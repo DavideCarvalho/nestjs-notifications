@@ -1,0 +1,32 @@
+{
+  "name": "@nestjs-notifications/redis",
+  "version": "0.1.0",
+  "description": "Redis-backed async dispatcher for nestjs-notifications (no BullMQ required)",
+  "license": "MIT",
+  "author": "Davide Carvalho",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
+    "directory": "packages/redis"
+  },
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@nestjs-notifications/core": "workspace:^",
+    "@nestjs/common": "^10.0.0 || ^11.0.0",
+    "ioredis": "^5.0.0"
+  },
+  "devDependencies": {
+    "@nestjs-notifications/core": "workspace:^",
+    "@nestjs/common": "^11.0.0",
+    "ioredis": "^5.0.0",
+    "reflect-metadata": "^0.2.2",
+    "typescript": "^5.7.2"
+  }
+}

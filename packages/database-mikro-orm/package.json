@@ -1,0 +1,35 @@
+{
+  "name": "@nestjs-notifications/database-mikro-orm",
+  "version": "0.1.0",
+  "description": "MikroORM adapter for the nestjs-notifications database channel",
+  "license": "MIT",
+  "author": "Davide Carvalho",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
+    "directory": "packages/database-mikro-orm"
+  },
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@mikro-orm/core": "^6.0.0",
+    "@mikro-orm/nestjs": "^6.0.0",
+    "@nestjs-notifications/database": "workspace:^",
+    "@nestjs/common": "^10.0.0 || ^11.0.0"
+  },
+  "devDependencies": {
+    "@mikro-orm/core": "^6.0.0",
+    "@mikro-orm/nestjs": "^6.0.0",
+    "@nestjs-notifications/core": "workspace:^",
+    "@nestjs-notifications/database": "workspace:^",
+    "@nestjs/common": "^11.0.0",
+    "reflect-metadata": "^0.2.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "nestjs-notifications-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Laravel-style notifications for NestJS",
+  "license": "MIT",
+  "author": "Davide Carvalho",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DavideCarvalho/nestjs-notifications.git"
+  },
+  "packageManager": "pnpm@11.5.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "turbo run typecheck",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "turbo run build && changeset publish"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@changesets/cli": "^2.27.10",
+    "@swc/core": "^1.10.1",
+    "@types/node": "^22.10.2",
+    "reflect-metadata": "^0.2.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "unplugin-swc": "^1.5.1",
+    "vitest": "^2.1.8"
+  }
+}

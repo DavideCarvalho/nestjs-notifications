@@ -1,0 +1,37 @@
+{
+  "name": "@nestjs-notifications/telescope",
+  "version": "0.1.0",
+  "description": "nestjs-telescope watcher for nestjs-notifications — records every notification send in the Telescope dashboard",
+  "license": "MIT",
+  "author": "Davide Carvalho",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
+    "directory": "packages/telescope"
+  },
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": ["nestjs", "telescope", "notifications", "observability", "watcher"],
+  "peerDependencies": {
+    "@dudousxd/nestjs-telescope": "^1.7.0",
+    "@nestjs-notifications/core": "workspace:^",
+    "@nestjs/common": "^10.0.0 || ^11.0.0",
+    "@nestjs/core": "^10.0.0 || ^11.0.0",
+    "@nestjs/event-emitter": "^2.0.0 || ^3.0.0"
+  },
+  "devDependencies": {
+    "@dudousxd/nestjs-telescope": "^1.7.0",
+    "@nestjs-notifications/core": "workspace:^",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/event-emitter": "^3.0.0",
+    "reflect-metadata": "^0.2.2",
+    "typescript": "^5.7.2"
+  }
+}

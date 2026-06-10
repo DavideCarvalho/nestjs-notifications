@@ -1,0 +1,33 @@
+{
+  "name": "@nestjs-notifications/mail",
+  "version": "0.1.0",
+  "description": "Mail channel for nestjs-notifications — render and send email notifications over SMTP",
+  "license": "MIT",
+  "author": "Davide Carvalho",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
+    "directory": "packages/mail"
+  },
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@nestjs-notifications/core": "workspace:^",
+    "@nestjs/common": "^10.0.0 || ^11.0.0",
+    "nodemailer": "^6.9.0"
+  },
+  "devDependencies": {
+    "@nestjs-notifications/core": "workspace:^",
+    "@nestjs/common": "^11.0.0",
+    "@types/nodemailer": "^6.4.0",
+    "nodemailer": "^6.9.0",
+    "reflect-metadata": "^0.2.2",
+    "typescript": "^5.7.2"
+  }
+}
