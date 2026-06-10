@@ -1,7 +1,7 @@
 {
   "name": "@dudousxd/nestjs-notifications-broadcast",
-  "version": "1.0.0",
-  "description": "Broadcast channel for nestjs-notifications — push real-time notifications over websockets",
+  "version": "0.2.0",
+  "description": "Broadcast channel for nestjs-notifications \u2014 push real-time notifications over websockets",
   "license": "MIT",
   "author": "Davide Carvalho",
   "repository": {
@@ -12,15 +12,13 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "@dudousxd/nestjs-notifications-core": "workspace:^",
+    "@dudousxd/nestjs-notifications-core": ">=0.1.0 <1.0.0",
     "@nestjs/common": "^10.0.0 || ^11.0.0",
     "@nestjs/websockets": "^10.0.0 || ^11.0.0",
     "@nestjs/platform-socket.io": "^10.0.0 || ^11.0.0",

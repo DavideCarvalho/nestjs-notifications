@@ -1,7 +1,7 @@
 {
   "name": "@dudousxd/nestjs-notifications-core",
   "version": "0.2.0",
-  "description": "Laravel-style notifications for NestJS — core abstractions, service and synchronous dispatcher",
+  "description": "Laravel-style notifications for NestJS \u2014 core abstractions, service and synchronous dispatcher",
   "license": "MIT",
   "author": "Davide Carvalho",
   "repository": {
@@ -12,9 +12,7 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"

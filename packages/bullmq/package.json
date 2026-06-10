@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-bullmq",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "BullMQ async dispatcher for nestjs-notifications",
   "license": "MIT",
   "author": "Davide Carvalho",
@@ -12,15 +12,13 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "@dudousxd/nestjs-notifications-core": "workspace:^",
+    "@dudousxd/nestjs-notifications-core": ">=0.1.0 <1.0.0",
     "@nestjs/bullmq": "^10.0.0 || ^11.0.0",
     "@nestjs/common": "^10.0.0 || ^11.0.0",
     "bullmq": "^5.0.0"
