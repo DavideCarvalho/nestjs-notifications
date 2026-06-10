@@ -1,7 +1,7 @@
 {
-  "name": "@nestjs-notifications/slack",
-  "version": "1.0.0",
-  "description": "Slack channel for nestjs-notifications — deliver notifications via incoming webhooks or the Web API",
+  "name": "@dudousxd/nestjs-notifications-slack",
+  "version": "0.1.0",
+  "description": "Slack channel for nestjs-notifications \u2014 deliver notifications via incoming webhooks or the Web API",
   "license": "MIT",
   "author": "Davide Carvalho",
   "repository": {
@@ -12,19 +12,17 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "@nestjs-notifications/core": "workspace:^",
+    "@dudousxd/nestjs-notifications-core": "workspace:^",
     "@nestjs/common": "^10.0.0 || ^11.0.0"
   },
   "devDependencies": {
-    "@nestjs-notifications/core": "workspace:^",
+    "@dudousxd/nestjs-notifications-core": "workspace:^",
     "@nestjs/common": "^11.0.0",
     "reflect-metadata": "^0.2.2",
     "typescript": "^5.7.2"

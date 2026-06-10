@@ -3,7 +3,7 @@ import type {
   NewStoredNotification,
   NotificationStore,
   StoredNotification,
-} from '@nestjs-notifications/database';
+} from '@dudousxd/nestjs-notifications-database';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, type Repository } from 'typeorm';

@@ -1,4 +1,4 @@
-import { NOTIFICATION_STORE } from '@nestjs-notifications/database';
+import { NOTIFICATION_STORE } from '@dudousxd/nestjs-notifications-database';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificationEntity } from './notification.entity';
@@ -9,7 +9,7 @@ import { TypeOrmNotificationStore } from './typeorm-notification.store';
  * {@link NOTIFICATION_STORE} token consumed by the database channel.
  *
  * Pair this with `DatabaseChannelModule.forFeature()` from
- * `@nestjs-notifications/database`: this module provides the store token, while
+ * `@dudousxd/nestjs-notifications-database`: this module provides the store token, while
  * `forFeature()` registers the channel that consumes it.
  *
  * ```ts

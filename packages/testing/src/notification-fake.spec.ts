@@ -1,4 +1,4 @@
-import type { Notifiable, Notification } from '@nestjs-notifications/core';
+import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
 import { describe, expect, it } from 'vitest';
 import { NotificationFake } from './notification-fake';
 

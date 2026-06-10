@@ -38,13 +38,13 @@ importers:
 
   examples/basic:
     dependencies:
-      '@nestjs-notifications/core':
+      '@dudousxd/nestjs-notifications-core':
         specifier: workspace:^
         version: link:../../packages/core
-      '@nestjs-notifications/database':
+      '@dudousxd/nestjs-notifications-database':
         specifier: workspace:^
         version: link:../../packages/database
-      '@nestjs-notifications/mail':
+      '@dudousxd/nestjs-notifications-mail':
         specifier: workspace:^
         version: link:../../packages/mail
       '@nestjs/common':
@@ -66,7 +66,7 @@ importers:
         specifier: ^7.8.1
         version: 7.8.2
     devDependencies:
-      '@nestjs-notifications/testing':
+      '@dudousxd/nestjs-notifications-testing':
         specifier: workspace:^
         version: link:../../packages/testing
       '@nestjs/testing':
@@ -78,7 +78,7 @@ importers:
 
   packages/broadcast:
     devDependencies:
-      '@nestjs-notifications/core':
+      '@dudousxd/nestjs-notifications-core':
         specifier: workspace:^
         version: link:../core
       '@nestjs/common':
@@ -102,7 +102,7 @@ importers:
 
   packages/bullmq:
     devDependencies:
-      '@nestjs-notifications/core':
+      '@dudousxd/nestjs-notifications-core':
         specifier: workspace:^
         version: link:../core
       '@nestjs/bullmq':
@@ -147,7 +147,7 @@ importers:
 
   packages/database:
     devDependencies:
-      '@nestjs-notifications/core':
+      '@dudousxd/nestjs-notifications-core':
         specifier: workspace:^
         version: link:../core
       '@nestjs/common':
@@ -162,18 +162,18 @@ importers:
 
   packages/database-mikro-orm:
     devDependencies:
+      '@dudousxd/nestjs-notifications-core':
+        specifier: workspace:^
+        version: link:../core
+      '@dudousxd/nestjs-notifications-database':
+        specifier: workspace:^
+        version: link:../database
       '@mikro-orm/core':
         specifier: ^6.0.0
         version: 6.6.14
       '@mikro-orm/nestjs':
         specifier: ^6.0.0
         version: 6.1.2(@mikro-orm/core@6.6.14)(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26)
-      '@nestjs-notifications/core':
-        specifier: workspace:^
-        version: link:../core
-      '@nestjs-notifications/database':
-        specifier: workspace:^
-        version: link:../database
       '@nestjs/common':
         specifier: ^11.0.0
         version: 11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -186,10 +186,10 @@ importers:
 
   packages/database-typeorm:
     devDependencies:
-      '@nestjs-notifications/core':
+      '@dudousxd/nestjs-notifications-core':
         specifier: workspace:^
         version: link:../core
-      '@nestjs-notifications/database':
+      '@dudousxd/nestjs-notifications-database':
         specifier: workspace:^
         version: link:../database
       '@nestjs/common':
@@ -210,7 +210,7 @@ importers:
 
   packages/event-emitter:
     devDependencies:
-      '@nestjs-notifications/core':
+      '@dudousxd/nestjs-notifications-core':
         specifier: workspace:^
         version: link:../core
       '@nestjs/common':
@@ -234,7 +234,7 @@ importers:
 
   packages/mail:
     devDependencies:
-      '@nestjs-notifications/core':
+      '@dudousxd/nestjs-notifications-core':
         specifier: workspace:^
         version: link:../core
       '@nestjs/common':
@@ -255,7 +255,7 @@ importers:
 
   packages/redis:
     devDependencies:
-      '@nestjs-notifications/core':
+      '@dudousxd/nestjs-notifications-core':
         specifier: workspace:^
         version: link:../core
       '@nestjs/common':
@@ -273,7 +273,7 @@ importers:
 
   packages/slack:
     devDependencies:
-      '@nestjs-notifications/core':
+      '@dudousxd/nestjs-notifications-core':
         specifier: workspace:^
         version: link:../core
       '@nestjs/common':
@@ -288,12 +288,12 @@ importers:
 
   packages/telescope:
     devDependencies:
+      '@dudousxd/nestjs-notifications-core':
+        specifier: workspace:^
+        version: link:../core
       '@dudousxd/nestjs-telescope':
         specifier: ^1.7.0
         version: 1.7.0(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26)(reflect-metadata@0.2.2)(rxjs@7.8.2)
-      '@nestjs-notifications/core':
-        specifier: workspace:^
-        version: link:../core
       '@nestjs/common':
         specifier: ^11.0.0
         version: 11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -312,7 +312,7 @@ importers:
 
   packages/testing:
     devDependencies:
-      '@nestjs-notifications/core':
+      '@dudousxd/nestjs-notifications-core':
         specifier: workspace:^
         version: link:../core
       '@nestjs/common':

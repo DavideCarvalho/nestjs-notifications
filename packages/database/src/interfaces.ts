@@ -1,4 +1,4 @@
-import type { Notifiable, Notification } from '@nestjs-notifications/core';
+import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
 
 /** A persisted notification row, mirroring Laravel's `notifications` table. */
 export interface StoredNotification {

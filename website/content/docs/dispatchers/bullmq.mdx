@@ -19,12 +19,12 @@ it, rehydrates the notification and recipient, and runs the channels. See
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @nestjs-notifications/bullmq @nestjs/bullmq bullmq
+    pnpm add @dudousxd/nestjs-notifications-bullmq @nestjs/bullmq bullmq
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @nestjs-notifications/bullmq @nestjs/bullmq bullmq
+    npm install @dudousxd/nestjs-notifications-bullmq @nestjs/bullmq bullmq
     ```
   </Tab>
 </Tabs>
@@ -39,8 +39,8 @@ rebuild jobs.
 ```ts title="app.module.ts"
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
-import { NotificationsModule } from '@nestjs-notifications/core';
-import { bullmqDispatcher } from '@nestjs-notifications/bullmq';
+import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
+import { bullmqDispatcher } from '@dudousxd/nestjs-notifications-bullmq';
 import { InvoicePaid } from './invoice-paid.notification';
 
 @Module({

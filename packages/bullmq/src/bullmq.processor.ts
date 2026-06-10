@@ -1,5 +1,5 @@
-import { ChannelRunner, NotificationSerializer } from '@nestjs-notifications/core';
-import type { NotificationJob } from '@nestjs-notifications/core';
+import { ChannelRunner, NotificationSerializer } from '@dudousxd/nestjs-notifications-core';
+import type { NotificationJob } from '@dudousxd/nestjs-notifications-core';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job } from 'bullmq';
 import { NOTIFICATIONS_QUEUE } from './constants';

@@ -16,12 +16,12 @@ count, a notifications dropdown, a "mark all as read" button. It persists throug
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @nestjs-notifications/database
+    pnpm add @dudousxd/nestjs-notifications-database
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @nestjs-notifications/database
+    npm install @dudousxd/nestjs-notifications-database
     ```
   </Tab>
 </Tabs>
@@ -29,7 +29,7 @@ count, a notifications dropdown, a "mark all as read" button. It persists throug
 ## Register the channel
 
 ```ts title="app.module.ts"
-import { DatabaseChannelModule } from '@nestjs-notifications/database';
+import { DatabaseChannelModule } from '@dudousxd/nestjs-notifications-database';
 
 @Module({
   imports: [
@@ -56,8 +56,8 @@ Implement `DatabaseNotification` and return a plain object from `toDatabase()` â
 the persisted `data`:
 
 ```ts title="invoice-paid.notification.ts"
-import type { Notifiable, Notification } from '@nestjs-notifications/core';
-import type { DatabaseNotification } from '@nestjs-notifications/database';
+import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import type { DatabaseNotification } from '@dudousxd/nestjs-notifications-database';
 
 export class InvoicePaid implements Notification, DatabaseNotification {
   constructor(private invoiceId: string, private amount: number) {}
@@ -137,7 +137,7 @@ The store is bound to the `NOTIFICATION_STORE` token, so inject it to build your
 
 ```ts
 import { Inject } from '@nestjs/common';
-import { NOTIFICATION_STORE, type NotificationStore } from '@nestjs-notifications/database';
+import { NOTIFICATION_STORE, type NotificationStore } from '@dudousxd/nestjs-notifications-database';
 
 constructor(@Inject(NOTIFICATION_STORE) private store: NotificationStore) {}
 ```
@@ -158,12 +158,12 @@ the adapter provides the store token, `forFeature()` registers the channel that 
     <Tabs items={['pnpm', 'npm']}>
       <Tab value="pnpm">
         ```bash
-        pnpm add @nestjs-notifications/database-typeorm @nestjs/typeorm typeorm
+        pnpm add @dudousxd/nestjs-notifications-database-typeorm @nestjs/typeorm typeorm
         ```
       </Tab>
       <Tab value="npm">
         ```bash
-        npm install @nestjs-notifications/database-typeorm @nestjs/typeorm typeorm
+        npm install @dudousxd/nestjs-notifications-database-typeorm @nestjs/typeorm typeorm
         ```
       </Tab>
     </Tabs>
@@ -172,8 +172,8 @@ the adapter provides the store token, `forFeature()` registers the channel that 
     then wire the store and channel:
 
     ```ts title="app.module.ts"
-    import { DatabaseChannelModule } from '@nestjs-notifications/database';
-    import { TypeOrmNotificationStoreModule } from '@nestjs-notifications/database-typeorm';
+    import { DatabaseChannelModule } from '@dudousxd/nestjs-notifications-database';
+    import { TypeOrmNotificationStoreModule } from '@dudousxd/nestjs-notifications-database-typeorm';
 
     @Module({
       imports: [
@@ -195,12 +195,12 @@ the adapter provides the store token, `forFeature()` registers the channel that 
     <Tabs items={['pnpm', 'npm']}>
       <Tab value="pnpm">
         ```bash
-        pnpm add @nestjs-notifications/database-mikro-orm @mikro-orm/core @mikro-orm/nestjs
+        pnpm add @dudousxd/nestjs-notifications-database-mikro-orm @mikro-orm/core @mikro-orm/nestjs
         ```
       </Tab>
       <Tab value="npm">
         ```bash
-        npm install @nestjs-notifications/database-mikro-orm @mikro-orm/core @mikro-orm/nestjs
+        npm install @dudousxd/nestjs-notifications-database-mikro-orm @mikro-orm/core @mikro-orm/nestjs
         ```
       </Tab>
     </Tabs>
@@ -208,8 +208,8 @@ the adapter provides the store token, `forFeature()` registers the channel that 
     Register the adapter's `NotificationEntity` with MikroORM, then wire the store and channel:
 
     ```ts title="app.module.ts"
-    import { DatabaseChannelModule } from '@nestjs-notifications/database';
-    import { MikroOrmNotificationStoreModule } from '@nestjs-notifications/database-mikro-orm';
+    import { DatabaseChannelModule } from '@dudousxd/nestjs-notifications-database';
+    import { MikroOrmNotificationStoreModule } from '@dudousxd/nestjs-notifications-database-mikro-orm';
 
     @Module({
       imports: [

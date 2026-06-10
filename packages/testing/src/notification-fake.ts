@@ -2,8 +2,8 @@ import {
   AnonymousNotifiable,
   type NotificationService,
   PendingNotification,
-} from '@nestjs-notifications/core';
-import type { Notifiable, Notification } from '@nestjs-notifications/core';
+} from '@dudousxd/nestjs-notifications-core';
+import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
 import { Injectable } from '@nestjs/common';
 
 /** A single recorded send captured by {@link NotificationFake}. */

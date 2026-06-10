@@ -1,6 +1,6 @@
-import { NotificationsModule } from '@nestjs-notifications/core';
-import { DatabaseChannelModule } from '@nestjs-notifications/database';
-import { MailChannelModule } from '@nestjs-notifications/mail';
+import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
+import { DatabaseChannelModule } from '@dudousxd/nestjs-notifications-database';
+import { MailChannelModule } from '@dudousxd/nestjs-notifications-mail';
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';

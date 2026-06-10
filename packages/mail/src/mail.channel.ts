@@ -3,7 +3,7 @@ import {
   MissingChannelMethodError,
   type Notifiable,
   type Notification,
-} from '@nestjs-notifications/core';
+} from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import type { MailMessage } from './mail-message';
 import type { MailRenderer } from './renderer';

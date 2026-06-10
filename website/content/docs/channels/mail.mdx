@@ -16,12 +16,12 @@ swappable.
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @nestjs-notifications/mail
+    pnpm add @dudousxd/nestjs-notifications-mail
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @nestjs-notifications/mail
+    npm install @dudousxd/nestjs-notifications-mail
     ```
   </Tab>
 </Tabs>
@@ -29,7 +29,7 @@ swappable.
 ## Register the channel
 
 ```ts title="app.module.ts"
-import { MailChannelModule } from '@nestjs-notifications/mail';
+import { MailChannelModule } from '@dudousxd/nestjs-notifications-mail';
 
 @Module({
   imports: [
@@ -57,8 +57,8 @@ export class AppModule {}
 Implement `MailNotification` to make `toMail()` type-checked. It returns a `MailMessage`:
 
 ```ts title="invoice-paid.notification.ts"
-import type { Notifiable, Notification } from '@nestjs-notifications/core';
-import { MailMessage, type MailNotification } from '@nestjs-notifications/mail';
+import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { MailMessage, type MailNotification } from '@dudousxd/nestjs-notifications-mail';
 
 export class InvoicePaid implements Notification, MailNotification {
   constructor(private invoiceId: string) {}
@@ -129,7 +129,7 @@ To use a provider's HTTP API instead of SMTP, implement `MailTransport` and pass
 
 ```ts title="resend.transport.ts"
 import { Injectable } from '@nestjs/common';
-import type { MailTransport, MailTransportPayload } from '@nestjs-notifications/mail';
+import type { MailTransport, MailTransportPayload } from '@dudousxd/nestjs-notifications-mail';
 
 @Injectable()
 export class ResendTransport implements MailTransport {
@@ -153,7 +153,7 @@ your own templates (MJML, React Email, Handlebars), implement `MailRenderer`:
 
 ```ts title="mjml.renderer.ts"
 import { Injectable } from '@nestjs/common';
-import type { MailMessage, MailRenderer } from '@nestjs-notifications/mail';
+import type { MailMessage, MailRenderer } from '@dudousxd/nestjs-notifications-mail';
 
 @Injectable()
 export class MjmlRenderer implements MailRenderer {

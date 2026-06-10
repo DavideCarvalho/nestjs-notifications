@@ -30,23 +30,23 @@ await notifications.send(user, new InvoicePaid(invoice));
 
 | Package | What it does |
 | --- | --- |
-| `@nestjs-notifications/core` | Abstractions, `NotificationService`, synchronous dispatcher, events |
-| `@nestjs-notifications/mail` | Mail channel — fluent `MailMessage`, pluggable transport & renderer |
-| `@nestjs-notifications/database` | Database channel — `NotificationStore` + in-memory store |
-| `@nestjs-notifications/database-typeorm` | TypeORM adapter for the database channel |
-| `@nestjs-notifications/database-mikro-orm` | MikroORM adapter for the database channel |
-| `@nestjs-notifications/broadcast` | WebSocket (socket.io) channel for realtime in-app notifications |
-| `@nestjs-notifications/slack` | Slack channel — webhook or bot token |
-| `@nestjs-notifications/event-emitter` | In-process async dispatch via `@nestjs/event-emitter` |
-| `@nestjs-notifications/bullmq` | Async dispatch reusing your app's BullMQ |
-| `@nestjs-notifications/redis` | Async dispatch via Redis for a dedicated worker |
-| `@nestjs-notifications/telescope` | nestjs-telescope watcher — see every send in the dashboard |
-| `@nestjs-notifications/testing` | `NotificationFake` + Laravel-style assertions |
+| `@dudousxd/nestjs-notifications-core` | Abstractions, `NotificationService`, synchronous dispatcher, events |
+| `@dudousxd/nestjs-notifications-mail` | Mail channel — fluent `MailMessage`, pluggable transport & renderer |
+| `@dudousxd/nestjs-notifications-database` | Database channel — `NotificationStore` + in-memory store |
+| `@dudousxd/nestjs-notifications-database-typeorm` | TypeORM adapter for the database channel |
+| `@dudousxd/nestjs-notifications-database-mikro-orm` | MikroORM adapter for the database channel |
+| `@dudousxd/nestjs-notifications-broadcast` | WebSocket (socket.io) channel for realtime in-app notifications |
+| `@dudousxd/nestjs-notifications-slack` | Slack channel — webhook or bot token |
+| `@dudousxd/nestjs-notifications-event-emitter` | In-process async dispatch via `@nestjs/event-emitter` |
+| `@dudousxd/nestjs-notifications-bullmq` | Async dispatch reusing your app's BullMQ |
+| `@dudousxd/nestjs-notifications-redis` | Async dispatch via Redis for a dedicated worker |
+| `@dudousxd/nestjs-notifications-telescope` | nestjs-telescope watcher — see every send in the dashboard |
+| `@dudousxd/nestjs-notifications-testing` | `NotificationFake` + Laravel-style assertions |
 
 ## Install
 
 ```bash
-pnpm add @nestjs-notifications/core @nestjs-notifications/mail @nestjs/event-emitter
+pnpm add @dudousxd/nestjs-notifications-core @dudousxd/nestjs-notifications-mail @nestjs/event-emitter
 ```
 
 ## Quick start
@@ -105,7 +105,7 @@ Set `shouldQueue` on the notification and choose a dispatcher:
 
 ```ts
 NotificationsModule.forRoot({
-  ...bullmqDispatcher(),                 // from @nestjs-notifications/bullmq
+  ...bullmqDispatcher(),                 // from @dudousxd/nestjs-notifications-bullmq
   imports: [/* BullModule.forRoot(...) */],
   notifications: [InvoicePaid],          // registry used to rehydrate in the worker
   resolveNotifiable: (ref) => userRepo.findOneBy({ id: Number(ref.id) }),

@@ -4,7 +4,7 @@ import {
   NotificationEvents,
   NotificationFailedEvent,
   NotificationSentEvent,
-} from '@nestjs-notifications/core';
+} from '@dudousxd/nestjs-notifications-core';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { describe, expect, it, vi } from 'vitest';
 import { NotificationsWatcher } from './notifications.watcher';

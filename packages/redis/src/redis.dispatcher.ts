@@ -1,5 +1,5 @@
-import { NotificationSerializer } from '@nestjs-notifications/core';
-import type { DispatchDriver, NotificationJob } from '@nestjs-notifications/core';
+import { NotificationSerializer } from '@dudousxd/nestjs-notifications-core';
+import type { DispatchDriver, NotificationJob } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Redis } from 'ioredis';
 import { DEFAULT_KEY, type RedisDispatcherOptions } from './options';

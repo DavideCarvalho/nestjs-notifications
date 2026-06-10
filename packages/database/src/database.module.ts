@@ -15,7 +15,7 @@ export interface DatabaseChannelOptions {
 
 /**
  * Registers the database channel. Pair with an ORM adapter package
- * (`@nestjs-notifications/database-typeorm` or `-mikro-orm`) or pass a custom store.
+ * (`@dudousxd/nestjs-notifications-database-typeorm` or `-mikro-orm`) or pass a custom store.
  *
  * ```ts
  * DatabaseChannelModule.forRoot({ store: TypeOrmNotificationStore, imports: [TypeOrmModule.forFeature([...])] })

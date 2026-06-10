@@ -10,7 +10,7 @@ plain object. There's no base class to extend and no decorator to add. You imple
 interface, and the recipient stays a normal object you own.
 
 ```ts
-import type { Notifiable } from '@nestjs-notifications/core';
+import type { Notifiable } from '@dudousxd/nestjs-notifications-core';
 
 export class User implements Notifiable {
   constructor(
@@ -62,7 +62,7 @@ worker that delivers it has no access to your in-memory `User`. It only has JSON
 So a queued notifiable must serialize to a stable reference the worker can reload:
 
 ```ts
-import type { Notifiable, NotifiableRef } from '@nestjs-notifications/core';
+import type { Notifiable, NotifiableRef } from '@dudousxd/nestjs-notifications-core';
 
 export class User implements Notifiable {
   // …

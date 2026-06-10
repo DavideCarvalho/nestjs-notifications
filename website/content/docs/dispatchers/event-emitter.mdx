@@ -19,12 +19,12 @@ handler then picks the job up on a later tick and runs the channels.
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @nestjs-notifications/event-emitter @nestjs/event-emitter
+    pnpm add @dudousxd/nestjs-notifications-event-emitter @nestjs/event-emitter
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @nestjs-notifications/event-emitter @nestjs/event-emitter
+    npm install @dudousxd/nestjs-notifications-event-emitter @nestjs/event-emitter
     ```
   </Tab>
 </Tabs>
@@ -37,8 +37,8 @@ imported (it usually already is — the core uses it for events).
 ```ts title="app.module.ts"
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { NotificationsModule } from '@nestjs-notifications/core';
-import { EventEmitterDispatcher } from '@nestjs-notifications/event-emitter';
+import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
+import { EventEmitterDispatcher } from '@dudousxd/nestjs-notifications-event-emitter';
 
 @Module({
   imports: [

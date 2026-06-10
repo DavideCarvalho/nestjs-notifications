@@ -3,7 +3,7 @@ import type {
   Notifiable,
   NotifiableRef,
   Notification,
-} from '@nestjs-notifications/core';
+} from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import type { DatabaseNotification, NotificationStore } from './interfaces';
 import { NOTIFICATION_STORE } from './tokens';

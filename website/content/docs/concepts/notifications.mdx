@@ -10,9 +10,9 @@ to (`via`), and *what* should each channel send (`to<Channel>()`). One class, on
 payload for every channel lives in one place.
 
 ```ts
-import type { Notifiable, Notification } from '@nestjs-notifications/core';
-import { MailMessage, type MailNotification } from '@nestjs-notifications/mail';
-import type { DatabaseNotification } from '@nestjs-notifications/database';
+import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { MailMessage, type MailNotification } from '@dudousxd/nestjs-notifications-mail';
+import type { DatabaseNotification } from '@dudousxd/nestjs-notifications-database';
 
 export class InvoicePaid implements Notification, MailNotification, DatabaseNotification {
   constructor(private invoice: Invoice) {}

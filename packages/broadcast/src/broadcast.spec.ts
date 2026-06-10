@@ -1,4 +1,4 @@
-import type { Notifiable } from '@nestjs-notifications/core';
+import type { Notifiable } from '@dudousxd/nestjs-notifications-core';
 import { describe, expect, it, vi } from 'vitest';
 import { BroadcastChannel } from './broadcast.channel';
 import type { BroadcastNotification } from './broadcast.channel';

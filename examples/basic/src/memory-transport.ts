@@ -1,4 +1,4 @@
-import type { MailTransport, MailTransportPayload } from '@nestjs-notifications/mail';
+import type { MailTransport, MailTransportPayload } from '@dudousxd/nestjs-notifications-mail';
 import { Injectable } from '@nestjs/common';
 
 /** A {@link MailTransport} that captures messages in memory instead of sending them. */

@@ -1,5 +1,5 @@
-import { NotificationService } from '@nestjs-notifications/core';
-import { InMemoryStore } from '@nestjs-notifications/database';
+import { NotificationService } from '@dudousxd/nestjs-notifications-core';
+import { InMemoryStore } from '@dudousxd/nestjs-notifications-database';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { AppModule } from './app.module';

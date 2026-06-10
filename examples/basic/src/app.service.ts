@@ -1,4 +1,4 @@
-import { NotificationService } from '@nestjs-notifications/core';
+import { NotificationService } from '@dudousxd/nestjs-notifications-core';
 import { Injectable } from '@nestjs/common';
 import { InvoicePaid } from './notifications/invoice-paid.notification';
 import type { User } from './user';

@@ -1,4 +1,4 @@
-import type { NotificationJob, NotificationSerializer } from '@nestjs-notifications/core';
+import type { NotificationJob, NotificationSerializer } from '@dudousxd/nestjs-notifications-core';
 import type { Redis } from 'ioredis';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_KEY, type RedisDispatcherOptions } from './options';

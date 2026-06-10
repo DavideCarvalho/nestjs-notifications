@@ -18,12 +18,12 @@ The channel uses Nest's websockets layer and socket.io, so install those peers a
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @nestjs-notifications/broadcast @nestjs/websockets @nestjs/platform-socket.io socket.io
+    pnpm add @dudousxd/nestjs-notifications-broadcast @nestjs/websockets @nestjs/platform-socket.io socket.io
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @nestjs-notifications/broadcast @nestjs/websockets @nestjs/platform-socket.io socket.io
+    npm install @dudousxd/nestjs-notifications-broadcast @nestjs/websockets @nestjs/platform-socket.io socket.io
     ```
   </Tab>
 </Tabs>
@@ -31,7 +31,7 @@ The channel uses Nest's websockets layer and socket.io, so install those peers a
 ## Register the channel
 
 ```ts title="app.module.ts"
-import { BroadcastChannelModule } from '@nestjs-notifications/broadcast';
+import { BroadcastChannelModule } from '@dudousxd/nestjs-notifications-broadcast';
 
 @Module({
   imports: [
@@ -58,8 +58,8 @@ their room on connect (typically keyed by the same value you route on).
 Implement `BroadcastNotification` and return the real-time payload from `toBroadcast()`:
 
 ```ts title="invoice-paid.notification.ts"
-import type { Notifiable, Notification } from '@nestjs-notifications/core';
-import type { BroadcastNotification } from '@nestjs-notifications/broadcast';
+import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import type { BroadcastNotification } from '@dudousxd/nestjs-notifications-broadcast';
 
 export class InvoicePaid implements Notification, BroadcastNotification {
   constructor(private invoiceId: string) {}

@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { EntityManager } from '@mikro-orm/core';
 import type {
   NewStoredNotification,
   NotificationStore,
   StoredNotification,
-} from '@nestjs-notifications/database';
+} from '@dudousxd/nestjs-notifications-database';
+import { EntityManager } from '@mikro-orm/core';
 import { Injectable } from '@nestjs/common';
 import { NotificationEntity } from './notification.entity';
 

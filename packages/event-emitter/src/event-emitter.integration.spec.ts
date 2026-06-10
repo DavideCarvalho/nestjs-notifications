@@ -5,7 +5,7 @@ import {
   type Notification,
   NotificationService,
   NotificationsModule,
-} from '@nestjs-notifications/core';
+} from '@dudousxd/nestjs-notifications-core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';

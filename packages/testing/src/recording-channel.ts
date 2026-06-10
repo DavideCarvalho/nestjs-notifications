@@ -1,4 +1,4 @@
-import type { ChannelDriver, Notifiable, Notification } from '@nestjs-notifications/core';
+import type { ChannelDriver, Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
 
 /** A single delivery captured by {@link RecordingChannel}. */
 export interface RecordedDelivery {

@@ -49,7 +49,7 @@ import {
   MissingChannelMethodError,
   type Notifiable,
   type Notification,
-} from '@nestjs-notifications/core';
+} from '@dudousxd/nestjs-notifications-core';
 import { Injectable } from '@nestjs/common';
 import type { SmsNotification } from './sms-notification';
 import { SmsClient } from './sms-client';
@@ -138,7 +138,7 @@ export class AppModule {}
 A notification opts into the channel by listing it in `via()` and implementing the interface:
 
 ```ts title="otp-code.notification.ts"
-import type { Notification } from '@nestjs-notifications/core';
+import type { Notification } from '@dudousxd/nestjs-notifications-core';
 import type { SmsMessage, SmsNotification } from './sms-notification';
 
 export class OtpCode implements Notification, SmsNotification {

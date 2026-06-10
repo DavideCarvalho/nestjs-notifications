@@ -9,7 +9,7 @@ import { Step, Steps } from 'fumadocs-ui/components/steps';
 
 If you run [nestjs-telescope](https://github.com/dudousxd/nestjs-telescope), you can see every
 notification — sent or failed, with its payload — right in the dashboard. The
-`@nestjs-notifications/telescope` package ships a watcher that plugs straight in. It works by
+`@dudousxd/nestjs-notifications-telescope` package ships a watcher that plugs straight in. It works by
 listening to the `notification.sent` / `notification.failed` events the core already emits, so
 there's nothing to wire at your call sites.
 
@@ -25,12 +25,12 @@ you're using Telescope.
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @nestjs-notifications/telescope @dudousxd/nestjs-telescope
+    pnpm add @dudousxd/nestjs-notifications-telescope @dudousxd/nestjs-telescope
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @nestjs-notifications/telescope @dudousxd/nestjs-telescope
+    npm install @dudousxd/nestjs-notifications-telescope @dudousxd/nestjs-telescope
     ```
   </Tab>
 </Tabs>
@@ -45,9 +45,9 @@ Add `NotificationsWatcher` to Telescope's `watchers` array:
 
 ```ts title="app.module.ts"
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { NotificationsModule } from '@nestjs-notifications/core';
+import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
 import { TelescopeModule } from '@dudousxd/nestjs-telescope';
-import { NotificationsWatcher } from '@nestjs-notifications/telescope';
+import { NotificationsWatcher } from '@dudousxd/nestjs-notifications-telescope';
 
 @Module({
   imports: [

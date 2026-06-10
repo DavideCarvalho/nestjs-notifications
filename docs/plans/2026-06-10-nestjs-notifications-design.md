@@ -25,7 +25,7 @@ Same stack as `nestjs-inertia`: pnpm workspaces + Turborepo + Vitest + Biome + C
 
 ```
 packages/
-  core/                 @nestjs-notifications/core      interfaces, NotificationService, SyncDispatcher, events, DI tokens
+  core/                 @dudousxd/nestjs-notifications-core      interfaces, NotificationService, SyncDispatcher, events, DI tokens
   event-emitter/        in-process async via @nestjs/event-emitter
   bullmq/               async via the app's existing @nestjs/bullmq queue
   redis/                async via Redis stream / pub-sub for dedicated workers
@@ -155,6 +155,6 @@ NotificationsModule.forRoot({
 
 ## Testing
 
-`@nestjs-notifications/testing`: `NotificationFake` (records instead of delivering) +
+`@dudousxd/nestjs-notifications-testing`: `NotificationFake` (records instead of delivering) +
 assertions `assertSentTo`, `assertSentOnChannel`, `assertNothingSent`, `assertCount`, and
 channel/dispatcher fakes for integration tests.

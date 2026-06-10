@@ -53,8 +53,8 @@ unchanged.
 An ops alert with no user attached, fanning out to email and Slack:
 
 ```ts title="incident-opened.notification.ts"
-import type { Notification } from '@nestjs-notifications/core';
-import { MailMessage, type MailNotification } from '@nestjs-notifications/mail';
+import type { Notification } from '@dudousxd/nestjs-notifications-core';
+import { MailMessage, type MailNotification } from '@dudousxd/nestjs-notifications-mail';
 
 export class IncidentOpened implements Notification, MailNotification {
   constructor(private readonly incident: Incident) {}

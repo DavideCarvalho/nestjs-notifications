@@ -1,12 +1,12 @@
 ---
 title: Testing
-description: Assert what your code would send without delivering anything. The @nestjs-notifications/testing package gives you a NotificationFake with Laravel-style assertions and a RecordingChannel for end-to-end tests.
+description: Assert what your code would send without delivering anything. The @dudousxd/nestjs-notifications-testing package gives you a NotificationFake with Laravel-style assertions and a RecordingChannel for end-to-end tests.
 ---
 
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 import { Callout } from 'fumadocs-ui/components/callout';
 
-Tests shouldn't send real emails. The `@nestjs-notifications/testing` package gives you two test
+Tests shouldn't send real emails. The `@dudousxd/nestjs-notifications-testing` package gives you two test
 doubles: a **`NotificationFake`** that records sends instead of delivering them (and asserts on
 them), and a **`RecordingChannel`** for integration tests that run through the real service and
 registry.
@@ -14,12 +14,12 @@ registry.
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
     ```bash
-    pnpm add -D @nestjs-notifications/testing
+    pnpm add -D @dudousxd/nestjs-notifications-testing
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install -D @nestjs-notifications/testing
+    npm install -D @dudousxd/nestjs-notifications-testing
     ```
   </Tab>
 </Tabs>
@@ -36,8 +36,8 @@ notification's `shouldQueue`.
 Use `provideNotificationFake()` to swap the real service in a Nest `TestingModule`:
 
 ```ts
-import { NotificationService } from '@nestjs-notifications/core';
-import { provideNotificationFake, NotificationFake } from '@nestjs-notifications/testing';
+import { NotificationService } from '@dudousxd/nestjs-notifications-core';
+import { provideNotificationFake, NotificationFake } from '@dudousxd/nestjs-notifications-testing';
 
 const moduleRef = await Test.createTestingModule({
   providers: [BillingService, provideNotificationFake()],
@@ -81,8 +81,8 @@ Each record is a `SentNotificationRecord`: `{ notifiable, notification, channels
     ```ts title="billing.service.spec.ts"
     import { Test } from '@nestjs/testing';
     import { beforeEach, describe, expect, it } from 'vitest';
-    import { NotificationService } from '@nestjs-notifications/core';
-    import { provideNotificationFake, NotificationFake } from '@nestjs-notifications/testing';
+    import { NotificationService } from '@dudousxd/nestjs-notifications-core';
+    import { provideNotificationFake, NotificationFake } from '@dudousxd/nestjs-notifications-testing';
     import { BillingService } from './billing.service';
     import { InvoicePaid } from './invoice-paid.notification';
     import { User } from './user';
@@ -116,8 +116,8 @@ Each record is a `SentNotificationRecord`: `{ notifiable, notification, channels
   <Tab value="Jest">
     ```ts title="billing.service.spec.ts"
     import { Test } from '@nestjs/testing';
-    import { NotificationService } from '@nestjs-notifications/core';
-    import { provideNotificationFake, NotificationFake } from '@nestjs-notifications/testing';
+    import { NotificationService } from '@dudousxd/nestjs-notifications-core';
+    import { provideNotificationFake, NotificationFake } from '@dudousxd/nestjs-notifications-testing';
     import { BillingService } from './billing.service';
     import { InvoicePaid } from './invoice-paid.notification';
     import { User } from './user';
@@ -163,8 +163,8 @@ lifecycle events — register a `RecordingChannel` instead. It's a real `Channel
 deliveries rather than performing them.
 
 ```ts
-import { ChannelRegistry } from '@nestjs-notifications/core';
-import { RecordingChannel } from '@nestjs-notifications/testing';
+import { ChannelRegistry } from '@dudousxd/nestjs-notifications-core';
+import { RecordingChannel } from '@dudousxd/nestjs-notifications-testing';
 
 const mail = new RecordingChannel('mail');
 moduleRef.get(ChannelRegistry).register(mail); // ChannelRegistry.register() is built for this

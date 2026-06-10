@@ -15,12 +15,12 @@ plain text, Block Kit blocks, and legacy attachments.
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @nestjs-notifications/slack
+    pnpm add @dudousxd/nestjs-notifications-slack
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @nestjs-notifications/slack
+    npm install @dudousxd/nestjs-notifications-slack
     ```
   </Tab>
 </Tabs>
@@ -28,7 +28,7 @@ plain text, Block Kit blocks, and legacy attachments.
 ## Register the channel
 
 ```ts title="app.module.ts"
-import { SlackChannelModule } from '@nestjs-notifications/slack';
+import { SlackChannelModule } from '@dudousxd/nestjs-notifications-slack';
 
 @Module({
   imports: [
@@ -55,8 +55,8 @@ export class AppModule {}
 Implement `SlackNotification` and return a `SlackMessage` from `toSlack()`:
 
 ```ts title="deploy-finished.notification.ts"
-import type { Notifiable, Notification } from '@nestjs-notifications/core';
-import { SlackMessage, type SlackNotification } from '@nestjs-notifications/slack';
+import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { SlackMessage, type SlackNotification } from '@dudousxd/nestjs-notifications-slack';
 
 export class DeployFinished implements Notification, SlackNotification {
   constructor(private service: string) {}

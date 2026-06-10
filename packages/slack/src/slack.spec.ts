@@ -1,4 +1,4 @@
-import type { Notifiable, Notification } from '@nestjs-notifications/core';
+import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SlackMessage } from './slack-message';
 import { SlackChannel } from './slack.channel';

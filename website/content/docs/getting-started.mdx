@@ -32,12 +32,12 @@ Install the core, the mail channel, and the event emitter:
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @nestjs-notifications/core @nestjs-notifications/mail @nestjs/event-emitter
+    pnpm add @dudousxd/nestjs-notifications-core @dudousxd/nestjs-notifications-mail @nestjs/event-emitter
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @nestjs-notifications/core @nestjs-notifications/mail @nestjs/event-emitter
+    npm install @dudousxd/nestjs-notifications-core @dudousxd/nestjs-notifications-mail @nestjs/event-emitter
     ```
   </Tab>
 </Tabs>
@@ -55,8 +55,8 @@ mail channel and is discovered automatically.
 ```ts title="app.module.ts"
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-import { NotificationsModule } from '@nestjs-notifications/core';
-import { MailChannelModule } from '@nestjs-notifications/mail';
+import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
+import { MailChannelModule } from '@dudousxd/nestjs-notifications-mail';
 
 @Module({
   imports: [
@@ -81,7 +81,7 @@ A recipient implements `Notifiable`. `routeNotificationFor` returns the per-chan
 an email here. Anything can be notifiable: an entity, a DTO, a plain object.
 
 ```ts title="user.ts"
-import type { Notifiable } from '@nestjs-notifications/core';
+import type { Notifiable } from '@dudousxd/nestjs-notifications-core';
 
 export class User implements Notifiable {
   constructor(
@@ -106,8 +106,8 @@ A notification is a plain class. `via()` lists the channels for this recipient, 
 shapes the email. Implementing `MailNotification` makes `toMail` type-checked.
 
 ```ts title="invoice-paid.notification.ts"
-import type { Notification } from '@nestjs-notifications/core';
-import { MailMessage, type MailNotification } from '@nestjs-notifications/mail';
+import type { Notification } from '@dudousxd/nestjs-notifications-core';
+import { MailMessage, type MailNotification } from '@dudousxd/nestjs-notifications-mail';
 
 export class InvoicePaid implements Notification, MailNotification {
   constructor(private invoiceId: string) {}
@@ -135,7 +135,7 @@ Inject `NotificationService` and call `send`. That's the whole flow.
 
 ```ts title="billing.service.ts"
 import { Injectable } from '@nestjs/common';
-import { NotificationService } from '@nestjs-notifications/core';
+import { NotificationService } from '@dudousxd/nestjs-notifications-core';
 import { InvoicePaid } from './invoice-paid.notification';
 import { User } from './user';
 
@@ -163,25 +163,25 @@ to the call site, just one more module and one more method.
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @nestjs-notifications/database
+    pnpm add @dudousxd/nestjs-notifications-database
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @nestjs-notifications/database
+    npm install @dudousxd/nestjs-notifications-database
     ```
   </Tab>
 </Tabs>
 
 ```ts title="app.module.ts"
-import { DatabaseChannelModule } from '@nestjs-notifications/database';
+import { DatabaseChannelModule } from '@dudousxd/nestjs-notifications-database';
 
 // inside imports:
 DatabaseChannelModule.forRoot(), // bundled in-memory store; swap for a real one later
 ```
 
 ```ts title="invoice-paid.notification.ts"
-import type { DatabaseNotification } from '@nestjs-notifications/database';
+import type { DatabaseNotification } from '@dudousxd/nestjs-notifications-database';
 
 // add to the class:
 via(): string[] {

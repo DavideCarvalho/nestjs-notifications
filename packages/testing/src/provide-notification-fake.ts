@@ -1,4 +1,4 @@
-import { NotificationService } from '@nestjs-notifications/core';
+import { NotificationService } from '@dudousxd/nestjs-notifications-core';
 import type { Provider } from '@nestjs/common';
 import { NotificationFake } from './notification-fake';
 

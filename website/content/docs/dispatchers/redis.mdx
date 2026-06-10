@@ -18,12 +18,12 @@ worker. See [Async dispatch](/docs/concepts/async-dispatch).
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @nestjs-notifications/redis ioredis
+    pnpm add @dudousxd/nestjs-notifications-redis ioredis
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @nestjs-notifications/redis ioredis
+    npm install @dudousxd/nestjs-notifications-redis ioredis
     ```
   </Tab>
 </Tabs>
@@ -36,11 +36,11 @@ Import `RedisDispatcherModule.forRoot()` to provide the client, dispatcher, and 
 
 ```ts title="app.module.ts"
 import { Module } from '@nestjs/common';
-import { NotificationsModule } from '@nestjs-notifications/core';
+import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
 import {
   RedisDispatcherModule,
   RedisNotificationDispatcher,
-} from '@nestjs-notifications/redis';
+} from '@dudousxd/nestjs-notifications-redis';
 import { InvoicePaid } from './invoice-paid.notification';
 
 @Module({

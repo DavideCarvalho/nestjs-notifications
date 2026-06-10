@@ -2,7 +2,7 @@ import type {
   ChannelRunner,
   NotificationJob,
   NotificationSerializer,
-} from '@nestjs-notifications/core';
+} from '@dudousxd/nestjs-notifications-core';
 import { describe, expect, it, vi } from 'vitest';
 import { EventEmitterDispatcher, PROCESS_EVENT } from './event-emitter.dispatcher';
 

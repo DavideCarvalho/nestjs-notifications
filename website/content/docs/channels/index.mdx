@@ -16,10 +16,10 @@ For the conceptual split between channels (where it goes) and dispatchers (when 
 
 | Channel | Package | Reads | Notification interface |
 | --- | --- | --- | --- |
-| `mail` | `@nestjs-notifications/mail` | `toMail()` | `MailNotification` |
-| `database` | `@nestjs-notifications/database` | `toDatabase()` | `DatabaseNotification` |
-| `broadcast` | `@nestjs-notifications/broadcast` | `toBroadcast()` | `BroadcastNotification` |
-| `slack` | `@nestjs-notifications/slack` | `toSlack()` | `SlackNotification` |
+| `mail` | `@dudousxd/nestjs-notifications-mail` | `toMail()` | `MailNotification` |
+| `database` | `@dudousxd/nestjs-notifications-database` | `toDatabase()` | `DatabaseNotification` |
+| `broadcast` | `@dudousxd/nestjs-notifications-broadcast` | `toBroadcast()` | `BroadcastNotification` |
+| `slack` | `@dudousxd/nestjs-notifications-slack` | `toSlack()` | `SlackNotification` |
 
 Each channel ships as its own package, so you only pull in what you send.
 
@@ -30,9 +30,9 @@ and the core finds it through Nest's `DiscoveryService` at startup. Import the m
 root module and the channel is live — referenceable by name from any notification's `via()`.
 
 ```ts title="app.module.ts"
-import { NotificationsModule } from '@nestjs-notifications/core';
-import { MailChannelModule } from '@nestjs-notifications/mail';
-import { SlackChannelModule } from '@nestjs-notifications/slack';
+import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
+import { MailChannelModule } from '@dudousxd/nestjs-notifications-mail';
+import { SlackChannelModule } from '@dudousxd/nestjs-notifications-slack';
 
 @Module({
   imports: [

@@ -1,4 +1,4 @@
-import type { Notifiable, NotifiableRef } from '@nestjs-notifications/core';
+import type { Notifiable, NotifiableRef } from '@dudousxd/nestjs-notifications-core';
 
 /** A simple domain object that can receive notifications. */
 export class User implements Notifiable {

@@ -1,4 +1,4 @@
-import type { DispatchDriver } from '@nestjs-notifications/core';
+import type { DispatchDriver } from '@dudousxd/nestjs-notifications-core';
 import { BullModule } from '@nestjs/bullmq';
 import type { ModuleMetadata, Provider, Type } from '@nestjs/common';
 import { BullmqNotificationDispatcher } from './bullmq.dispatcher';

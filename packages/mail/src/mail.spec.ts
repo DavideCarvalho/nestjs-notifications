@@ -1,4 +1,4 @@
-import type { Notifiable, Notification } from '@nestjs-notifications/core';
+import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
 import { describe, expect, it, vi } from 'vitest';
 import { MailMessage } from './mail-message';
 import { MailChannel } from './mail.channel';

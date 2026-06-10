@@ -1,5 +1,5 @@
-import { ChannelRunner, NotificationSerializer } from '@nestjs-notifications/core';
-import type { DispatchDriver, NotificationJob } from '@nestjs-notifications/core';
+import { ChannelRunner, NotificationSerializer } from '@dudousxd/nestjs-notifications-core';
+import type { DispatchDriver, NotificationJob } from '@dudousxd/nestjs-notifications-core';
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 

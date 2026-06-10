@@ -1,6 +1,6 @@
-import type { Notifiable, Notification } from '@nestjs-notifications/core';
-import type { DatabaseNotification } from '@nestjs-notifications/database';
-import { MailMessage, type MailNotification } from '@nestjs-notifications/mail';
+import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import type { DatabaseNotification } from '@dudousxd/nestjs-notifications-database';
+import { MailMessage, type MailNotification } from '@dudousxd/nestjs-notifications-mail';
 
 /**
  * Sent when an invoice is paid. Goes out over both the mail and database channels —

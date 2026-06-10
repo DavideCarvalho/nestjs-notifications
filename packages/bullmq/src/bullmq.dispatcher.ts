@@ -1,5 +1,5 @@
-import { NotificationSerializer } from '@nestjs-notifications/core';
-import type { DispatchDriver, NotificationJob } from '@nestjs-notifications/core';
+import { NotificationSerializer } from '@dudousxd/nestjs-notifications-core';
+import type { DispatchDriver, NotificationJob } from '@dudousxd/nestjs-notifications-core';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
 import type { Queue } from 'bullmq';

@@ -1,13 +1,13 @@
-// Type-only imports — erased at compile time, so this CJS package never has to
-// `require()` the ESM-only telescope package at runtime.
-import type { RecordInput, Watcher, WatcherContext } from '@dudousxd/nestjs-telescope';
 import {
   type Notifiable,
   type Notification,
   NotificationEvents,
   type NotificationFailedEvent,
   type NotificationSentEvent,
-} from '@nestjs-notifications/core';
+} from '@dudousxd/nestjs-notifications-core';
+// Type-only imports — erased at compile time, so this CJS package never has to
+// `require()` the ESM-only telescope package at runtime.
+import type { RecordInput, Watcher, WatcherContext } from '@dudousxd/nestjs-telescope';
 import { Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 

@@ -1,4 +1,4 @@
-import type { ChannelDriver, Notifiable, Notification } from '@nestjs-notifications/core';
+import type { ChannelDriver, Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import { NotificationsGateway } from './gateway';
 import { BROADCAST_OPTIONS } from './tokens';

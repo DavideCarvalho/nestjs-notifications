@@ -1,4 +1,4 @@
-import type { NotificationJob, NotificationSerializer } from '@nestjs-notifications/core';
+import type { NotificationJob, NotificationSerializer } from '@dudousxd/nestjs-notifications-core';
 import type { Queue } from 'bullmq';
 import { describe, expect, it, vi } from 'vitest';
 import { BullmqNotificationDispatcher } from './bullmq.dispatcher';
