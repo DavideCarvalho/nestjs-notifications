@@ -54,19 +54,18 @@ export class AppModule {}
 
 ## The notification side
 
-Implement `MailNotification` to make `toMail()` type-checked. It returns a `MailMessage`:
+Annotate the payload method with the `@Mail()` handle — that declares the mail channel and defines
+its payload. The method returns a `MailMessage`:
 
 ```ts title="invoice-paid.notification.ts"
-import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
-import { MailMessage, type MailNotification } from '@dudousxd/nestjs-notifications-mail';
+import { type Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Mail, MailMessage } from '@dudousxd/nestjs-notifications-mail';
 
-export class InvoicePaid implements Notification, MailNotification {
+@Notification()
+export class InvoicePaid {
   constructor(private invoiceId: string) {}
 
-  via(): string[] {
-    return ['mail'];
-  }
-
+  @Mail()
   toMail(notifiable: Notifiable): MailMessage {
     return new MailMessage()
       .subject(`Invoice ${this.invoiceId} paid`)
@@ -77,6 +76,10 @@ export class InvoicePaid implements Notification, MailNotification {
   }
 }
 ```
+
+The `Mail` handle doubles as a `via()` token (`via() { return [Mail]; }`) for the cases where you
+need [explicit routing](/docs/concepts/notifications#alternative-explicit-via-and-interfaces). For
+compile-time checks on `toMail()`'s shape, implement `MailNotification` alongside the decorator.
 
 ### MailMessage builder
 

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ChannelRunner } from './channel-runner';
-import type { DispatchDriver, Notifiable, Notification } from './interfaces';
+import { resolveChannels } from './decorators';
+import type { DispatchDriver, Notifiable, Notification, NotificationInput } from './interfaces';
 import { PendingNotification } from './pending-notification';
 import { NOTIFICATION_DISPATCHER } from './tokens';
 
@@ -24,35 +25,42 @@ export class NotificationService {
    * Send a notification to one or many notifiables. Goes through the async dispatcher when
    * the notification sets `shouldQueue`, otherwise delivers inline.
    */
-  async send(notifiables: Notifiable | Notifiable[], notification: Notification): Promise<void> {
+  async send(
+    notifiables: Notifiable | Notifiable[],
+    notification: NotificationInput,
+  ): Promise<void> {
+    const n = notification as Notification;
     const targets = Array.isArray(notifiables) ? notifiables : [notifiables];
     await Promise.all(
       targets.map((notifiable) =>
-        notification.shouldQueue
-          ? this.sendAsyncTo(notifiable, notification)
-          : this.sendNowTo(notifiable, notification),
+        n.shouldQueue ? this.sendAsyncTo(notifiable, n) : this.sendNowTo(notifiable, n),
       ),
     );
   }
 
   /** Alias of {@link send}, matching Laravel's `notify()` ergonomics. */
-  notify(notifiables: Notifiable | Notifiable[], notification: Notification): Promise<void> {
+  notify(notifiables: Notifiable | Notifiable[], notification: NotificationInput): Promise<void> {
     return this.send(notifiables, notification);
   }
 
   /** Force inline delivery, ignoring `shouldQueue` (Laravel's `sendNow`). */
-  async sendNow(notifiables: Notifiable | Notifiable[], notification: Notification): Promise<void> {
+  async sendNow(
+    notifiables: Notifiable | Notifiable[],
+    notification: NotificationInput,
+  ): Promise<void> {
+    const n = notification as Notification;
     const targets = Array.isArray(notifiables) ? notifiables : [notifiables];
-    await Promise.all(targets.map((n) => this.sendNowTo(n, notification)));
+    await Promise.all(targets.map((target) => this.sendNowTo(target, n)));
   }
 
   /** Force delivery through the configured async dispatcher. */
   async sendAsync(
     notifiables: Notifiable | Notifiable[],
-    notification: Notification,
+    notification: NotificationInput,
   ): Promise<void> {
+    const n = notification as Notification;
     const targets = Array.isArray(notifiables) ? notifiables : [notifiables];
-    await Promise.all(targets.map((n) => this.sendAsyncTo(n, notification)));
+    await Promise.all(targets.map((target) => this.sendAsyncTo(target, n)));
   }
 
   /** Start an on-demand notification to a raw route value, with no Notifiable object. */
@@ -61,13 +69,13 @@ export class NotificationService {
   }
 
   private async sendNowTo(notifiable: Notifiable, notification: Notification): Promise<void> {
-    const channels = notification.via(notifiable);
+    const channels = resolveChannels(notification, notifiable);
     if (channels.length === 0) return;
     await this.runner.run(notifiable, notification, channels);
   }
 
   private async sendAsyncTo(notifiable: Notifiable, notification: Notification): Promise<void> {
-    const channels = notification.via(notifiable);
+    const channels = resolveChannels(notification, notifiable);
     if (channels.length === 0) return;
     // Pass live objects through; cross-process dispatchers serialize via NotificationSerializer.
     await this.dispatcher.dispatch({

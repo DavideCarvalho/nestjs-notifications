@@ -55,27 +55,29 @@ their room on connect (typically keyed by the same value you route on).
 
 ## The notification side
 
-Implement `BroadcastNotification` and return the real-time payload from `toBroadcast()`:
+Annotate the payload method with the `@Broadcast()` handle and return the real-time payload:
 
 ```ts title="invoice-paid.notification.ts"
-import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
-import type { BroadcastNotification } from '@dudousxd/nestjs-notifications-broadcast';
+import { type Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Broadcast } from '@dudousxd/nestjs-notifications-broadcast';
 
-export class InvoicePaid implements Notification, BroadcastNotification {
+@Notification()
+export class InvoicePaid {
   constructor(private invoiceId: string) {}
 
-  via(): string[] {
-    return ['broadcast'];
-  }
-
+  @Broadcast()
   toBroadcast(notifiable: Notifiable): Record<string, unknown> {
     return { invoiceId: this.invoiceId, message: 'Your invoice was paid' };
   }
 }
 ```
 
-`toBroadcast()` is optional. If it's absent the channel falls back to `toArray()`, and finally to a
-structural copy of the notification's own properties.
+The `Broadcast` handle also works as a `via()` token (`via() { return [Broadcast]; }`) for
+[explicit routing](/docs/concepts/notifications#alternative-explicit-via-and-interfaces); implement
+`BroadcastNotification` alongside the decorator for compile-time checks.
+
+`toBroadcast()` is optional when you route with an explicit `via()`. If it's absent the channel
+falls back to `toArray()`, and finally to a structural copy of the notification's own properties.
 
 ## The target room
 

@@ -1,4 +1,5 @@
 export * from './interfaces';
+export * from './decorators';
 export * from './options';
 export * from './tokens';
 export * from './events';

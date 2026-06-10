@@ -3,12 +3,17 @@ import {
   MissingChannelMethodError,
   type Notifiable,
   type Notification,
+  createChannel,
+  getHandler,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import type { MailMessage } from './mail-message';
 import type { MailRenderer } from './renderer';
 import { MAIL_OPTIONS, MAIL_RENDERER, MAIL_TRANSPORT } from './tokens';
 import type { MailTransport } from './transport';
+
+/** Channel handle: use as `@Mail()` on a payload method, or as a token in `via()`. */
+export const Mail = createChannel('mail');
 
 /** Resolved runtime options for the mail channel. */
 export interface MailChannelOptions {
@@ -41,15 +46,15 @@ export class MailChannel implements ChannelDriver {
   async send(notifiable: Notifiable, notification: Notification): Promise<void> {
     const recipient = String(notifiable.routeNotificationFor('mail', notification));
 
-    const mail = notification as MailNotification;
-    if (typeof mail.toMail !== 'function') {
+    const handler = getHandler(notification, 'mail', 'toMail');
+    if (!handler) {
       const name =
         (notification.constructor as { notificationName?: string }).notificationName ??
         notification.constructor.name;
       throw new MissingChannelMethodError('mail', 'toMail()', name);
     }
 
-    const message = mail.toMail(notifiable);
+    const message = handler(notifiable) as MailMessage;
     const rendered = this.renderer.render(message);
 
     await this.transport.send({

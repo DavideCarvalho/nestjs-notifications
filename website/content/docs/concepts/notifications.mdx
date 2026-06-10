@@ -1,13 +1,166 @@
 ---
 title: Notifications
-description: A notification is a plain class. via() lists the channels, and a to<Channel>() method shapes the payload for each — type-checked by implementing the channel's interface.
+description: A notification is a plain class. Annotate each payload method with the channel handle — @Mail(), @Database() — and via() is inferred automatically. No magic strings, no implements.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 A **notification** is a plain class that answers two questions: *which channels* should this go
-to (`via`), and *what* should each channel send (`to<Channel>()`). One class, one event — the
-payload for every channel lives in one place.
+to, and *what* should each channel send. With the decorator API you answer both at once: annotate
+a payload method with the channel's handle — `@Mail()`, `@Database()` — and the channels are
+**inferred** from those decorators. One class, one event, no `via()` array to keep in sync.
+
+```ts title="invoice-paid.notification.ts"
+import { Notification } from '@dudousxd/nestjs-notifications-core';
+import { Database } from '@dudousxd/nestjs-notifications-database';
+import { Mail, MailMessage } from '@dudousxd/nestjs-notifications-mail';
+
+@Notification()
+export class InvoicePaid {
+  constructor(
+    private readonly invoiceId: string,
+    private readonly amount: number,
+  ) {}
+
+  @Mail()
+  toMail(): MailMessage {
+    return new MailMessage()
+      .subject(`Invoice ${this.invoiceId} paid`)
+      .greeting('Thanks for your payment!')
+      .line(`We received your payment of $${this.amount.toFixed(2)}.`);
+  }
+
+  @Database()
+  toDatabase(): Record<string, unknown> {
+    return { invoiceId: this.invoiceId, amount: this.amount };
+  }
+}
+```
+
+That's it — `@Mail()` and `@Database()` declare the channels *and* the payload for each. No
+`implements`, no string list. Add a channel by adding a decorated method; remove one by deleting it.
+
+## Channel handles
+
+Each channel package exports a **handle** — `Mail`, `Database`, `Broadcast`, `Slack` — and it plays
+two roles:
+
+- **A method decorator.** `@Mail()` on `toMail()` marks that method as the mail payload and adds
+  `mail` to the inferred channel list. There are no magic strings to misspell.
+- **A type-safe token.** The same handle works as a value in `via()` (see below), so you never
+  hand-write `'mail'` either way.
+
+Annotate one method per channel you want. The method name is up to you — `@Mail() build()` works
+just as well as `@Mail() toMail()` — though the conventional `to<Channel>()` names read nicely and
+match the fallback the channels look for.
+
+## Inferred via
+
+Because the decorators already say which channels to use, `via` is computed for you: the notification
+above sends over `mail` and `database` with nothing else to declare. This is the recommended default.
+
+You only reach for an explicit `via()` when routing must vary **per recipient** — see
+[Alternative: explicit via()](#alternative-explicit-via-and-interfaces) below.
+
+## Injecting services
+
+A notification is `new`-able with plain data, but sometimes building a payload needs a service — a
+`UrlService` to sign links, a `ConfigService` to read a base URL. Use `@InjectService(Token)` on a
+property and the library populates it from the Nest container at delivery time:
+
+```ts title="invoice-paid.notification.ts"
+import { InjectService, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Mail, MailMessage } from '@dudousxd/nestjs-notifications-mail';
+import { UrlService } from '../url.service';
+
+@Notification()
+export class InvoicePaid {
+  @InjectService(UrlService)
+  private readonly urls!: UrlService;
+
+  constructor(private readonly invoiceId: string) {}
+
+  @Mail()
+  toMail(): MailMessage {
+    return new MailMessage()
+      .subject(`Invoice ${this.invoiceId} paid`)
+      .action('View invoice', this.urls.signed(`/invoices/${this.invoiceId}`));
+  }
+}
+```
+
+You still construct it with just data — `new InvoicePaid(invoiceId)` — and the `urls` property is
+filled in before the channel runs. Injection is also re-run after async rehydration, so a queued
+notification gets its services back on the worker too. See the
+[Injecting services recipe](/docs/recipes/injecting-services) for the full pattern.
+
+<Callout type="info">
+  Injection is idempotent and only fills properties that are still undefined, so it's safe whether
+  the notification is sent inline or queued, and on the worker after a rebuild.
+</Callout>
+
+## Stable names for the queue
+
+`@Notification({ name })` is an optional class marker. Its main job is pinning a **stable name** so
+async (de)serialization survives a class rename — the worker looks the notification up by this name
+when rebuilding it:
+
+```ts
+@Notification({ name: 'invoice.paid' })
+export class InvoicePaid { /* … */ }
+```
+
+Channel inference works with or without it — the decorator reads the `@Mail()`/`@Database()`
+metadata regardless. Add a `name` once a notification can be dispatched asynchronously, then you're
+free to rename the class. Without it, the class name is used.
+
+## shouldQueue
+
+Set `shouldQueue = true` to route the notification through the configured async
+[dispatcher](/docs/dispatchers) instead of delivering inline:
+
+```ts
+@Notification({ name: 'invoice.paid' })
+export class InvoicePaid {
+  shouldQueue = true;
+  // …
+}
+```
+
+You can also set a `queue` hint that dispatchers may use to target a specific queue.
+
+## serialize — for the queue
+
+When queued, a notification is serialized to `{ name, data }`. By default `data` is a structural
+copy of the instance's own properties, which is right for most notifications. Implement
+`serialize()` (and optionally a static `deserialize()`) when you need control:
+
+```ts
+@Notification({ name: 'invoice.paid' })
+export class InvoicePaid {
+  constructor(private invoice: Invoice) {}
+
+  @Mail()
+  toMail() { /* … */ }
+
+  serialize() {
+    return { invoiceId: this.invoice.id }; // store only the id, refetch later
+  }
+}
+```
+
+<Callout type="warn">
+  Queued notifications are rebuilt on the worker by assigning `data` onto the prototype — the
+  constructor does **not** run again. Keep constructor side effects out, or use a custom
+  `deserialize()`. `@InjectService` properties are re-populated automatically after the rebuild.
+  See [Async dispatch](/docs/concepts/async-dispatch).
+</Callout>
+
+## Alternative: explicit via() and interfaces
+
+The decorator API is the recommended default, but the original interface style still works and is
+the right tool for **conditional, per-recipient routing**. Implement `via(notifiable)` and it
+overrides decorator inference entirely — branch on the recipient's preferences:
 
 ```ts
 import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
@@ -17,8 +170,10 @@ import type { DatabaseNotification } from '@dudousxd/nestjs-notifications-databa
 export class InvoicePaid implements Notification, MailNotification, DatabaseNotification {
   constructor(private invoice: Invoice) {}
 
-  via(notifiable: Notifiable): string[] {
-    return ['mail', 'database'];
+  via(notifiable: User): string[] {
+    const channels = ['database'];
+    if (notifiable.wantsEmail) channels.push('mail'); // per-recipient choice
+    return channels;
   }
 
   toMail(): MailMessage {
@@ -33,75 +188,15 @@ export class InvoicePaid implements Notification, MailNotification, DatabaseNoti
 }
 ```
 
-## via
+A few things worth knowing:
 
-`via` returns the channel names to use for a given recipient. It receives the notifiable, so you
-can branch on the recipient's preferences:
+- **`via()` can return handles too.** Instead of strings, return the channel tokens for type safety:
+  `via() { return [Mail, Database]; }`. Mix them freely — both forms resolve to the same channel.
+- **Implement the channel interface** (`MailNotification`, `DatabaseNotification`, …) for
+  compile-time safety: forgetting a method, or returning the wrong shape, becomes a type error.
+- **You can combine the styles.** Decorate your payload methods *and* implement `via()` when you
+  want inferred payloads but conditional routing — `via()` always wins when present.
 
-```ts
-via(notifiable: User): string[] {
-  const channels = ['database'];
-  if (notifiable.wantsEmail) channels.push('mail');
-  if (notifiable.phone) channels.push('sms');
-  return channels;
-}
-```
-
-Return an empty array to send nothing for this recipient.
-
-## Per-channel payloads
-
-Each channel reads one method off the notification, by convention `to<Channel>()` — `toMail`,
-`toDatabase`, `toBroadcast`, `toSlack`. The method's return type is defined by the channel:
-`toMail` returns a `MailMessage`, `toDatabase` returns a plain object, and so on.
-
-To get **compile-time safety**, implement the interface each channel exports. Then forgetting a
-method, or returning the wrong shape, is a type error rather than a runtime surprise:
-
-```ts
-// MailNotification requires toMail(): MailMessage
-class InvoicePaid implements Notification, MailNotification {
-  via() { return ['mail']; }
-  // ❌ omit toMail → TypeScript error
-}
-```
-
-If a notification is routed to a channel but doesn't implement its method, the channel throws a
-clear `MissingChannelMethodError` at send time.
-
-## shouldQueue
-
-Set `shouldQueue = true` to route the notification through the configured async
-[dispatcher](/docs/dispatchers) instead of delivering inline:
-
-```ts
-export class InvoicePaid implements Notification, MailNotification {
-  shouldQueue = true;
-  // …
-}
-```
-
-You can also pass a `queue` hint that dispatchers may use to target a specific queue.
-
-## serialize — for the queue
-
-When queued, a notification is serialized to `{ name, data }`. By default `data` is a structural
-copy of the instance's own properties, which is right for most notifications. Override
-`serialize()` (and optionally a static `deserialize()`) when you need control:
-
-```ts
-export class InvoicePaid implements Notification {
-  constructor(private invoice: Invoice) {}
-  via() { return ['mail']; }
-
-  serialize() {
-    return { invoiceId: this.invoice.id }; // store only the id, refetch later
-  }
-}
-```
-
-<Callout type="warn">
-  Queued notifications are rebuilt on the worker by assigning `data` onto the prototype — the
-  constructor does **not** run again. Keep constructor side effects out, or use a custom
-  `deserialize()`. See [Async dispatch](/docs/concepts/async-dispatch).
-</Callout>
+Return an empty array from `via()` to send nothing for this recipient. If a notification is routed
+to a channel but has no method for it, the channel throws a clear `MissingChannelMethodError` at
+send time.

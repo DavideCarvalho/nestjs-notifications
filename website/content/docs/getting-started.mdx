@@ -102,20 +102,19 @@ export class User implements Notifiable {
 
 ### Write a notification
 
-A notification is a plain class. `via()` lists the channels for this recipient, and `toMail()`
-shapes the email. Implementing `MailNotification` makes `toMail` type-checked.
+A notification is a plain class. Annotate the payload method with the channel's handle — `@Mail()` —
+and the library infers that this notification goes over the mail channel. No `via()` array, no
+magic strings.
 
 ```ts title="invoice-paid.notification.ts"
-import type { Notification } from '@dudousxd/nestjs-notifications-core';
-import { MailMessage, type MailNotification } from '@dudousxd/nestjs-notifications-mail';
+import { Notification } from '@dudousxd/nestjs-notifications-core';
+import { Mail, MailMessage } from '@dudousxd/nestjs-notifications-mail';
 
-export class InvoicePaid implements Notification, MailNotification {
+@Notification()
+export class InvoicePaid {
   constructor(private invoiceId: string) {}
 
-  via(): string[] {
-    return ['mail'];
-  }
-
+  @Mail()
   toMail(): MailMessage {
     return new MailMessage()
       .subject(`Invoice ${this.invoiceId} paid`)
@@ -158,7 +157,7 @@ export class BillingService {
 ## Add a second channel
 
 Want the same notification to also land in an in-app feed? Add the database channel — no change
-to the call site, just one more module and one more method.
+to the call site, no `via()` to edit. Just one more module and one more decorated method.
 
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
@@ -181,18 +180,16 @@ DatabaseChannelModule.forRoot(), // bundled in-memory store; swap for a real one
 ```
 
 ```ts title="invoice-paid.notification.ts"
-import type { DatabaseNotification } from '@dudousxd/nestjs-notifications-database';
+import { Database } from '@dudousxd/nestjs-notifications-database';
 
-// add to the class:
-via(): string[] {
-  return ['mail', 'database']; // [!code highlight]
-}
-
+// add a second decorated method to the class:
+@Database() // [!code highlight]
 toDatabase() {
   return { invoiceId: this.invoiceId };
 }
 ```
 
+The `@Database()` decorator adds the channel to the inferred list — there's nothing else to update.
 `send()` now fans out to both. If the mail channel throws, the database row still gets written —
 channels are isolated by default.
 
@@ -209,7 +206,8 @@ When you're ready to move delivery off the request, set `shouldQueue` on the not
 pick a [dispatcher](/docs/dispatchers). The call site doesn't change.
 
 ```ts
-export class InvoicePaid implements Notification, MailNotification {
+@Notification({ name: 'invoice.paid' }) // a stable name keeps async (de)serialization rename-proof
+export class InvoicePaid {
   shouldQueue = true; // [!code highlight]
   // …
 }

@@ -1,5 +1,6 @@
 export { SlackMessage, type SlackPayload } from './slack-message';
 export {
+  Slack,
   SlackChannel,
   type SlackChannelOptions,
   type SlackNotification,

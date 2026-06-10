@@ -24,6 +24,12 @@ Mail, database, broadcast and Slack are channels. Each is its own package, and e
 core discovers it from the Nest container automatically, so there's no registration array to keep
 in sync.
 
+Each channel package also exports a **handle** — `Mail`, `Database`, `Broadcast`, `Slack` — that
+serves double duty: as the method decorator (`@Mail()`) that declares a notification's payload and
+infers its channels, and as a type-safe token you can return from `via()`. Same value, no magic
+strings either way. See [Notifications](/docs/concepts/notifications) for how that drives channel
+inference.
+
 See [Channels](/docs/channels) for the built-ins, and [Custom channels](/docs/recipes/custom-channel)
 to write your own.
 

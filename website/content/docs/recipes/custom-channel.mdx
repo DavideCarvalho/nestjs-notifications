@@ -15,22 +15,31 @@ SMS channel against a fictional SMS API.
 
 <Step>
 
-### Export a notification interface
+### Export a channel handle and a notification interface
 
-First, define the contract notifications opt into for type safety. A notification routed to `sms`
-should implement `toSms()`. Exporting this interface means forgetting the method is a compile error,
-not a runtime surprise.
+First, create the channel **handle** with `createChannel('sms')`. The handle is callable as a method
+decorator (`@Sms()`) and usable as a type-safe token in `via()` (`return [Sms]`) — exactly like the
+built-in `Mail` and `Database` handles. Export it next to the message type and a notification
+interface for compile-time safety.
 
 ```ts title="sms-notification.ts"
+import { createChannel } from '@dudousxd/nestjs-notifications-core';
+
+/** Channel handle: use as `@Sms()` on a payload method, or as a token in `via()`. */
+export const Sms = createChannel('sms');
+
 export interface SmsMessage {
   body: string;
 }
 
-/** Implement this on any notification routed to the `sms` channel. */
+/** Implement this on any notification routed to the `sms` channel for type safety. */
 export interface SmsNotification {
   toSms(notifiable: unknown): SmsMessage;
 }
 ```
+
+`createChannel(name)` takes just the channel name — the same string your driver reports as its
+`channel`. That one string is the only thing the handle and the driver need to agree on.
 
 </Step>
 
@@ -43,15 +52,20 @@ from the notification's `toSms()`, and calls the API. If the notification was ro
 never implemented `toSms()`, throw `MissingChannelMethodError` — the same error the built-in
 channels raise, so the failure is consistent and clear.
 
+Use `getHandler(notification, 'sms', 'toSms')` to resolve the payload method: it returns the
+`@Sms()`-decorated method if present, otherwise the `toSms` convention name — so both styles work,
+just like the built-in channels.
+
 ```ts title="sms.channel.ts"
 import {
   type ChannelDriver,
   MissingChannelMethodError,
   type Notifiable,
   type Notification,
+  getHandler,
 } from '@dudousxd/nestjs-notifications-core';
 import { Injectable } from '@nestjs/common';
-import type { SmsNotification } from './sms-notification';
+import type { SmsMessage } from './sms-notification';
 import { SmsClient } from './sms-client';
 
 @Injectable()
@@ -64,8 +78,8 @@ export class SmsChannel implements ChannelDriver {
     const to = notifiable.routeNotificationFor(this.channel, notification) as string | undefined;
     if (!to) return; // no SMS address for this recipient — nothing to do
 
-    const candidate = notification as Partial<SmsNotification>;
-    if (typeof candidate.toSms !== 'function') {
+    const handler = getHandler(notification, this.channel, 'toSms');
+    if (!handler) {
       throw new MissingChannelMethodError(
         this.channel,
         'toSms',
@@ -74,14 +88,14 @@ export class SmsChannel implements ChannelDriver {
       );
     }
 
-    const message = candidate.toSms(notifiable);
+    const message = handler(notifiable) as SmsMessage;
     await this.client.send({ to, body: message.body });
   }
 }
 ```
 
-`MissingChannelMethodError` takes the channel name, the missing method name, and the notification
-name — it builds the message for you.
+`getHandler` returns the bound method (or `undefined`), and `MissingChannelMethodError` takes the
+channel name, the missing method name, and the notification name — it builds the message for you.
 
 </Step>
 
@@ -135,24 +149,26 @@ export class AppModule {}
 
 ## Use it in a notification
 
-A notification opts into the channel by listing it in `via()` and implementing the interface:
+Because you exported the `Sms` handle, notifications opt into the channel exactly like the built-ins:
+annotate the payload method with `@Sms()` and the channel is inferred — no `via()` to maintain.
 
 ```ts title="otp-code.notification.ts"
-import type { Notification } from '@dudousxd/nestjs-notifications-core';
-import type { SmsMessage, SmsNotification } from './sms-notification';
+import { Notification } from '@dudousxd/nestjs-notifications-core';
+import { Sms, type SmsMessage } from './sms-notification';
 
-export class OtpCode implements Notification, SmsNotification {
+@Notification()
+export class OtpCode {
   constructor(private readonly code: string) {}
 
-  via(): string[] {
-    return ['sms'];
-  }
-
+  @Sms()
   toSms(): SmsMessage {
     return { body: `Your verification code is ${this.code}` };
   }
 }
 ```
+
+The `Sms` handle also works as a `via()` token (`via() { return [Sms]; }`), and implementing
+`SmsNotification` adds compile-time checks on `toSms()`.
 
 ```ts
 await notifications.send(user, new OtpCode('492013'));

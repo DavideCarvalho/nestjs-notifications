@@ -1,0 +1,130 @@
+---
+title: Injecting services
+description: Pull a provider into a notification with @InjectService. The notification stays new-able with plain data, and the library fills the service from the Nest container at delivery time — sync and queued.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+A notification is a plain class you construct with data: `new InvoicePaid(invoiceId)`. But building
+a payload sometimes needs a **service** — a `UrlService` to sign links, a `ConfigService` to read a
+base URL, a translator for localized copy. You can't inject through the constructor, because the
+constructor is yours to pass data to (and on the queue it doesn't even run again).
+
+`@InjectService(Token)` solves this. Mark a property with it and the library resolves the provider
+from the Nest container and assigns it **at delivery time** — before any channel runs. The
+notification stays `new`-able with data *and* gets its services.
+
+## The pattern
+
+```ts title="invoice-paid.notification.ts"
+import { InjectService, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Mail, MailMessage } from '@dudousxd/nestjs-notifications-mail';
+import { UrlService } from '../url.service';
+
+@Notification({ name: 'invoice.paid' })
+export class InvoicePaid {
+  @InjectService(UrlService)
+  private readonly urls!: UrlService;
+
+  constructor(private readonly invoiceId: string) {}
+
+  @Mail()
+  toMail(): MailMessage {
+    return new MailMessage()
+      .subject(`Invoice ${this.invoiceId} paid`)
+      .line('Thanks for your payment!')
+      .action('View invoice', this.urls.signed(`/invoices/${this.invoiceId}`));
+  }
+}
+```
+
+The call site is unchanged — you still pass only data:
+
+```ts
+await notifications.send(user, new InvoicePaid(invoiceId));
+```
+
+The `urls` property is `undefined` right after `new`, then populated from the container before
+`toMail()` runs. Use `!` (definite assignment) so TypeScript trusts it will be set.
+
+## How it works
+
+<Steps>
+
+<Step>
+
+### You construct with data only
+
+`new InvoicePaid(invoiceId)` carries the payload data. The `@InjectService` property is left
+unset — there's no container in scope at the call site, and that's fine.
+
+</Step>
+
+<Step>
+
+### The library injects before delivery
+
+When the notification reaches a channel, the library walks its `@InjectService` properties and
+resolves each token from the Nest container (`ModuleRef`), assigning it onto the instance. It runs
+once per delivery and only fills properties that are still `undefined`, so it's cheap and safe to
+repeat.
+
+</Step>
+
+<Step>
+
+### Async re-injects on the worker
+
+A queued notification is serialized to plain `data` and rebuilt on the worker — the constructor and
+any container state are gone. The library re-runs injection after that rebuild, so `this.urls` is a
+live service again before `toMail()` runs on the worker. Nothing extra to wire.
+
+</Step>
+
+</Steps>
+
+<Callout type="info">
+  Only the property's value is serialized for the queue if it happens to be set — but since
+  injection fills it lazily at delivery, an `@InjectService` property is normally `undefined` at
+  serialize time and re-resolved fresh on the other side. Keep injected services out of `serialize()`.
+</Callout>
+
+## The injected service
+
+The service is an ordinary Nest provider — register it wherever its module lives:
+
+```ts title="url.service.ts"
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+
+@Injectable()
+export class UrlService {
+  constructor(private readonly config: ConfigService) {}
+
+  signed(path: string): string {
+    const base = this.config.getOrThrow<string>('APP_URL');
+    return `${base}${path}?sig=${this.sign(path)}`;
+  }
+
+  private sign(path: string): string {
+    // …compute an HMAC over the path
+    return '…';
+  }
+}
+```
+
+The token can be a class (as above), a string, or a symbol — anything Nest can resolve. The library
+looks it up with `strict: false`, so a globally-provided service resolves from anywhere.
+
+<Callout type="warn">
+  The token must be resolvable from the container at delivery time. If you queue notifications, make
+  sure the service is also provided in the worker process — typically it is, since the worker boots
+  the same Nest application.
+</Callout>
+
+## See also
+
+- [Notifications](/docs/concepts/notifications) — the decorator API and `@InjectService` in context
+- [Async dispatch](/docs/concepts/async-dispatch) — how notifications are rebuilt on a worker
+- [Queued notifications](/docs/recipes/queued-notifications) — the full queueing setup

@@ -1,5 +1,6 @@
 export { NotificationsGateway } from './gateway';
 export {
+  Broadcast,
   BroadcastChannel,
   type BroadcastChannelOptions,
   type BroadcastNotification,

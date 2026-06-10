@@ -6,7 +6,7 @@ export {
   type SMTPOptions,
   NodemailerTransport,
 } from './transport';
-export { MailChannel, type MailChannelOptions, type MailNotification } from './mail.channel';
+export { Mail, MailChannel, type MailChannelOptions, type MailNotification } from './mail.channel';
 export {
   MailChannelModule,
   type MailChannelModuleOptions,

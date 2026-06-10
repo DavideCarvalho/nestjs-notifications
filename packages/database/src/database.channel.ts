@@ -1,12 +1,17 @@
-import type {
-  ChannelDriver,
-  Notifiable,
-  NotifiableRef,
-  Notification,
+import {
+  type ChannelDriver,
+  type Notifiable,
+  type NotifiableRef,
+  type Notification,
+  createChannel,
+  getHandler,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import type { DatabaseNotification, NotificationStore } from './interfaces';
 import { NOTIFICATION_STORE } from './tokens';
+
+/** Channel handle: use as `@Database()` on a payload method, or as a token in `via()`. */
+export const Database = createChannel('database');
 
 /**
  * Persists notifications via a {@link NotificationStore} so they can be shown in-app.
@@ -50,7 +55,8 @@ export class DatabaseChannel implements ChannelDriver {
     notifiable: Notifiable,
     notification: DatabaseNotification,
   ): Record<string, unknown> {
-    if (typeof notification.toDatabase === 'function') return notification.toDatabase(notifiable);
+    const handler = getHandler(notification, 'database', 'toDatabase');
+    if (handler) return handler(notifiable) as Record<string, unknown>;
     if (typeof notification.toArray === 'function') return notification.toArray(notifiable);
     const { ...rest } = notification as unknown as Record<string, unknown>;
     return rest;

@@ -52,28 +52,31 @@ There's also `DatabaseChannelModule.forFeature()`, which registers only the chan
 
 ## The notification side
 
-Implement `DatabaseNotification` and return a plain object from `toDatabase()` — that object becomes
-the persisted `data`:
+Annotate the payload method with the `@Database()` handle and return a plain object — that object
+becomes the persisted `data`:
 
 ```ts title="invoice-paid.notification.ts"
-import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
-import type { DatabaseNotification } from '@dudousxd/nestjs-notifications-database';
+import { type Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Database } from '@dudousxd/nestjs-notifications-database';
 
-export class InvoicePaid implements Notification, DatabaseNotification {
+@Notification()
+export class InvoicePaid {
   constructor(private invoiceId: string, private amount: number) {}
 
-  via(): string[] {
-    return ['database'];
-  }
-
+  @Database()
   toDatabase(notifiable: Notifiable): Record<string, unknown> {
     return { invoiceId: this.invoiceId, amount: this.amount };
   }
 }
 ```
 
-`toDatabase()` is optional. If it's absent the channel falls back to `toArray()` (Laravel parity),
-and finally to a structural copy of the notification's own properties.
+The `Database` handle also works as a `via()` token (`via() { return [Database]; }`) for
+[explicit routing](/docs/concepts/notifications#alternative-explicit-via-and-interfaces). For
+compile-time checks, implement `DatabaseNotification` alongside the decorator.
+
+`toDatabase()` is optional when you route with an explicit `via()`. If it's absent the channel falls
+back to `toArray()` (Laravel parity), and finally to a structural copy of the notification's own
+properties.
 
 ### The notifiable reference
 

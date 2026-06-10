@@ -3,10 +3,15 @@ import {
   MissingChannelMethodError,
   type Notifiable,
   type Notification,
+  createChannel,
+  getHandler,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import type { SlackMessage, SlackPayload } from './slack-message';
 import { SLACK_OPTIONS } from './tokens';
+
+/** Channel handle: use as `@Slack()` on a payload method, or as a token in `via()`. */
+export const Slack = createChannel('slack');
 
 const CHAT_POST_MESSAGE_URL = 'https://slack.com/api/chat.postMessage';
 
@@ -44,15 +49,15 @@ export class SlackChannel implements ChannelDriver {
   ) {}
 
   async send(notifiable: Notifiable, notification: Notification): Promise<void> {
-    const slack = notification as SlackNotification;
-    if (typeof slack.toSlack !== 'function') {
+    const handler = getHandler(notification, 'slack', 'toSlack');
+    if (!handler) {
       const name =
         (notification.constructor as { notificationName?: string }).notificationName ??
         notification.constructor.name;
       throw new MissingChannelMethodError('slack', 'toSlack()', name);
     }
 
-    const message = slack.toSlack(notifiable);
+    const message = handler(notifiable) as SlackMessage;
     const payload = message.toPayload();
     const route = notifiable.routeNotificationFor('slack', notification);
 

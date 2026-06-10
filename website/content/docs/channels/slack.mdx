@@ -52,19 +52,17 @@ export class AppModule {}
 
 ## The notification side
 
-Implement `SlackNotification` and return a `SlackMessage` from `toSlack()`:
+Annotate the payload method with the `@Slack()` handle and return a `SlackMessage`:
 
 ```ts title="deploy-finished.notification.ts"
-import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
-import { SlackMessage, type SlackNotification } from '@dudousxd/nestjs-notifications-slack';
+import { type Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Slack, SlackMessage } from '@dudousxd/nestjs-notifications-slack';
 
-export class DeployFinished implements Notification, SlackNotification {
+@Notification()
+export class DeployFinished {
   constructor(private service: string) {}
 
-  via(): string[] {
-    return ['slack'];
-  }
-
+  @Slack()
   toSlack(notifiable: Notifiable): SlackMessage {
     return new SlackMessage()
       .text(`Deploy finished: ${this.service}`)
@@ -72,6 +70,10 @@ export class DeployFinished implements Notification, SlackNotification {
   }
 }
 ```
+
+The `Slack` handle also works as a `via()` token (`via() { return [Slack]; }`) for
+[explicit routing](/docs/concepts/notifications#alternative-explicit-via-and-interfaces); implement
+`SlackNotification` alongside the decorator for compile-time checks on `toSlack()`.
 
 ### SlackMessage builder
 

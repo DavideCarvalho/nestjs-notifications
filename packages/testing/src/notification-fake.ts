@@ -2,8 +2,13 @@ import {
   AnonymousNotifiable,
   type NotificationService,
   PendingNotification,
+  resolveChannels,
 } from '@dudousxd/nestjs-notifications-core';
-import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import type {
+  Notifiable,
+  Notification,
+  NotificationInput,
+} from '@dudousxd/nestjs-notifications-core';
 import { Injectable } from '@nestjs/common';
 
 /** A single recorded send captured by {@link NotificationFake}. */
@@ -39,27 +44,33 @@ export class NotificationFake {
    * Records a notification to one or many notifiables. Mode is derived from
    * `notification.shouldQueue` (async when true, sync otherwise).
    */
-  async send(notifiables: Notifiable | Notifiable[], notification: Notification): Promise<void> {
-    const mode: 'sync' | 'async' = notification.shouldQueue ? 'async' : 'sync';
-    this.record(notifiables, notification, mode);
+  async send(
+    notifiables: Notifiable | Notifiable[],
+    notification: NotificationInput,
+  ): Promise<void> {
+    const n = notification as Notification;
+    this.record(notifiables, n, n.shouldQueue ? 'async' : 'sync');
   }
 
   /** Alias of {@link send}, matching `NotificationService.notify`. */
-  notify(notifiables: Notifiable | Notifiable[], notification: Notification): Promise<void> {
+  notify(notifiables: Notifiable | Notifiable[], notification: NotificationInput): Promise<void> {
     return this.send(notifiables, notification);
   }
 
   /** Records as a forced inline (sync) send. */
-  async sendNow(notifiables: Notifiable | Notifiable[], notification: Notification): Promise<void> {
-    this.record(notifiables, notification, 'sync');
+  async sendNow(
+    notifiables: Notifiable | Notifiable[],
+    notification: NotificationInput,
+  ): Promise<void> {
+    this.record(notifiables, notification as Notification, 'sync');
   }
 
   /** Records as a forced async (queued) send. */
   async sendAsync(
     notifiables: Notifiable | Notifiable[],
-    notification: Notification,
+    notification: NotificationInput,
   ): Promise<void> {
-    this.record(notifiables, notification, 'async');
+    this.record(notifiables, notification as Notification, 'async');
   }
 
   /**
@@ -90,7 +101,7 @@ export class NotificationFake {
 
   private channelsFor(notification: Notification, notifiable: Notifiable): string[] {
     try {
-      return notification.via(notifiable) ?? [];
+      return resolveChannels(notification, notifiable);
     } catch {
       return [];
     }

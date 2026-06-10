@@ -1,7 +1,16 @@
-import type { ChannelDriver, Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import {
+  type ChannelDriver,
+  type Notifiable,
+  type Notification,
+  createChannel,
+  getHandler,
+} from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import { NotificationsGateway } from './gateway';
 import { BROADCAST_OPTIONS } from './tokens';
+
+/** Channel handle: use as `@Broadcast()` on a payload method, or as a token in `via()`. */
+export const Broadcast = createChannel('broadcast');
 
 /** Resolved runtime options for the broadcast channel. */
 export interface BroadcastChannelOptions {
@@ -42,7 +51,8 @@ export class BroadcastChannel implements ChannelDriver {
     notifiable: Notifiable,
     notification: BroadcastNotification,
   ): Record<string, unknown> {
-    if (typeof notification.toBroadcast === 'function') return notification.toBroadcast(notifiable);
+    const handler = getHandler(notification, 'broadcast', 'toBroadcast');
+    if (handler) return handler(notifiable) as Record<string, unknown>;
     if (typeof notification.toArray === 'function') return notification.toArray(notifiable);
     const { ...rest } = notification as unknown as Record<string, unknown>;
     return rest;

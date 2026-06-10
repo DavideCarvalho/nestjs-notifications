@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ChannelRegistry } from './channel-registry';
+import { injectServices } from './decorators';
 import { ChannelNotRegisteredError } from './errors';
 import { NotificationFailedEvent, NotificationSendingEvent, NotificationSentEvent } from './events';
 import type { Notifiable, Notification } from './interfaces';
@@ -24,11 +26,15 @@ export class ChannelRunner {
   constructor(
     private readonly registry: ChannelRegistry,
     private readonly events: EventEmitter2,
+    private readonly moduleRef: ModuleRef,
     @Inject(NOTIFICATION_OPTIONS)
     private readonly options: NotificationsModuleOptions,
   ) {}
 
   async run(notifiable: Notifiable, notification: Notification, channels: string[]): Promise<void> {
+    // Populate @InjectService properties from the container (no-op if there are none).
+    injectServices(notification, this.moduleRef);
+
     const failFast = this.options.errorPolicy === 'failFast';
 
     if (failFast) {

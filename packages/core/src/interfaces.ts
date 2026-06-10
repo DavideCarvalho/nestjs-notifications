@@ -29,12 +29,28 @@ export interface SerializedNotification {
 }
 
 /**
- * A notification. Implement `via` to declare which channels to use for a given
- * notifiable. Per-channel payload methods (`toMail`, `toDatabase`, ...) are added by
- * implementing the matching interface exported by each channel package.
+ * A type-safe reference to a channel, exported by each channel package (`Mail`,
+ * `Database`, ...). Usable both as a method decorator (`@Mail()`) and as a value in
+ * `via()` (`return [Mail, Database]`) — no magic strings.
+ */
+export interface ChannelRef {
+  readonly channel: string;
+}
+
+/**
+ * A notification. The channels can be declared two ways:
+ *
+ * - **Decorators** (idiomatic): annotate payload methods with the channel handles
+ *   (`@Mail()`, `@Database()`); `via` is then inferred automatically.
+ * - **Explicit `via`**: implement `via()` (returning channel names or {@link ChannelRef}
+ *   handles) when you need per-recipient conditional routing — it overrides inference.
+ *
+ * Per-channel payload methods (`toMail`, `toDatabase`, ...) are typed by implementing the
+ * matching interface exported by each channel package, or carry a channel decorator.
  */
 export interface Notification {
-  via(notifiable: Notifiable): string[];
+  /** Optional explicit channel list; overrides decorator inference when present. */
+  via?(notifiable: Notifiable): Array<string | ChannelRef>;
   /** Route through the configured async dispatch driver instead of sending inline. */
   shouldQueue?: boolean;
   /** Optional queue/driver hint passed through to the dispatcher. */
@@ -46,9 +62,44 @@ export interface Notification {
   serialize?(): Record<string, unknown>;
 }
 
-/** Constructor of a {@link Notification}, optionally with a custom deserializer. */
+/**
+ * A notification instance accepted by the public API: a plain class carrying channel
+ * decorators, or any object implementing the {@link Notification} contract. Kept loose so
+ * a decorator-only class (which shares no member with {@link Notification}) is accepted.
+ */
+export type NotificationInput = object;
+
+/** Options for the {@link Notification} class decorator. */
+export interface NotificationOptions {
+  /** Stable name used in the async rehydration registry; defaults to the class name. */
+  name?: string;
+}
+
+/**
+ * Optional class marker for a notification. Its main use is pinning a stable
+ * `notificationName` so async (de)serialization survives a class rename:
+ *
+ * ```ts
+ * @Notification({ name: 'invoice.paid' })
+ * export class InvoicePaid { ... }
+ * ```
+ *
+ * Channel inference works with or without it — it reads the channel decorators.
+ */
+export function Notification(options: NotificationOptions = {}): ClassDecorator {
+  return (target) => {
+    if (options.name) {
+      Object.defineProperty(target, 'notificationName', {
+        value: options.name,
+        configurable: true,
+      });
+    }
+  };
+}
+
+/** Constructor of a notification, optionally with a custom deserializer. */
 export interface NotificationClass {
-  new (...args: any[]): Notification;
+  new (...args: any[]): object;
   /** Stable name used in the rehydration registry; defaults to the class name. */
   readonly notificationName?: string;
   /** Custom rebuild from serialized data. Defaults to assigning data onto the prototype. */

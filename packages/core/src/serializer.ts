@@ -132,5 +132,14 @@ function isRef(value: Notifiable | NotifiableRef): value is NotifiableRef {
 function isSerialized(
   value: Notification | SerializedNotification,
 ): value is SerializedNotification {
-  return typeof (value as Notification).via !== 'function';
+  // The serialized wire form is a plain { name, data } object; a live notification is a
+  // class instance with a custom prototype. (Can't rely on `via` — it's optional now that
+  // channels can be declared with decorators.)
+  const candidate = value as SerializedNotification;
+  return (
+    typeof candidate.name === 'string' &&
+    typeof candidate.data === 'object' &&
+    candidate.data !== null &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
 }

@@ -210,7 +210,7 @@ function FanoutPreview() {
                 </code>
               </pre>
               <p className="mt-4 font-mono text-[11px] leading-relaxed text-zinc-600">
-                via() returns the channels.
+                channel decorators infer the routes.
                 <br />
                 each channel reads its own payload.
               </p>
@@ -368,20 +368,23 @@ function FeatureCard({ feature }: { feature: Feature }) {
 const CODE_LINES: readonly { tokens: { text: string; cls?: string }[] }[] = [
   {
     tokens: [
+      { text: '@', cls: 'text-amber-300' },
+      { text: 'Notification', cls: 'text-sky-400' },
+      { text: '()' },
+    ],
+  },
+  {
+    tokens: [
       { text: 'class ', cls: 'text-violet-400' },
       { text: 'InvoicePaid', cls: 'text-emerald-400' },
-      { text: ' implements ', cls: 'text-violet-400' },
-      { text: 'Notification, MailNotification', cls: 'text-sky-400' },
       { text: ' {' },
     ],
   },
   {
     tokens: [
-      { text: '  ' },
-      { text: 'via', cls: 'text-sky-400' },
-      { text: '() { ' },
-      { text: 'return', cls: 'text-violet-400' },
-      { text: " ['mail', 'database']; }", cls: 'text-teal-300' },
+      { text: '  @', cls: 'text-amber-300' },
+      { text: 'Mail', cls: 'text-sky-400' },
+      { text: '()' },
     ],
   },
   {
@@ -430,13 +433,12 @@ function WireItIn() {
             One class. That&apos;s the notification.
           </h2>
           <p className="mt-4 text-fd-muted-foreground">
-            A notification is a plain class:{' '}
-            <code className="rounded bg-fd-muted px-1.5 py-0.5 font-mono text-sm">via()</code> lists
-            the channels, and a{' '}
-            <code className="rounded bg-fd-muted px-1.5 py-0.5 font-mono text-sm">
-              to&lt;Channel&gt;()
-            </code>{' '}
-            method shapes each payload. Register the channels you want once in your module, then{' '}
+            A notification is a plain class: annotate each payload method with the channel handle —{' '}
+            <code className="rounded bg-fd-muted px-1.5 py-0.5 font-mono text-sm">@Mail()</code>,{' '}
+            <code className="rounded bg-fd-muted px-1.5 py-0.5 font-mono text-sm">@Database()</code>{' '}
+            — and the channels are inferred. No magic strings, no{' '}
+            <code className="rounded bg-fd-muted px-1.5 py-0.5 font-mono text-sm">via()</code> array
+            to keep in sync. Register the channels once in your module, then{' '}
             <code className="rounded bg-fd-muted px-1.5 py-0.5 font-mono text-sm">send</code> from
             anywhere.
           </p>

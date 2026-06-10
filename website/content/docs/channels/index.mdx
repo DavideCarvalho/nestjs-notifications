@@ -6,28 +6,31 @@ description: A channel is a transport — mail, database, broadcast, Slack. Impo
 import { Callout } from 'fumadocs-ui/components/callout';
 
 A **channel** is a transport: it takes a notification and delivers it over one medium — an email,
-a persisted row, a websocket push, a Slack message. A notification's `via()` lists the channels
-to use, and each channel reads one `to<Channel>()` method off the notification for its payload.
+a persisted row, a websocket push, a Slack message. A notification declares a channel by annotating
+a payload method with the channel's handle (`@Mail()`, `@Database()`, …); the channels are then
+inferred, and each channel reads that one `to<Channel>()` method for its payload.
 
 For the conceptual split between channels (where it goes) and dispatchers (when it goes), see
 [Channels vs. dispatchers](/docs/concepts/channels-and-dispatchers).
 
 ## Built-in channels
 
-| Channel | Package | Reads | Notification interface |
-| --- | --- | --- | --- |
-| `mail` | `@dudousxd/nestjs-notifications-mail` | `toMail()` | `MailNotification` |
-| `database` | `@dudousxd/nestjs-notifications-database` | `toDatabase()` | `DatabaseNotification` |
-| `broadcast` | `@dudousxd/nestjs-notifications-broadcast` | `toBroadcast()` | `BroadcastNotification` |
-| `slack` | `@dudousxd/nestjs-notifications-slack` | `toSlack()` | `SlackNotification` |
+| Channel | Package | Handle / decorator | Reads | Notification interface |
+| --- | --- | --- | --- | --- |
+| `mail` | `@dudousxd/nestjs-notifications-mail` | `Mail` / `@Mail()` | `toMail()` | `MailNotification` |
+| `database` | `@dudousxd/nestjs-notifications-database` | `Database` / `@Database()` | `toDatabase()` | `DatabaseNotification` |
+| `broadcast` | `@dudousxd/nestjs-notifications-broadcast` | `Broadcast` / `@Broadcast()` | `toBroadcast()` | `BroadcastNotification` |
+| `slack` | `@dudousxd/nestjs-notifications-slack` | `Slack` / `@Slack()` | `toSlack()` | `SlackNotification` |
 
-Each channel ships as its own package, so you only pull in what you send.
+Each channel ships as its own package, so you only pull in what you send. The handle is both the
+method decorator that declares a payload (`@Mail()`) and a type-safe token you can return from
+`via()` — see [Notifications](/docs/concepts/notifications).
 
 ## Registration is just an import
 
 There is no channels array to maintain. Each `*ChannelModule.forRoot()` provides a `ChannelDriver`,
 and the core finds it through Nest's `DiscoveryService` at startup. Import the module once in your
-root module and the channel is live — referenceable by name from any notification's `via()`.
+root module and the channel is live — usable from any notification via its decorator handle.
 
 ```ts title="app.module.ts"
 import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
