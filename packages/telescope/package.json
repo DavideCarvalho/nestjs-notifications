@@ -1,7 +1,7 @@
 {
   "name": "@dudousxd/nestjs-notifications-telescope",
-  "version": "0.1.0",
-  "description": "nestjs-telescope watcher for nestjs-notifications \u2014 records every notification send in the Telescope dashboard",
+  "version": "1.0.0",
+  "description": "nestjs-telescope watcher for nestjs-notifications — records every notification send in the Telescope dashboard",
   "license": "MIT",
   "author": "Davide Carvalho",
   "repository": {
@@ -12,12 +12,20 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
-  "keywords": ["nestjs", "telescope", "notifications", "observability", "watcher"],
+  "keywords": [
+    "nestjs",
+    "telescope",
+    "notifications",
+    "observability",
+    "watcher"
+  ],
   "peerDependencies": {
     "@dudousxd/nestjs-telescope": "^1.7.0",
     "@dudousxd/nestjs-notifications-core": "workspace:^",
