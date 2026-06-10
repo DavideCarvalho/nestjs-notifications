@@ -4,7 +4,7 @@ import type {
   NotificationStore,
   StoredNotification,
 } from '@dudousxd/nestjs-notifications-database';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PRISMA_CLIENT, type PrismaNotificationClientLike } from './prisma-client';
 
 /** Maps a Prisma `Notification` row to the channel-agnostic {@link StoredNotification}. */
@@ -78,5 +78,16 @@ export class PrismaNotificationStore implements NotificationStore {
 
   async delete(id: string): Promise<void> {
     await this.client.notification.delete({ where: { id } });
+  }
+
+  /**
+   * No-op: Prisma is schema-first. Create the `Notification` model in your `schema.prisma`
+   * and apply it with `prisma migrate` / `prisma db push` — the library won't run DDL here.
+   */
+  async ensureSchema(): Promise<void> {
+    new Logger('Notifications').log(
+      'Prisma manages its own schema — add the Notification model to schema.prisma and run ' +
+        '`prisma migrate`. Skipping auto-create.',
+    );
   }
 }

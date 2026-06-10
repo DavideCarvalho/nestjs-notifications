@@ -296,3 +296,78 @@ the channel that consumes it.
   Neither adapter fits your schema? Implement `NotificationStore` yourself and pass it as the `store`
   option to `DatabaseChannelModule.forRoot()`. The interface is six methods.
 </Callout>
+
+## Schema
+
+By default the channel is **self-contained**: on boot it creates the `notifications` table if it's
+missing, non-destructively — it only adds what's absent and never drops anything. That's
+`autoCreateSchema: true`, the default on both `DatabaseChannelModule.forRoot()` and
+`DatabaseChannelModule.forFeature()`. Install an adapter, register the module, and the feed works on
+first run with no migration step.
+
+<Callout type="info">
+  Auto-create is non-destructive — it only creates missing tables and columns, so it's safe to leave
+  on. Turn it off (`autoCreateSchema: false`) for strict, migration-only environments where the app
+  must never touch DDL.
+</Callout>
+
+To own the schema with your ORM's migrations instead, disable auto-create and use the exported
+migration helpers:
+
+```ts title="app.module.ts"
+DatabaseChannelModule.forFeature({ autoCreateSchema: false }),
+```
+
+<Tabs items={['TypeORM', 'MikroORM', 'Prisma']}>
+  <Tab value="TypeORM">
+
+    Call `createNotificationsTable(queryRunner)` inside a TypeORM migration. It's non-destructive
+    (creates the table only if it doesn't exist) and driver-portable — the column types come from the
+    entity metadata.
+
+    ```ts title="migrations/1700000000000-AddNotifications.ts"
+    import { createNotificationsTable } from '@dudousxd/nestjs-notifications-database-typeorm';
+    import type { MigrationInterface, QueryRunner } from 'typeorm';
+
+    export class AddNotifications1700000000000 implements MigrationInterface {
+      async up(queryRunner: QueryRunner): Promise<void> {
+        await createNotificationsTable(queryRunner);
+      }
+
+      async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.dropTable('notifications', true);
+      }
+    }
+    ```
+
+  </Tab>
+  <Tab value="MikroORM">
+
+    Get the non-destructive SQL with `notificationsSchemaSql(em)` and add it to a MikroORM
+    `Migration`. It returns only the statements needed to bring the `notifications` table up to date
+    (create it, add missing columns).
+
+    ```ts title="migrations/AddNotifications.ts"
+    import { notificationsSchemaSql } from '@dudousxd/nestjs-notifications-database-mikro-orm';
+    import { Migration } from '@mikro-orm/migrations';
+
+    export class AddNotifications extends Migration {
+      async up(): Promise<void> {
+        this.addSql(await notificationsSchemaSql(this.getEntityManager()));
+      }
+    }
+    ```
+
+  </Tab>
+  <Tab value="Prisma">
+
+    Prisma is schema-first, so `autoCreateSchema` is a no-op for the Prisma adapter — it won't run
+    DDL. Add the [`Notification` model](#persistence-adapters) to your `schema.prisma` and apply it
+    with `prisma migrate`:
+
+    ```bash
+    npx prisma migrate dev --name add-notifications
+    ```
+
+  </Tab>
+</Tabs>

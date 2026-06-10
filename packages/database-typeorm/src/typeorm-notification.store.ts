@@ -8,6 +8,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, type Repository } from 'typeorm';
 import { NotificationEntity } from './notification.entity';
+import { ensureNotificationsTable } from './schema';
 
 /** Maps a {@link NotificationEntity} row to the channel-agnostic {@link StoredNotification}. */
 function toStored(row: NotificationEntity): StoredNotification {
@@ -81,5 +82,10 @@ export class TypeOrmNotificationStore implements NotificationStore {
 
   async delete(id: string): Promise<void> {
     await this.repo.delete(id);
+  }
+
+  /** Create the notifications table if missing (non-destructive). */
+  async ensureSchema(): Promise<void> {
+    await ensureNotificationsTable(this.repo.manager.connection);
   }
 }

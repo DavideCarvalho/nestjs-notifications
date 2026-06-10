@@ -32,6 +32,12 @@ export interface NotificationStore {
   getForNotifiable(notifiableType: string, notifiableId: string): Promise<StoredNotification[]>;
   getUnread(notifiableType: string, notifiableId: string): Promise<StoredNotification[]>;
   delete(id: string): Promise<void>;
+  /**
+   * Optionally create the backing schema if it's missing — non-destructively (never drops).
+   * Called on bootstrap when `autoCreateSchema` is enabled. Stores that don't manage schema
+   * (in-memory, or schema-first ORMs like Prisma) may omit it or make it a no-op.
+   */
+  ensureSchema?(): Promise<void>;
 }
 
 /**

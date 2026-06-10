@@ -7,6 +7,7 @@ import type {
 import { EntityManager } from '@mikro-orm/core';
 import { Injectable } from '@nestjs/common';
 import { NotificationEntity } from './notification.entity';
+import { ensureNotificationsTable } from './schema';
 
 /** Maps a {@link NotificationEntity} row to the channel-agnostic {@link StoredNotification}. */
 function toStored(row: NotificationEntity): StoredNotification {
@@ -84,5 +85,10 @@ export class MikroOrmNotificationStore implements NotificationStore {
 
   async delete(id: string): Promise<void> {
     await this.em.nativeDelete(NotificationEntity, { id });
+  }
+
+  /** Create/patch the notifications table if needed (non-destructive). */
+  async ensureSchema(): Promise<void> {
+    await ensureNotificationsTable(this.em);
   }
 }

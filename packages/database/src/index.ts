@@ -1,8 +1,13 @@
 export * from './interfaces';
-export { NOTIFICATION_STORE } from './tokens';
+export { NOTIFICATION_STORE, AUTO_CREATE_SCHEMA } from './tokens';
 export { Database, DatabaseChannel } from './database.channel';
 export { InMemoryStore } from './in-memory.store';
-export { DatabaseChannelModule, type DatabaseChannelOptions } from './database.module';
+export {
+  DatabaseChannelModule,
+  type DatabaseChannelOptions,
+  type DatabaseChannelFeatureOptions,
+} from './database.module';
+export { SchemaInitializer } from './schema-initializer';
 export {
   NotificationsQueryService,
   type NotifiableTarget,

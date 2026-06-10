@@ -194,7 +194,8 @@ toDatabase() {
 
 The `@Database()` decorator adds the channel to the inferred list — there's nothing else to update.
 `send()` now fans out to both. If the mail channel throws, the database row still gets written —
-channels are isolated by default.
+channels are isolated by default. The `notifications` table is created automatically on first boot
+(toggle with [`autoCreateSchema`](/docs/channels/database#schema)).
 
 <Callout type="info">
   The in-memory store is for development and tests. For production, plug the
