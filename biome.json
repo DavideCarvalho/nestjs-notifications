@@ -27,6 +27,11 @@
       "semicolons": "always"
     }
   },
+  "json": {
+    "formatter": {
+      "enabled": false
+    }
+  },
   "linter": {
     "enabled": true,
     "rules": {
