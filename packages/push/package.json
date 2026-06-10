@@ -1,0 +1,48 @@
+{
+  "name": "@dudousxd/nestjs-notifications-push",
+  "version": "0.2.0",
+  "description": "Push channel for nestjs-notifications \u2014 deliver push notifications via Web Push (VAPID), Firebase Cloud Messaging, or Expo",
+  "license": "MIT",
+  "author": "Davide Carvalho",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
+    "directory": "packages/push"
+  },
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@dudousxd/nestjs-notifications-core": ">=0.1.0 <1.0.0",
+    "@nestjs/common": "^10.0.0 || ^11.0.0",
+    "web-push": "^3.6.0",
+    "firebase-admin": "^12.0.0 || ^13.0.0",
+    "expo-server-sdk": "^3.10.0"
+  },
+  "peerDependenciesMeta": {
+    "web-push": {
+      "optional": true
+    },
+    "firebase-admin": {
+      "optional": true
+    },
+    "expo-server-sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@dudousxd/nestjs-notifications-core": "workspace:^",
+    "@nestjs/common": "^11.0.0",
+    "web-push": "^3.6.0",
+    "firebase-admin": "^13.0.0",
+    "expo-server-sdk": "^3.10.0",
+    "reflect-metadata": "^0.2.2",
+    "typescript": "^5.7.2",
+    "@types/web-push": "^3.6.0"
+  }
+}

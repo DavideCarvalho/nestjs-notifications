@@ -2,6 +2,7 @@ import { type DynamicModule, Module, type Provider, type Type } from '@nestjs/co
 import { DatabaseChannel } from './database.channel';
 import { InMemoryStore } from './in-memory.store';
 import type { NotificationStore } from './interfaces';
+import { NotificationsQueryService } from './notifications-query.service';
 import { NOTIFICATION_STORE } from './tokens';
 
 export interface DatabaseChannelOptions {
@@ -29,13 +30,14 @@ export class DatabaseChannelModule {
       storeClass,
       { provide: NOTIFICATION_STORE, useExisting: storeClass },
       DatabaseChannel,
+      NotificationsQueryService,
     ];
     return {
       module: DatabaseChannelModule,
       global: options.global ?? true,
       imports: options.imports ?? [],
       providers,
-      exports: [DatabaseChannel, NOTIFICATION_STORE],
+      exports: [DatabaseChannel, NOTIFICATION_STORE, NotificationsQueryService],
     };
   }
 
@@ -43,8 +45,8 @@ export class DatabaseChannelModule {
   static forFeature(): DynamicModule {
     return {
       module: DatabaseChannelModule,
-      providers: [DatabaseChannel],
-      exports: [DatabaseChannel],
+      providers: [DatabaseChannel, NotificationsQueryService],
+      exports: [DatabaseChannel, NotificationsQueryService],
     };
   }
 }

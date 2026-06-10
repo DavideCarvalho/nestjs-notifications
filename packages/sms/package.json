@@ -1,13 +1,13 @@
 {
-  "name": "@dudousxd/nestjs-notifications-database-mikro-orm",
+  "name": "@dudousxd/nestjs-notifications-sms",
   "version": "0.2.0",
-  "description": "MikroORM adapter for the nestjs-notifications database channel",
+  "description": "SMS channel for nestjs-notifications — send SMS notifications via a pluggable transport (Twilio built-in)",
   "license": "MIT",
   "author": "Davide Carvalho",
   "repository": {
     "type": "git",
     "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
-    "directory": "packages/database-mikro-orm"
+    "directory": "packages/sms"
   },
   "type": "commonjs",
   "main": "dist/index.js",
@@ -18,18 +18,19 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
-    "@mikro-orm/core": "^6.0.0",
-    "@mikro-orm/nestjs": "^6.0.0",
-    "@dudousxd/nestjs-notifications-database": ">=0.1.0 <1.0.0",
-    "@nestjs/common": "^10.0.0 || ^11.0.0"
+    "@dudousxd/nestjs-notifications-core": ">=0.1.0 <1.0.0",
+    "@nestjs/common": "^10.0.0 || ^11.0.0",
+    "twilio": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "twilio": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "@mikro-orm/core": "^6.0.0",
-    "@mikro-orm/nestjs": "^6.0.0",
-    "@mikro-orm/sqlite": "^6.0.0",
     "@dudousxd/nestjs-notifications-core": "workspace:^",
-    "@dudousxd/nestjs-notifications-database": "workspace:^",
     "@nestjs/common": "^11.0.0",
+    "twilio": "^5.0.0",
     "reflect-metadata": "^0.2.2",
     "typescript": "^5.7.2"
   }

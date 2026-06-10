@@ -1,0 +1,82 @@
+import { randomUUID } from 'node:crypto';
+import type {
+  NewStoredNotification,
+  NotificationStore,
+  StoredNotification,
+} from '@dudousxd/nestjs-notifications-database';
+import { Inject, Injectable } from '@nestjs/common';
+import { PRISMA_CLIENT, type PrismaNotificationClientLike } from './prisma-client';
+
+/** Maps a Prisma `Notification` row to the channel-agnostic {@link StoredNotification}. */
+function toStored(row: any): StoredNotification {
+  return {
+    id: row.id,
+    type: row.type,
+    notifiableType: row.notifiableType,
+    notifiableId: row.notifiableId,
+    data: row.data,
+    readAt: row.readAt ?? null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/** Prisma-backed {@link NotificationStore}. */
+@Injectable()
+export class PrismaNotificationStore implements NotificationStore {
+  constructor(
+    @Inject(PRISMA_CLIENT)
+    private readonly client: PrismaNotificationClientLike,
+  ) {}
+
+  async save(notification: NewStoredNotification): Promise<StoredNotification> {
+    const row = await this.client.notification.create({
+      data: {
+        id: randomUUID(),
+        type: notification.type,
+        notifiableType: notification.notifiableType,
+        notifiableId: notification.notifiableId,
+        data: notification.data,
+        readAt: null,
+      },
+    });
+    return toStored(row);
+  }
+
+  async markAsRead(id: string): Promise<void> {
+    await this.client.notification.update({
+      where: { id },
+      data: { readAt: new Date() },
+    });
+  }
+
+  async markAllAsRead(notifiableType: string, notifiableId: string): Promise<void> {
+    await this.client.notification.updateMany({
+      where: { notifiableType, notifiableId, readAt: null },
+      data: { readAt: new Date() },
+    });
+  }
+
+  async getForNotifiable(
+    notifiableType: string,
+    notifiableId: string,
+  ): Promise<StoredNotification[]> {
+    const rows = await this.client.notification.findMany({
+      where: { notifiableType, notifiableId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map(toStored);
+  }
+
+  async getUnread(notifiableType: string, notifiableId: string): Promise<StoredNotification[]> {
+    const rows = await this.client.notification.findMany({
+      where: { notifiableType, notifiableId, readAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map(toStored);
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.client.notification.delete({ where: { id } });
+  }
+}

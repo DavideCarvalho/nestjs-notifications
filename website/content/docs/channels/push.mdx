@@ -1,0 +1,175 @@
+---
+title: Push
+description: Send push notifications through Web Push, Firebase Cloud Messaging, or Expo. Pick one transport, build a PushMessage, and route to one device token or many.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The push channel delivers a notification through a single push transport — Web Push (VAPID), Firebase
+Cloud Messaging, or Expo. You pick one transport at registration, build a fluent `PushMessage`, and
+route to one device token (or subscription) or an array of them.
+
+## Install
+
+Each transport pulls a different SDK as an optional peer — install only the one you use:
+
+<Tabs items={['Web Push', 'FCM', 'Expo']}>
+  <Tab value="Web Push">
+    ```bash
+    pnpm add @dudousxd/nestjs-notifications-push web-push
+    ```
+  </Tab>
+  <Tab value="FCM">
+    ```bash
+    pnpm add @dudousxd/nestjs-notifications-push firebase-admin
+    ```
+  </Tab>
+  <Tab value="Expo">
+    ```bash
+    pnpm add @dudousxd/nestjs-notifications-push expo-server-sdk
+    ```
+  </Tab>
+</Tabs>
+
+## Register the channel
+
+Pick exactly one transport and supply its matching options:
+
+<Tabs items={['Web Push', 'FCM', 'Expo']}>
+  <Tab value="Web Push">
+    ```ts title="app.module.ts"
+    import { PushChannelModule, WebPushTransport } from '@dudousxd/nestjs-notifications-push';
+
+    @Module({
+      imports: [
+        PushChannelModule.forRoot({
+          transport: WebPushTransport,
+          webPush: {
+            publicKey: process.env.VAPID_PUBLIC_KEY!,
+            privateKey: process.env.VAPID_PRIVATE_KEY!,
+            subject: 'mailto:ops@example.com',
+          },
+        }),
+      ],
+    })
+    export class AppModule {}
+    ```
+
+    The target is a browser `PushSubscription` object (from `PushManager.subscribe()`, persisted
+    server-side).
+
+  </Tab>
+  <Tab value="FCM">
+    ```ts title="app.module.ts"
+    import * as admin from 'firebase-admin';
+    import { FcmTransport, PushChannelModule } from '@dudousxd/nestjs-notifications-push';
+
+    @Module({
+      imports: [
+        PushChannelModule.forRoot({
+          transport: FcmTransport,
+          fcm: { credential: admin.credential.cert(serviceAccount) },
+        }),
+      ],
+    })
+    export class AppModule {}
+    ```
+
+    The target is an FCM registration (device) token string. `fcm` options are forwarded to
+    `admin.initializeApp`; the transport reuses an already-initialized app if there is one.
+
+  </Tab>
+  <Tab value="Expo">
+    ```ts title="app.module.ts"
+    import { ExpoTransport, PushChannelModule } from '@dudousxd/nestjs-notifications-push';
+
+    @Module({
+      imports: [
+        PushChannelModule.forRoot({
+          transport: ExpoTransport,
+          expo: { accessToken: process.env.EXPO_ACCESS_TOKEN },
+        }),
+      ],
+    })
+    export class AppModule {}
+    ```
+
+    The target is an Expo push token string (e.g. `ExponentPushToken[...]`).
+
+  </Tab>
+</Tabs>
+
+`PushChannelModule.forRoot()` takes:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `transport` | `Type<PushTransport>` | — | The transport class. Required — pick one. |
+| `webPush` | `WebPushOptions` | — | VAPID options. Supply with `WebPushTransport`. |
+| `fcm` | `FcmOptions` | — | Firebase Admin app options. Supply with `FcmTransport`. |
+| `expo` | `ExpoOptions` | — | Expo client options. Supply with `ExpoTransport`. |
+| `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+## The notification side
+
+Annotate the payload method with the `@Push()` handle and return a `PushMessage`:
+
+```ts title="order-shipped.notification.ts"
+import { type Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Push, PushMessage } from '@dudousxd/nestjs-notifications-push';
+
+@Notification()
+export class OrderShipped {
+  constructor(private orderId: number) {}
+
+  @Push()
+  toPush(notifiable: Notifiable): PushMessage {
+    return new PushMessage()
+      .title('Order shipped')
+      .body('Your order is on its way.')
+      .icon('https://app.example.com/icon.png')
+      .url(`https://app.example.com/orders/${this.orderId}`)
+      .data({ orderId: this.orderId });
+  }
+}
+```
+
+The `Push` handle also works as a `via()` token (`via() { return [Push]; }`) for
+[explicit routing](/docs/concepts/notifications#alternative-explicit-via-and-interfaces); implement
+`PushNotification` alongside the decorator for compile-time checks on `toPush()`.
+
+### PushMessage builder
+
+Each method returns `this`:
+
+| Method | Effect |
+| --- | --- |
+| `.title(s)` | Set the notification title. |
+| `.body(s)` | Set the body text. |
+| `.icon(s)` | Set the notification icon URL. |
+| `.url(s)` | Set the URL opened when the notification is tapped. |
+| `.data(obj)` | Attach an arbitrary data payload delivered alongside the notification. |
+
+<Callout type="info">
+  Transports map these fields to each provider's shape. FCM stringifies every `data` value (the FCM
+  API requires string data), and Expo delivers only `title`, `body`, and `data`.
+</Callout>
+
+## Routing the target
+
+The target comes from `routeNotificationFor('push')`. Return a single token/subscription, or an
+array — the channel sends the message to each one:
+
+```ts title="user.ts"
+export class User implements Notifiable {
+  constructor(public deviceTokens: string[]) {}
+
+  routeNotificationFor(channel: string) {
+    if (channel !== 'push') return undefined;
+    return this.deviceTokens; // one string, or an array of them
+  }
+}
+```
+
+The concrete shape of the target depends on the transport — a Web Push subscription object, an FCM
+device token, or an Expo push token.

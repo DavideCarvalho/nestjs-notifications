@@ -21,6 +21,9 @@ For the conceptual split between channels (where it goes) and dispatchers (when 
 | `database` | `@dudousxd/nestjs-notifications-database` | `Database` / `@Database()` | `toDatabase()` | `DatabaseNotification` |
 | `broadcast` | `@dudousxd/nestjs-notifications-broadcast` | `Broadcast` / `@Broadcast()` | `toBroadcast()` | `BroadcastNotification` |
 | `slack` | `@dudousxd/nestjs-notifications-slack` | `Slack` / `@Slack()` | `toSlack()` | `SlackNotification` |
+| `webhook` | `@dudousxd/nestjs-notifications-webhook` | `Webhook` / `@Webhook()` | `toWebhook()` | `WebhookNotification` |
+| `sms` | `@dudousxd/nestjs-notifications-sms` | `Sms` / `@Sms()` | `toSms()` | `SmsNotification` |
+| `push` | `@dudousxd/nestjs-notifications-push` | `Push` / `@Push()` | `toPush()` | `PushNotification` |
 
 Each channel ships as its own package, so you only pull in what you send. The handle is both the
 method decorator that declares a payload (`@Mail()`) and a type-safe token you can return from
@@ -71,5 +74,5 @@ that runtime error into a compile-time one.
 
 ## Build your own
 
-Need SMS, push, or an internal webhook? A channel is just a class with a `channel` name and a
+Need a channel that isn't built in? A channel is just a class with a `channel` name and a
 `send()` method. See [Writing a custom channel](/docs/recipes/custom-channel).

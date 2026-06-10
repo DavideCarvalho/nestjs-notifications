@@ -110,7 +110,7 @@ function Hero() {
         </div>
 
         <p className="mt-6 font-mono text-xs text-fd-muted-foreground">
-          12 packages on npm · one notification, many channels · sync or queued · fully typed
+          16 packages on npm · one notification, many channels · sync or queued · fully typed
         </p>
       </div>
     </section>

@@ -1,0 +1,145 @@
+---
+title: SMS
+description: Text a notification through a pluggable SMS transport. Ships with a Twilio transport; return a plain string or a fluent SmsMessage, and route the recipient per notifiable.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The SMS channel sends a notification's text through a pluggable `SmsTransport`. A Twilio transport is
+bundled; swap in your own for any provider. Return a plain string for the message body, or a fluent
+`SmsMessage` when you want to override the sender number.
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @dudousxd/nestjs-notifications-sms twilio
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @dudousxd/nestjs-notifications-sms twilio
+    ```
+  </Tab>
+</Tabs>
+
+The `twilio` SDK is only needed for the built-in `TwilioTransport`. Skip it if you supply a custom
+transport.
+
+## Register the channel
+
+```ts title="app.module.ts"
+import { SmsChannelModule } from '@dudousxd/nestjs-notifications-sms';
+
+@Module({
+  imports: [
+    SmsChannelModule.forRoot({
+      from: '+15555550100',
+      twilio: {
+        accountSid: process.env.TWILIO_ACCOUNT_SID!,
+        authToken: process.env.TWILIO_AUTH_TOKEN!,
+      },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+`SmsChannelModule.forRoot()` takes:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `from` | `string` | — | Default sender number for messages that don't set their own. |
+| `transport` | `Type<SmsTransport>` | `TwilioTransport` | Transport class used to deliver. |
+| `twilio` | `{ accountSid, authToken, from? }` | — | Credentials for the built-in `TwilioTransport`. |
+| `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+## The notification side
+
+Annotate the payload method with the `@Sms()` handle and return a string:
+
+```ts title="login-code.notification.ts"
+import { type Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Sms } from '@dudousxd/nestjs-notifications-sms';
+
+@Notification()
+export class LoginCode {
+  constructor(private code: string) {}
+
+  @Sms()
+  toSms(notifiable: Notifiable): string {
+    return `Your code is ${this.code}`;
+  }
+}
+```
+
+The `Sms` handle also works as a `via()` token (`via() { return [Sms]; }`) for
+[explicit routing](/docs/concepts/notifications#alternative-explicit-via-and-interfaces); implement
+`SmsNotification` alongside the decorator for compile-time checks on `toSms()`.
+
+### SmsMessage builder
+
+Return an `SmsMessage` when you need to override the sender number for a single notification. Each
+method returns `this`:
+
+```ts title="login-code.notification.ts"
+import { Sms, SmsMessage } from '@dudousxd/nestjs-notifications-sms';
+
+@Sms()
+toSms(notifiable: Notifiable): SmsMessage {
+  return new SmsMessage()
+    .content(`Your code is ${this.code}`)
+    .from('+15555550199');
+}
+```
+
+| Method | Effect |
+| --- | --- |
+| `.content(text)` | Set the SMS body text. |
+| `.from(number)` | Override the sender number for this message. |
+
+A message's `from` wins over the module's `from`, which in turn falls back to the transport's own
+default sender.
+
+## Routing the recipient
+
+The recipient comes from `routeNotificationFor('sms')` — return the phone number to text:
+
+```ts title="user.ts"
+export class User implements Notifiable {
+  constructor(public phone: string) {}
+
+  routeNotificationFor(channel: string) {
+    if (channel !== 'sms') return undefined;
+    return this.phone;
+  }
+}
+```
+
+## Custom transports
+
+A transport is one method — implement `SmsTransport` and pass it as `transport`:
+
+```ts title="vonage.transport.ts"
+import { Injectable } from '@nestjs/common';
+import type { SmsTransport, SmsTransportPayload } from '@dudousxd/nestjs-notifications-sms';
+
+@Injectable()
+export class VonageTransport implements SmsTransport {
+  async send(payload: SmsTransportPayload): Promise<void> {
+    // payload is { to, from?, text }
+    await myVonageClient.send(payload.to, payload.from, payload.text);
+  }
+}
+```
+
+```ts title="app.module.ts"
+SmsChannelModule.forRoot({ from: '+15555550100', transport: VonageTransport });
+```
+
+<Callout type="info">
+  A custom transport is a normal Nest provider, so you can inject config or an HTTP client into it.
+  The `twilio` option is ignored unless you use the default `TwilioTransport`.
+</Callout>

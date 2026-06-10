@@ -32,6 +32,9 @@ export class TypeOrmNotificationStore implements NotificationStore {
   ) {}
 
   async save(notification: NewStoredNotification): Promise<StoredNotification> {
+    // Timestamps are set in code (millisecond precision) for stable ordering and parity
+    // with the other stores — SQLite's datetime is only second-precise.
+    const now = new Date();
     const entity = this.repo.create({
       id: randomUUID(),
       type: notification.type,
@@ -39,19 +42,21 @@ export class TypeOrmNotificationStore implements NotificationStore {
       notifiableId: notification.notifiableId,
       data: notification.data,
       readAt: null,
+      createdAt: now,
+      updatedAt: now,
     });
     const saved = await this.repo.save(entity);
     return toStored(saved);
   }
 
   async markAsRead(id: string): Promise<void> {
-    await this.repo.update(id, { readAt: new Date() });
+    await this.repo.update(id, { readAt: new Date(), updatedAt: new Date() });
   }
 
   async markAllAsRead(notifiableType: string, notifiableId: string): Promise<void> {
     await this.repo.update(
       { notifiableType, notifiableId, readAt: IsNull() },
-      { readAt: new Date() },
+      { readAt: new Date(), updatedAt: new Date() },
     );
   }
 

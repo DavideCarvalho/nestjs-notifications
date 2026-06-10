@@ -18,12 +18,14 @@ export class NotificationEntity {
   @Property({ type: 'json' })
   data!: Record<string, unknown>;
 
-  @Property({ nullable: true })
+  // Explicit `datetime` type so the value round-trips as a Date on every driver
+  // (SQLite otherwise hydrates it as a raw timestamp string/number).
+  @Property({ type: 'datetime', nullable: true })
   readAt?: Date | null;
 
-  @Property()
+  @Property({ type: 'datetime' })
   createdAt!: Date;
 
-  @Property({ onUpdate: () => new Date() })
+  @Property({ type: 'datetime', onUpdate: () => new Date() })
   updatedAt!: Date;
 }

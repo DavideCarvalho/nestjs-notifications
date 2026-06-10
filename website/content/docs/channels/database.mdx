@@ -1,6 +1,6 @@
 ---
 title: Database
-description: Persist notifications so you can show an in-app feed. A NotificationStore interface, a bundled in-memory store, and TypeORM / MikroORM adapters.
+description: Persist notifications so you can show an in-app feed. A NotificationStore interface, a bundled in-memory store, and TypeORM / MikroORM / Prisma adapters.
 ---
 
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
@@ -9,7 +9,7 @@ import { Callout } from 'fumadocs-ui/components/callout';
 The database channel writes a notification to a store so you can render an in-app feed — an unread
 count, a notifications dropdown, a "mark all as read" button. It persists through a
 `NotificationStore` abstraction: a bundled in-memory store for development, and ORM adapters
-(TypeORM, MikroORM) for production. The row shape mirrors Laravel's `notifications` table.
+(TypeORM, MikroORM, Prisma) for production. The row shape mirrors Laravel's `notifications` table.
 
 ## Install
 
@@ -148,14 +148,24 @@ constructor(@Inject(NOTIFICATION_STORE) private store: NotificationStore) {}
 The bundled `InMemoryStore` keeps rows in a `Map`. It's perfect for tests and prototyping — but it's
 not durable, so use a persistence adapter in production.
 
+## Reading notifications in-app
+
+You usually don't inject the raw store. The `NotificationsQueryService` (provided by the database
+module) wraps it with the read/manage methods you reach for — `all`, `unread`, `unreadCount`,
+`paginate`, `markAsRead`, `markAllAsRead`, `delete` — accepting a notifiable or a `{ type, id }` ref.
+There's also an optional REST controller you can mount in one call.
+
+See [In-app notifications](/docs/recipes/in-app-notifications) for the full recipe.
+
 ## Persistence adapters [#persistence-adapters]
 
-For real persistence, pair the channel with an ORM adapter. Each adapter provides a store bound to
-the `NOTIFICATION_STORE` token, plus a `NotificationEntity` mapping the `notifications` table. You
-register the adapter's `*StoreModule.forFeature()` alongside `DatabaseChannelModule.forFeature()` —
-the adapter provides the store token, `forFeature()` registers the channel that consumes it.
+For real persistence, pair the channel with an adapter. Each adapter provides a store bound to the
+`NOTIFICATION_STORE` token, plus the schema it needs (a `NotificationEntity` for the ORM adapters, a
+`Notification` model for Prisma). You register the adapter's store module alongside
+`DatabaseChannelModule.forFeature()` — the adapter provides the store token, `forFeature()` registers
+the channel that consumes it.
 
-<Tabs items={['TypeORM', 'MikroORM']}>
+<Tabs items={['TypeORM', 'MikroORM', 'Prisma']}>
   <Tab value="TypeORM">
 
     <Tabs items={['pnpm', 'npm']}>
@@ -226,6 +236,58 @@ the adapter provides the store token, `forFeature()` registers the channel that 
 
     `MikroOrmNotificationStoreModule.forFeature()` registers `MikroOrmModule.forFeature([NotificationEntity])`
     and binds `MikroOrmNotificationStore` to `NOTIFICATION_STORE`.
+
+  </Tab>
+  <Tab value="Prisma">
+
+    <Tabs items={['pnpm', 'npm']}>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add @dudousxd/nestjs-notifications-database-prisma
+        ```
+      </Tab>
+      <Tab value="npm">
+        ```bash
+        npm install @dudousxd/nestjs-notifications-database-prisma
+        ```
+      </Tab>
+    </Tabs>
+
+    Prisma's client is app-owned, so you pass your instance in. Add a `Notification` model to your
+    `schema.prisma`:
+
+    ```prisma title="schema.prisma"
+    model Notification {
+      id             String    @id
+      type           String
+      notifiableType String
+      notifiableId   String
+      data           Json
+      readAt         DateTime?
+      createdAt      DateTime  @default(now())
+      updatedAt      DateTime  @updatedAt
+    }
+    ```
+
+    A real `PrismaClient` structurally satisfies the adapter's client type, so pass it directly to
+    `forRoot()`:
+
+    ```ts title="app.module.ts"
+    import { DatabaseChannelModule } from '@dudousxd/nestjs-notifications-database';
+    import { PrismaNotificationStoreModule } from '@dudousxd/nestjs-notifications-database-prisma';
+
+    @Module({
+      imports: [
+        PrismaNotificationStoreModule.forRoot({ client: prisma }),
+        DatabaseChannelModule.forFeature(),
+      ],
+    })
+    export class AppModule {}
+    ```
+
+    `PrismaNotificationStoreModule.forRoot({ client })` binds the client to the `PRISMA_CLIENT` token
+    and `PrismaNotificationStore` to `NOTIFICATION_STORE`. If you already provide `PRISMA_CLIENT`
+    elsewhere (e.g. a shared `PrismaModule`), use `PrismaNotificationStoreModule.forFeature()` instead.
 
   </Tab>
 </Tabs>

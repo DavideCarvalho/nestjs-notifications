@@ -1,0 +1,126 @@
+---
+title: Webhook
+description: Deliver notifications as an HTTP request to any endpoint. Return a plain object for a JSON POST, or a fluent WebhookMessage for full control over url, method, and headers.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The webhook channel POSTs a notification to an HTTP endpoint. Return a plain object and it becomes
+the JSON body; return a fluent `WebhookMessage` when you need to set the URL per notification, switch
+the method, or sign the request with custom headers. Delivery uses the platform `fetch`.
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @dudousxd/nestjs-notifications-webhook
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @dudousxd/nestjs-notifications-webhook
+    ```
+  </Tab>
+</Tabs>
+
+## Register the channel
+
+```ts title="app.module.ts"
+import { WebhookChannelModule } from '@dudousxd/nestjs-notifications-webhook';
+
+@Module({
+  imports: [
+    WebhookChannelModule.forRoot({
+      url: 'https://example.com/hooks/notifications',
+      headers: { Authorization: `Bearer ${process.env.WEBHOOK_TOKEN}` },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+`WebhookChannelModule.forRoot()` takes:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `url` | `string` | — | Default target URL, used when neither the message nor the route supplies one. |
+| `headers` | `Record<string, string>` | — | Default headers merged into every request. |
+| `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+## The notification side
+
+Annotate the payload method with the `@Webhook()` handle. Return a plain object to POST it as the
+JSON body:
+
+```ts title="order-paid.notification.ts"
+import { type Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Webhook } from '@dudousxd/nestjs-notifications-webhook';
+
+@Notification()
+export class OrderPaid {
+  constructor(private orderId: number) {}
+
+  @Webhook()
+  toWebhook(notifiable: Notifiable): Record<string, unknown> {
+    return { event: 'order.paid', id: this.orderId };
+  }
+}
+```
+
+The `Webhook` handle also works as a `via()` token (`via() { return [Webhook]; }`) for
+[explicit routing](/docs/concepts/notifications#alternative-explicit-via-and-interfaces); implement
+`WebhookNotification` alongside the decorator for compile-time checks on `toWebhook()`.
+
+### WebhookMessage builder
+
+Return a `WebhookMessage` instead of a plain object when you need control over the request itself —
+a per-notification URL, a non-`POST` method, or signed headers. Each method returns `this`:
+
+```ts title="order-paid.notification.ts"
+import { Webhook, WebhookMessage } from '@dudousxd/nestjs-notifications-webhook';
+
+@Webhook()
+toWebhook(notifiable: Notifiable): WebhookMessage {
+  return new WebhookMessage()
+    .url('https://example.com/hooks/orders')
+    .header('X-Signature', sign(this.orderId))
+    .payload({ event: 'order.paid', id: this.orderId });
+}
+```
+
+| Method | Effect |
+| --- | --- |
+| `.url(u)` | Set the target URL (overrides the route and configured default). |
+| `.payload(obj)` | Set the JSON body. |
+| `.method(m)` | Set the HTTP method — `POST` (default), `PUT`, `PATCH`, `DELETE`, `GET`. |
+| `.header(key, value)` | Set a single request header. |
+| `.headers(obj)` | Merge multiple request headers. |
+
+Every request sends `Content-Type: application/json`; message headers override the module's default
+headers. A non-2xx response throws.
+
+## URL resolution
+
+The channel resolves the target URL in order, using the first one available:
+
+1. The `WebhookMessage` URL (`.url(...)`).
+2. `routeNotificationFor('webhook')`, when it returns a URL string.
+3. The module's `url` default.
+
+```ts title="endpoint.ts"
+export class Endpoint implements Notifiable {
+  constructor(public hookUrl: string) {}
+
+  routeNotificationFor(channel: string) {
+    if (channel !== 'webhook') return undefined;
+    return this.hookUrl;
+  }
+}
+```
+
+<Callout type="info">
+  If none of the three supply a URL, the channel throws asking you to set one — on the
+  `WebhookMessage` via `.url()`, from `routeNotificationFor('webhook')`, or as `url` in `forRoot()`.
+</Callout>

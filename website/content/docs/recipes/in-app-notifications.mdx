@@ -1,0 +1,99 @@
+---
+title: In-app notifications
+description: Build an in-app feed from persisted notifications. Inject NotificationsQueryService to list, count, and mark read — or mount the optional REST controller in one call.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Once the [database channel](/docs/channels/database) persists notifications, you render them in-app —
+an unread badge, a dropdown, a "mark all as read" button. `NotificationsQueryService` is the read
+side: it wraps the store with the methods you actually reach for. Mount the bundled REST controller
+and you have an inbox API with zero glue code.
+
+## Inject the query service
+
+`NotificationsQueryService` is provided by `DatabaseChannelModule` (and its `forFeature()`), so it's
+injectable anywhere the module is in scope:
+
+```ts title="inbox.service.ts"
+import { Injectable } from '@nestjs/common';
+import { NotificationsQueryService } from '@dudousxd/nestjs-notifications-database';
+
+@Injectable()
+export class InboxService {
+  constructor(private readonly notifications: NotificationsQueryService) {}
+
+  async feed(user: User) {
+    const items = await this.notifications.all(user);
+    const badge = await this.notifications.unreadCount(user);
+    return { items, badge };
+  }
+}
+```
+
+Every method that reads "whose notifications" accepts a **target**: either a notifiable (anything with
+`toNotifiableRef()`) or a plain `{ type, id }` reference.
+
+| Method | Returns | Description |
+| --- | --- | --- |
+| `all(target)` | `StoredNotification[]` | Every notification for the target, newest first. |
+| `unread(target)` | `StoredNotification[]` | Unread notifications for the target. |
+| `unreadCount(target)` | `number` | How many are unread. |
+| `paginate(target, { page?, perPage? })` | `{ items, page, perPage, total }` | One page over `all` (defaults: page 1, 20 per page). |
+| `markAsRead(id)` | `void` | Mark one notification read, by its id. |
+| `markAllAsRead(target)` | `void` | Mark every notification for the target read. |
+| `delete(id)` | `void` | Remove one notification, by its id. |
+
+<Callout type="info">
+  `markAsRead(id)` and `delete(id)` take a notification **id** (a string), not a target — they act on
+  a single row. `markAllAsRead(target)` takes the target, since it spans every row for that notifiable.
+</Callout>
+
+Pass a ref directly when you only have an id at hand — handy in a controller where the user comes off
+the request:
+
+```ts
+await this.notifications.unreadCount({ type: 'User', id: req.user.id });
+```
+
+## Mount the REST controller
+
+Rather than write inbox endpoints by hand, `createNotificationsController()` builds a
+`@Controller('notifications')` for you. Tell it how to resolve the current notifiable from the
+request, then add the returned class to a module's `controllers`:
+
+```ts title="inbox.module.ts"
+import { Module } from '@nestjs/common';
+import {
+  DatabaseChannelModule,
+  createNotificationsController,
+} from '@dudousxd/nestjs-notifications-database';
+
+const NotificationsController = createNotificationsController({
+  resolveRef: (req) => ({ type: 'User', id: req.user.id }),
+});
+
+@Module({
+  imports: [DatabaseChannelModule.forFeature()],
+  controllers: [NotificationsController],
+})
+export class InboxModule {}
+```
+
+`resolveRef` receives the request and returns a `{ type, id }` ref (it may be async) — wire it to
+whatever your auth layer puts on `req.user`. The controller exposes:
+
+| Route | Action |
+| --- | --- |
+| `GET /notifications` | Paginated list (`?page` & `?perPage`). |
+| `GET /notifications/unread` | Unread notifications. |
+| `GET /notifications/unread/count` | `{ count }` of unread. |
+| `POST /notifications/:id/read` | Mark one read. |
+| `POST /notifications/read-all` | Mark all read for the current user. |
+| `DELETE /notifications/:id` | Delete one. |
+
+<Callout type="info">
+  The controller relies on `resolveRef` to scope reads and "mark all" / "unread" to the current user.
+  The per-id routes (`:id/read`, `DELETE :id`) act on a notification id directly, so guard them so a
+  user can only touch their own rows.
+</Callout>
