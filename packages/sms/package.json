@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-sms",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "SMS channel for nestjs-notifications — send SMS notifications via a pluggable transport (Twilio built-in)",
   "license": "MIT",
   "author": "Davide Carvalho",
@@ -12,7 +12,9 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"

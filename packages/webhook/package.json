@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-webhook",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Webhook channel for nestjs-notifications — deliver notifications by POSTing JSON to an HTTP endpoint",
   "license": "MIT",
   "author": "Davide Carvalho",
@@ -12,7 +12,9 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"

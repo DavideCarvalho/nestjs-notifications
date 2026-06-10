@@ -1,7 +1,7 @@
 {
   "name": "@dudousxd/nestjs-notifications-push",
-  "version": "0.2.0",
-  "description": "Push channel for nestjs-notifications \u2014 deliver push notifications via Web Push (VAPID), Firebase Cloud Messaging, or Expo",
+  "version": "0.2.1",
+  "description": "Push channel for nestjs-notifications — deliver push notifications via Web Push (VAPID), Firebase Cloud Messaging, or Expo",
   "license": "MIT",
   "author": "Davide Carvalho",
   "repository": {
@@ -12,7 +12,9 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
