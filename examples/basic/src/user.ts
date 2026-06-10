@@ -1,19 +1,20 @@
-import type { Notifiable, NotifiableRef } from '@dudousxd/nestjs-notifications-core';
+import { Notifiable, NotifiableId, RouteFor } from '@dudousxd/nestjs-notifications-core';
 
-/** A simple domain object that can receive notifications. */
-export class User implements Notifiable {
-  constructor(
-    public readonly id: number,
-    public readonly email: string,
-  ) {}
+/**
+ * A domain object that can receive notifications. The per-channel addresses are declared with
+ * `@RouteFor`, and `@Notifiable()` + `@NotifiableId()` provide the async reference — no
+ * `routeNotificationFor` switch and no manual `toNotifiableRef`.
+ */
+@Notifiable()
+export class User {
+  @NotifiableId()
+  id: number;
 
-  routeNotificationFor(channel: string): unknown {
-    if (channel === 'mail') return this.email;
-    // 'database' falls back to toNotifiableRef() below.
-    return undefined;
-  }
+  @RouteFor('mail')
+  email: string;
 
-  toNotifiableRef(): NotifiableRef {
-    return { type: 'User', id: this.id };
+  constructor(id: number, email: string) {
+    this.id = id;
+    this.email = email;
   }
 }

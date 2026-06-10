@@ -128,6 +128,18 @@ export class NotificationMetrics {
   [Telescope watcher](/docs/recipes/telescope).
 </Callout>
 
+## Send results & hooks
+
+Events are for cross-cutting listeners; for the **outcome of a specific call**, every `send` /
+`notify` / `sendNow` / `sendAsync` returns a `SendResult[]` — one entry per notifiable, each with a
+`ChannelResult` per channel (`status: 'sent' | 'failed' | 'skipped' | 'queued'`, plus the transport
+`response` or `error`).
+
+A notification can also gate and observe its own delivery: `shouldSend(notifiable, channel)` skips a
+channel at delivery time (recorded as `skipped`), and `afterSending(notifiable, channel, response)`
+runs after each successful delivery with the transport response. See
+[Send results](/docs/concepts/notifications#send-results) for the full detail.
+
 ## Error handling
 
 The `errorPolicy` decides what happens when a single channel's `send()` throws.

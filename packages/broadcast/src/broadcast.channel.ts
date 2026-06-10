@@ -4,6 +4,7 @@ import {
   type Notification,
   createChannel,
   getHandler,
+  routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import { NotificationsGateway } from './gateway';
@@ -40,7 +41,7 @@ export class BroadcastChannel implements ChannelDriver {
   ) {}
 
   async send(notifiable: Notifiable, notification: Notification): Promise<void> {
-    const room = String(notifiable.routeNotificationFor('broadcast', notification));
+    const room = String(routeFor(notifiable, 'broadcast', notification));
     const event = this.options.event ?? 'notification';
     const payload = this.payloadFor(notifiable, notification as BroadcastNotification);
 

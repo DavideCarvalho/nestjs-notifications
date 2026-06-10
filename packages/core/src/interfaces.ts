@@ -9,17 +9,48 @@ export interface NotifiableRef {
 }
 
 /**
- * Anything that can receive notifications. Mirrors Laravel's `Notifiable` trait:
- * `routeNotificationFor` returns the per-channel "address" (an email, a phone number,
- * a websocket room, or the object itself).
+ * Anything that can receive notifications. Two ways to declare per-channel addresses:
+ *
+ * - **Decorators** (idiomatic): annotate properties with `@RouteFor('mail')` etc. and mark
+ *   the id with `@NotifiableId()`; the address is then read off the property.
+ * - **`routeNotificationFor`**: implement it for dynamic/computed routing — it overrides the
+ *   decorators.
+ *
+ * `toNotifiableRef` (or `@Notifiable()` + `@NotifiableId()`) is only needed for async dispatch.
  */
 export interface Notifiable {
-  routeNotificationFor(channel: string, notification: Notification): unknown;
+  /** Optional explicit per-channel address resolver; overrides `@RouteFor` decorators. */
+  routeNotificationFor?(channel: string, notification: Notification): unknown;
   /**
-   * Required only when this notifiable may be dispatched asynchronously. Returns a
-   * serializable reference so the worker can reload it. Sync delivery never needs it.
+   * Required (or replaced by `@Notifiable()`/`@NotifiableId()`) only when this notifiable may
+   * be dispatched asynchronously. Returns a serializable reference so the worker can reload it.
    */
   toNotifiableRef?(): NotifiableRef;
+}
+
+/**
+ * A notifiable instance accepted by the public API: a plain class carrying `@RouteFor`
+ * decorators, or any object implementing the {@link Notifiable} contract. Kept loose so a
+ * decorator-only class is accepted.
+ */
+export type NotifiableInput = object;
+
+/** Options for the {@link Notifiable} class decorator. */
+export interface NotifiableOptions {
+  /** Morph type used in the async reference; defaults to the class name. */
+  type?: string;
+}
+
+/**
+ * Optional class marker for a notifiable. Pins the morph `type` used in the async reference
+ * (defaults to the class name). Pair with `@NotifiableId()` to drop `toNotifiableRef()`.
+ */
+export function Notifiable(options: NotifiableOptions = {}): ClassDecorator {
+  return (target) => {
+    if (options.type) {
+      Object.defineProperty(target, 'notifiableType', { value: options.type, configurable: true });
+    }
+  };
 }
 
 /** The wire form of a notification once serialized for async dispatch. */
@@ -56,10 +87,41 @@ export interface Notification {
   /** Optional queue/driver hint passed through to the dispatcher. */
   queue?: string;
   /**
+   * Delay delivery. A number of milliseconds or an absolute `Date`. A delay routes the
+   * notification through the async dispatcher (honored by BullMQ/Redis/event-emitter).
+   */
+  delay?: number | Date;
+  /**
+   * Per-channel gate, evaluated just before delivery (Laravel's `shouldSend`). Return
+   * `false` to skip that channel for this notifiable (recorded as `skipped`).
+   */
+  shouldSend?(notifiable: Notifiable, channel: string): boolean;
+  /** Lifecycle hook called after a channel delivers, with the channel's transport response. */
+  afterSending?(notifiable: Notifiable, channel: string, response: unknown): void | Promise<void>;
+  /**
    * Custom serialization for async dispatch. Defaults to a structural copy of the
    * instance's own enumerable properties.
    */
   serialize?(): Record<string, unknown>;
+}
+
+/** Outcome of delivering a notification on one channel. */
+export type ChannelDeliveryStatus = 'sent' | 'failed' | 'skipped' | 'queued';
+
+/** Per-channel result returned from a send. */
+export interface ChannelResult {
+  channel: string;
+  status: ChannelDeliveryStatus;
+  /** The channel transport's response, when it returns one (sent only). */
+  response?: unknown;
+  /** The error that occurred (failed only). */
+  error?: unknown;
+}
+
+/** Result of sending a notification to one notifiable. */
+export interface SendResult {
+  notifiable: Notifiable;
+  results: ChannelResult[];
 }
 
 /**
@@ -109,7 +171,8 @@ export interface NotificationClass {
 /** Delivers a notification over a single transport (mail, database, slack, ...). */
 export interface ChannelDriver {
   readonly channel: string;
-  send(notifiable: Notifiable, notification: Notification): Promise<void>;
+  /** Deliver; may return the transport's response (passed to `afterSending` and SendResult). */
+  send(notifiable: Notifiable, notification: Notification): Promise<unknown>;
 }
 
 /** A unit of work handed to a {@link DispatchDriver}. */
@@ -118,6 +181,8 @@ export interface NotificationJob {
   notification: Notification | SerializedNotification;
   channels: string[];
   queue?: string;
+  /** Delivery delay in milliseconds (honored by async dispatchers). */
+  delay?: number;
 }
 
 /** Decides where/when a job is processed: inline, in-process events, Redis, BullMQ. */

@@ -5,6 +5,7 @@ import {
   type Notification,
   createChannel,
   getHandler,
+  routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import type { PushMessage } from './push-message';
@@ -34,7 +35,7 @@ export class PushChannel implements ChannelDriver {
   ) {}
 
   async send(notifiable: Notifiable, notification: Notification): Promise<void> {
-    const target = notifiable.routeNotificationFor('push', notification);
+    const target = routeFor(notifiable, 'push', notification);
 
     const handler = getHandler(notification, 'push', 'toPush');
     if (!handler) {

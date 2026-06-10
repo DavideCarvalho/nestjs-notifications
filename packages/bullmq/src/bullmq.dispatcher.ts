@@ -28,6 +28,8 @@ export class BullmqNotificationDispatcher implements DispatchDriver {
     await this.queue.add(SEND_JOB, payload, {
       attempts: 3,
       backoff: { type: 'exponential', delay: 1000 },
+      // Scheduled delivery: BullMQ holds the job until the delay elapses.
+      ...(job.delay && job.delay > 0 ? { delay: job.delay } : {}),
     });
   }
 }

@@ -5,6 +5,8 @@ import {
   type Notification,
   createChannel,
   getHandler,
+  notifiableRef,
+  routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import type { DatabaseNotification, NotificationStore } from './interfaces';
@@ -26,14 +28,15 @@ export class DatabaseChannel implements ChannelDriver {
     private readonly store: NotificationStore,
   ) {}
 
-  async send(notifiable: Notifiable, notification: Notification): Promise<void> {
+  async send(notifiable: Notifiable, notification: Notification): Promise<unknown> {
     const ref = this.referenceFor(notifiable, notification);
     const data = this.payloadFor(notifiable, notification);
     const type =
       (notification.constructor as { notificationName?: string }).notificationName ??
       notification.constructor.name;
 
-    await this.store.save({
+    // Return the stored row so it flows into afterSending() and the SendResult.
+    return this.store.save({
       type,
       notifiableType: ref.type,
       notifiableId: String(ref.id),
@@ -42,13 +45,11 @@ export class DatabaseChannel implements ChannelDriver {
   }
 
   private referenceFor(notifiable: Notifiable, notification: Notification): NotifiableRef {
-    const routed = notifiable.routeNotificationFor('database', notification);
+    // A { type, id } returned from the 'database' route wins; otherwise derive the ref from
+    // toNotifiableRef() or the @Notifiable/@NotifiableId decorators.
+    const routed = routeFor(notifiable, 'database', notification);
     if (isRef(routed)) return routed;
-    if (typeof notifiable.toNotifiableRef === 'function') return notifiable.toNotifiableRef();
-    throw new Error(
-      'The database channel needs a notifiable reference. Implement toNotifiableRef() on the ' +
-        'notifiable, or return { type, id } from routeNotificationFor("database").',
-    );
+    return notifiableRef(notifiable);
   }
 
   private payloadFor(

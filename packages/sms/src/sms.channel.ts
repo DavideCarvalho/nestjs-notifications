@@ -5,6 +5,7 @@ import {
   type Notification,
   createChannel,
   getHandler,
+  routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import { SmsMessage } from './sms-message';
@@ -41,7 +42,7 @@ export class SmsChannel implements ChannelDriver {
   ) {}
 
   async send(notifiable: Notifiable, notification: Notification): Promise<void> {
-    const recipient = String(notifiable.routeNotificationFor('sms', notification));
+    const recipient = String(routeFor(notifiable, 'sms', notification));
 
     const handler = getHandler(notification, 'sms', 'toSms');
     if (!handler) {

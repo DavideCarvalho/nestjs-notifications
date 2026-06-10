@@ -107,9 +107,11 @@ describe('NotificationService (sync)', () => {
     const moduleRef = await bootstrap(failing);
     const service = moduleRef.get(NotificationService);
 
-    await expect(
-      service.send(new TestUser(1, 'a@b.com'), new WelcomeNotification()),
-    ).resolves.toBeUndefined();
+    const [result] = await service.send(new TestUser(1, 'a@b.com'), new WelcomeNotification());
     expect(failing.send).toHaveBeenCalledOnce();
+    // The failure is isolated and surfaced in the per-channel result, not thrown.
+    expect(result?.results).toEqual([
+      expect.objectContaining({ channel: 'mail', status: 'failed' }),
+    ]);
   });
 });

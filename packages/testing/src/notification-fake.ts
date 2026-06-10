@@ -8,6 +8,7 @@ import type {
   Notifiable,
   Notification,
   NotificationInput,
+  SendResult,
 } from '@dudousxd/nestjs-notifications-core';
 import { Injectable } from '@nestjs/common';
 
@@ -47,13 +48,17 @@ export class NotificationFake {
   async send(
     notifiables: Notifiable | Notifiable[],
     notification: NotificationInput,
-  ): Promise<void> {
+  ): Promise<SendResult[]> {
     const n = notification as Notification;
-    this.record(notifiables, n, n.shouldQueue ? 'async' : 'sync');
+    const mode = n.shouldQueue || n.delay !== undefined ? 'async' : 'sync';
+    return this.record(notifiables, n, mode);
   }
 
   /** Alias of {@link send}, matching `NotificationService.notify`. */
-  notify(notifiables: Notifiable | Notifiable[], notification: NotificationInput): Promise<void> {
+  notify(
+    notifiables: Notifiable | Notifiable[],
+    notification: NotificationInput,
+  ): Promise<SendResult[]> {
     return this.send(notifiables, notification);
   }
 
@@ -61,16 +66,16 @@ export class NotificationFake {
   async sendNow(
     notifiables: Notifiable | Notifiable[],
     notification: NotificationInput,
-  ): Promise<void> {
-    this.record(notifiables, notification as Notification, 'sync');
+  ): Promise<SendResult[]> {
+    return this.record(notifiables, notification as Notification, 'sync');
   }
 
   /** Records as a forced async (queued) send. */
   async sendAsync(
     notifiables: Notifiable | Notifiable[],
     notification: NotificationInput,
-  ): Promise<void> {
-    this.record(notifiables, notification as Notification, 'async');
+  ): Promise<SendResult[]> {
+    return this.record(notifiables, notification as Notification, 'async');
   }
 
   /**
@@ -87,16 +92,14 @@ export class NotificationFake {
     notifiables: Notifiable | Notifiable[],
     notification: Notification,
     mode: 'sync' | 'async',
-  ): void {
+  ): SendResult[] {
     const targets = Array.isArray(notifiables) ? notifiables : [notifiables];
-    for (const notifiable of targets) {
-      this.records.push({
-        notifiable,
-        notification,
-        channels: this.channelsFor(notification, notifiable),
-        mode,
-      });
-    }
+    const status = mode === 'async' ? ('queued' as const) : ('sent' as const);
+    return targets.map((notifiable) => {
+      const channels = this.channelsFor(notification, notifiable);
+      this.records.push({ notifiable, notification, channels, mode });
+      return { notifiable, results: channels.map((channel) => ({ channel, status })) };
+    });
   }
 
   private channelsFor(notification: Notification, notifiable: Notifiable): string[] {

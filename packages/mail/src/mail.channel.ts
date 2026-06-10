@@ -5,6 +5,7 @@ import {
   type Notification,
   createChannel,
   getHandler,
+  routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import type { MailMessage } from './mail-message';
@@ -44,7 +45,7 @@ export class MailChannel implements ChannelDriver {
   ) {}
 
   async send(notifiable: Notifiable, notification: Notification): Promise<void> {
-    const recipient = String(notifiable.routeNotificationFor('mail', notification));
+    const recipient = String(routeFor(notifiable, 'mail', notification));
 
     const handler = getHandler(notification, 'mail', 'toMail');
     if (!handler) {

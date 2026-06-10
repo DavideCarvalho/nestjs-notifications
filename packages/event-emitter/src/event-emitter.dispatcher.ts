@@ -37,6 +37,9 @@ export class EventEmitterDispatcher implements DispatchDriver {
 
   @OnEvent(PROCESS_EVENT, { async: true })
   async handle(job: NotificationJob): Promise<void> {
+    if (job.delay && job.delay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, job.delay));
+    }
     const { notifiable, notification } = await this.serializer.hydrateJob(job);
     await this.channelRunner.run(notifiable, notification, job.channels);
   }

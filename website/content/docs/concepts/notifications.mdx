@@ -129,6 +129,100 @@ export class InvoicePaid {
 
 You can also set a `queue` hint that dispatchers may use to target a specific queue.
 
+## Send results
+
+`send`, `notify`, `sendNow`, and `sendAsync` all resolve to a `SendResult[]` — **one entry per
+notifiable** (in the order you passed them). Each entry has the `notifiable` and a `results` array
+with **one `ChannelResult` per channel**:
+
+```ts
+import type { SendResult } from '@dudousxd/nestjs-notifications-core';
+
+const [result] = await notifications.send(user, new InvoicePaid(invoiceId));
+
+result.results;
+// [
+//   { channel: 'mail', status: 'sent', response: { messageId: '…' } },
+//   { channel: 'database', status: 'sent' },
+// ]
+```
+
+A `ChannelResult` carries:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `channel` | `string` | The channel name. |
+| `status` | `'sent' \| 'failed' \| 'skipped' \| 'queued'` | Outcome of this channel for this notifiable. |
+| `response` | `unknown` | The transport's response, when it returns one (`sent` only). |
+| `error` | `unknown` | The thrown error (`failed` only). |
+
+`status` tells you exactly what happened: `sent` when the channel delivered, `failed` when it threw
+(under `continueOnError`, see [error handling](/docs/reference/configuration#error-handling)),
+`skipped` when [`shouldSend`](#conditional-channels-with-shouldsend) gated it out, and `queued` when
+the notification was routed through the async dispatcher instead of delivered inline.
+
+### Conditional channels with shouldSend
+
+`shouldSend(notifiable, channel)` is a per-channel gate evaluated **just before delivery**. Return
+`false` to skip that channel for that notifiable — it's recorded as `skipped` in the result and the
+channel never runs:
+
+```ts
+@Notification()
+export class InvoicePaid {
+  shouldSend(notifiable: User, channel: string): boolean {
+    // Don't email users who opted out, but still write the in-app row.
+    if (channel === 'mail') return notifiable.wantsEmail;
+    return true;
+  }
+
+  @Mail() toMail() { /* … */ }
+  @Database() toDatabase() { /* … */ }
+}
+```
+
+This differs from `via()`: `via()` decides the channel list up front, while `shouldSend` runs at
+delivery time per notifiable and is the cleanest way to honour a per-recipient opt-out.
+
+### afterSending hook
+
+`afterSending(notifiable, channel, response)` is a lifecycle hook called **after each channel
+delivers**, with the channel's transport response — the same value you get back as `response` in the
+`SendResult`. Use it to record a receipt, log a provider message id, or trigger follow-up work:
+
+```ts
+@Notification()
+export class InvoicePaid {
+  @Mail() toMail() { /* … */ }
+
+  async afterSending(notifiable: User, channel: string, response: unknown) {
+    if (channel === 'mail') {
+      await this.receipts.record(notifiable.id, response);
+    }
+  }
+}
+```
+
+It can be sync or async, and runs once per channel that actually delivered (not for `skipped` or
+`failed` channels).
+
+### Delaying delivery
+
+Set `delay` to push delivery into the future — a number of **milliseconds**, or an absolute `Date`:
+
+```ts
+@Notification({ name: 'invoice.paid' })
+export class InvoicePaid {
+  delay = 60_000; // one minute from now
+  // delay = new Date('2026-06-11T09:00:00Z'); // or an absolute time
+}
+```
+
+A `delay` always routes the notification through the async [dispatcher](/docs/dispatchers) (just like
+`shouldQueue`), so the channels in the result come back as `queued`. BullMQ honours the delay
+**natively**; the Redis and event-emitter dispatchers honour it with an in-process timer. The
+`SyncDispatcher` has no concept of a delay, so pick a real dispatcher when you rely on it.
+
 ## serialize — for the queue
 
 When queued, a notification is serialized to `{ name, data }`. By default `data` is a structural

@@ -5,6 +5,7 @@ import {
   type Notification,
   createChannel,
   getHandler,
+  routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import { WEBHOOK_OPTIONS } from './tokens';
@@ -59,7 +60,7 @@ export class WebhookChannel implements ChannelDriver {
       result instanceof WebhookMessage ? result : new WebhookMessage().payload(result);
     const request = message.toRequest();
 
-    const route = notifiable.routeNotificationFor('webhook', notification);
+    const route = routeFor(notifiable, 'webhook', notification);
     const url = request.url ?? (typeof route === 'string' ? route : undefined) ?? this.options.url;
 
     if (!url) {

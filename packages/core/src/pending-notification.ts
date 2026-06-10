@@ -1,4 +1,4 @@
-import type { Notifiable, NotificationInput } from './interfaces';
+import type { Notifiable, NotificationInput, SendResult } from './interfaces';
 import type { NotificationService } from './notification.service';
 
 /**
@@ -42,7 +42,7 @@ export class PendingNotification {
     return this;
   }
 
-  notify(notification: NotificationInput): Promise<void> {
+  notify(notification: NotificationInput): Promise<SendResult[]> {
     return this.service.send(this.notifiable, notification);
   }
 }

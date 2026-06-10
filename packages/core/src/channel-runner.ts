@@ -5,7 +5,7 @@ import { ChannelRegistry } from './channel-registry';
 import { injectServices } from './decorators';
 import { ChannelNotRegisteredError } from './errors';
 import { NotificationFailedEvent, NotificationSendingEvent, NotificationSentEvent } from './events';
-import type { Notifiable, Notification } from './interfaces';
+import type { ChannelResult, Notifiable, Notification } from './interfaces';
 import type { NotificationsModuleOptions } from './options';
 import { NOTIFICATION_OPTIONS, NotificationEvents } from './tokens';
 
@@ -31,21 +31,31 @@ export class ChannelRunner {
     private readonly options: NotificationsModuleOptions,
   ) {}
 
-  async run(notifiable: Notifiable, notification: Notification, channels: string[]): Promise<void> {
+  async run(
+    notifiable: Notifiable,
+    notification: Notification,
+    channels: string[],
+  ): Promise<ChannelResult[]> {
     // Populate @InjectService properties from the container (no-op if there are none).
     injectServices(notification, this.moduleRef);
 
     const failFast = this.options.errorPolicy === 'failFast';
 
     if (failFast) {
+      const results: ChannelResult[] = [];
       for (const channel of channels) {
-        await this.deliver(notifiable, notification, channel, true);
+        results.push(await this.deliver(notifiable, notification, channel, true));
       }
-      return;
+      return results;
     }
 
-    await Promise.allSettled(
+    const settled = await Promise.allSettled(
       channels.map((channel) => this.deliver(notifiable, notification, channel, false)),
+    );
+    return settled.map((s, i) =>
+      s.status === 'fulfilled'
+        ? s.value
+        : { channel: channels[i] ?? 'unknown', status: 'failed' as const, error: s.reason },
     );
   }
 
@@ -54,14 +64,22 @@ export class ChannelRunner {
     notification: Notification,
     channel: string,
     rethrow: boolean,
-  ): Promise<void> {
+  ): Promise<ChannelResult> {
+    // shouldSend gate (Laravel parity): skip this channel when it returns false.
+    if (
+      typeof notification.shouldSend === 'function' &&
+      !notification.shouldSend(notifiable, channel)
+    ) {
+      return { channel, status: 'skipped' };
+    }
+
     const driver = this.registry.get(channel);
     if (!driver) {
       const err = new ChannelNotRegisteredError(channel, this.registry.names());
       this.emitFailed(notifiable, notification, channel, err);
       if (rethrow) throw err;
       this.logger.error(err.message);
-      return;
+      return { channel, status: 'failed', error: err };
     }
 
     this.events.emit(
@@ -70,15 +88,20 @@ export class ChannelRunner {
     );
 
     try {
-      await driver.send(notifiable, notification);
+      const response = await driver.send(notifiable, notification);
       this.events.emit(
         NotificationEvents.sent,
         new NotificationSentEvent(notifiable, notification, channel),
       );
+      if (typeof notification.afterSending === 'function') {
+        await notification.afterSending(notifiable, channel, response);
+      }
+      return { channel, status: 'sent', response };
     } catch (error) {
       this.emitFailed(notifiable, notification, channel, error);
       this.logger.error(`Channel "${channel}" failed: ${describe(error)}`);
       if (rethrow) throw error;
+      return { channel, status: 'failed', error };
     }
   }
 

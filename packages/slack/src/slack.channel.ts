@@ -5,6 +5,7 @@ import {
   type Notification,
   createChannel,
   getHandler,
+  routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import type { SlackMessage, SlackPayload } from './slack-message';
@@ -59,7 +60,7 @@ export class SlackChannel implements ChannelDriver {
 
     const message = handler(notifiable) as SlackMessage;
     const payload = message.toPayload();
-    const route = notifiable.routeNotificationFor('slack', notification);
+    const route = routeFor(notifiable, 'slack', notification);
 
     if (this.options.token) {
       await this.postViaWebApi(payload, route);

@@ -77,21 +77,24 @@ export class AppModule {}
 
 ### Make a recipient notifiable
 
-A recipient implements `Notifiable`. `routeNotificationFor` returns the per-channel address —
-an email here. Anything can be notifiable: an entity, a DTO, a plain object.
+Mark the per-channel address with `@RouteFor` — an email here. `@Notifiable()` + `@NotifiableId()`
+provide the stable reference used if you ever queue (more on that below). Anything can be notifiable:
+an entity, a DTO, a plain object.
 
 ```ts title="user.ts"
-import type { Notifiable } from '@dudousxd/nestjs-notifications-core';
+import { Notifiable, NotifiableId, RouteFor } from '@dudousxd/nestjs-notifications-core';
 
-export class User implements Notifiable {
-  constructor(
-    public id: number,
-    public email: string,
-  ) {}
+@Notifiable()
+export class User {
+  @NotifiableId()
+  id: number;
 
-  routeNotificationFor(channel: string) {
-    if (channel === 'mail') return this.email;
-    return undefined;
+  @RouteFor('mail')
+  email: string;
+
+  constructor(id: number, email: string) {
+    this.id = id;
+    this.email = email;
   }
 }
 ```

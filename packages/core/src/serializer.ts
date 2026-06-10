@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { notifiableRef } from './decorators';
 import { NotificationSerializationError } from './errors';
 import type {
   Notifiable,
@@ -66,13 +67,14 @@ export class NotificationSerializer {
   }
 
   serializeNotifiable(notifiable: Notifiable): NotifiableRef {
-    if (typeof notifiable.toNotifiableRef !== 'function') {
+    try {
+      // Uses toNotifiableRef() if present, else the @Notifiable/@NotifiableId decorators.
+      return notifiableRef(notifiable);
+    } catch (error) {
       throw new NotificationSerializationError(
-        'Cannot dispatch asynchronously: the notifiable does not implement ' +
-          'toNotifiableRef(). Add it so the worker can reload the recipient.',
+        error instanceof Error ? error.message : String(error),
       );
     }
-    return notifiable.toNotifiableRef();
   }
 
   async resolveNotifiable(ref: NotifiableRef): Promise<Notifiable> {
@@ -126,7 +128,14 @@ export class NotificationSerializer {
 }
 
 function isRef(value: Notifiable | NotifiableRef): value is NotifiableRef {
-  return typeof (value as Notifiable).routeNotificationFor !== 'function';
+  // A NotifiableRef is a plain { type, id } object; a live notifiable is a class instance.
+  // (Can't rely on routeNotificationFor — it's optional now that @RouteFor decorators exist.)
+  const candidate = value as NotifiableRef;
+  return (
+    typeof candidate.type === 'string' &&
+    (typeof candidate.id === 'string' || typeof candidate.id === 'number') &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
 }
 
 function isSerialized(

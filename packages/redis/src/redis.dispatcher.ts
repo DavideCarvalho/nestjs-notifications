@@ -24,6 +24,15 @@ export class RedisNotificationDispatcher implements DispatchDriver {
   }
 
   async dispatch(job: NotificationJob): Promise<void> {
-    await this.client.lpush(this.key, JSON.stringify(this.serializer.serialize(job)));
+    const payload = JSON.stringify(this.serializer.serialize(job));
+    // A delay is honored with an in-process timer before the job is pushed. Note this is not
+    // durable across a restart — use the BullMQ dispatcher for durable scheduled delivery.
+    if (job.delay && job.delay > 0) {
+      setTimeout(() => {
+        void this.client.lpush(this.key, payload);
+      }, job.delay);
+      return;
+    }
+    await this.client.lpush(this.key, payload);
   }
 }
