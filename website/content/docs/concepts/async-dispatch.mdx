@@ -1,0 +1,99 @@
+---
+title: Async dispatch
+description: How a notification and its recipient survive the trip to a worker — notifications serialize to { name, data }, notifiables to a { type, id } reference rebuilt by resolveNotifiable.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Sync delivery is easy: the live notification and notifiable are passed straight to the channels.
+Async delivery is the interesting case, because the worker that delivers the job may be a
+different process entirely — all it receives is JSON. Two things have to make the round trip: the
+**notification** and the **notifiable**.
+
+## The round trip
+
+```
+send(user, new InvoicePaid(invoice))
+        │   shouldQueue = true
+        ▼
+ serialize → { notification: { name, data }, notifiable: { type, id }, channels }
+        │   enqueue (BullMQ / Redis / …)
+        ▼
+   worker pops the job
+        │
+        ▼
+ rehydrate → resolveNotifiable({ type, id })  +  rebuild notification by name
+        │
+        ▼
+   run the same channels, on the worker
+```
+
+## Notifications: name + data
+
+A notification serializes to `{ name, data }`. `name` is the class name (or a static
+`notificationName`), and `data` defaults to a structural copy of the instance's own properties.
+On the worker, the library looks the class up in a registry and rebuilds it.
+
+That registry is the `notifications` array you pass to `forRoot`:
+
+```ts
+NotificationsModule.forRoot({
+  notifications: [InvoicePaid, PaymentFailed], // [!code highlight]
+});
+```
+
+<Callout type="warn">
+  Rehydration assigns `data` onto the class prototype — it does **not** call the constructor. Your
+  `to<Channel>()` methods (which live on the prototype) work fine, but constructor side effects
+  won't run. For full control, override `serialize()` and a static `deserialize(data)` on the
+  notification.
+</Callout>
+
+## Notifiables: a reference, not the object
+
+You can't ship a live entity through Redis, so a queued notifiable serializes to a small
+reference via `toNotifiableRef()`:
+
+```ts
+toNotifiableRef(): NotifiableRef {
+  return { type: 'User', id: this.id };
+}
+```
+
+On the worker, the library rebuilds the recipient by calling the `resolveNotifiable` function you
+provide — typically a repository lookup:
+
+```ts
+NotificationsModule.forRootAsync({
+  inject: [UserRepository],
+  useFactory: (users: UserRepository) => ({
+    notifications: [InvoicePaid],
+    resolveNotifiable: (ref) => users.findOneByOrFail({ id: Number(ref.id) }), // [!code highlight]
+  }),
+});
+```
+
+Use `forRootAsync` when `resolveNotifiable` needs injected dependencies (it usually does).
+
+<Callout type="error">
+  Queue a notifiable without `toNotifiableRef`, or configure async without `resolveNotifiable`,
+  and the library throws a `NotificationSerializationError` with a message telling you exactly
+  what's missing — at dispatch time, not silently.
+</Callout>
+
+## In-process dispatch skips serialization
+
+Not every async dispatcher crosses a process boundary. The
+[event-emitter dispatcher](/docs/dispatchers/event-emitter) runs on the same process on a later
+tick, so it passes the **live** objects through and never serializes — you get
+fire-and-forget async with zero rehydration cost, and no `toNotifiableRef`/`resolveNotifiable`
+required. Only the cross-process dispatchers (BullMQ, Redis) serialize.
+
+## Choosing a dispatcher
+
+| Dispatcher | Process | Serializes | Needs `resolveNotifiable` |
+| --- | --- | --- | --- |
+| [Sync](/docs/dispatchers) (default) | same, inline | no | no |
+| [event-emitter](/docs/dispatchers/event-emitter) | same, deferred | no | no |
+| [BullMQ](/docs/dispatchers/bullmq) | worker | yes | yes |
+| [Redis](/docs/dispatchers/redis) | worker | yes | yes |

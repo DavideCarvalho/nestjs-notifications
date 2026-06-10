@@ -1,0 +1,46 @@
+---
+title: Documentation
+description: Laravel-style notifications for NestJS — one notification, many channels (mail, database, broadcast, Slack), delivered synchronously or queued through your own dispatcher.
+---
+
+Welcome to the **nestjs-notifications** documentation.
+
+`@nestjs-notifications/core` brings Laravel's notification ergonomics to NestJS. You write a
+notification once — a plain class that lists its channels and shapes a payload for each — and
+send it with a single call. It fans out to mail, the database, a websocket, Slack, or anything
+you plug in, synchronously or queued, with one call site that never changes.
+
+Head to the [Getting Started](/docs/getting-started) guide to send your first notification in
+under five minutes, or use the sidebar to explore the concepts, channels, and dispatchers.
+
+## What you get
+
+- **One notification, many channels.** Define `via()` and a `to<Channel>()` method per channel.
+  Mail, database, broadcast and Slack ship today; each is an opt-in package.
+- **Sync or queued, without changing the call site.** Deliver inline by default, or set
+  `shouldQueue` and route through an async dispatcher — in-process events, Redis, or the BullMQ
+  you already run.
+- **A decoupled core.** The core knows only interfaces. Channels are discovered from the Nest
+  container; dispatchers are swapped with one option. Nothing is hard-wired.
+- **Type-safe payloads.** Each channel exports an interface your notification implements, so
+  `toMail`, `toDatabase` and `toSlack` are checked at compile time.
+- **On-demand routing.** No entity to notify? Send straight to an address with
+  `notifications.route('mail', 'ops@x.com').notify(...)`.
+- **Observable.** Lifecycle events for every send, plus a first-class
+  [nestjs-telescope](/docs/recipes/telescope) watcher that records each delivery.
+- **Built to test.** A `NotificationFake` swaps the real service in tests, with Laravel-style
+  assertions and no real SMTP, sockets, or queues.
+
+## Why
+
+Sending a notification is rarely "send an email." It's an email *and* a database row for the
+in-app feed *and* a realtime push *and*, when something is on fire, a Slack message — and half
+of those should happen on a queue, not on the request. Wire that by hand and the logic for one
+event ends up smeared across a mailer, a repository, a gateway, and a queue processor.
+
+nestjs-notifications collapses that into a single class. The recipient decides *where* it goes
+(`routeNotificationFor`), the notification decides *what* each channel sends (`to<Channel>()`),
+and the library handles the fan-out, the failures, and — when you ask — the queue.
+
+If you've used Laravel notifications, you already know this API. If you haven't,
+[Getting Started](/docs/getting-started) is five minutes.

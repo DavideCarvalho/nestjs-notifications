@@ -1,0 +1,72 @@
+---
+title: Channels & Dispatchers
+description: The two pluggable abstractions at the heart of the library. Channels decide how a notification leaves; dispatchers decide where and when it is processed. They are independent.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+nestjs-notifications has exactly two pluggable abstractions, and keeping them separate is the
+whole design. Everything else is built on these two interfaces.
+
+## Channel drivers — *how* it leaves
+
+A **channel** delivers a notification over one transport. It has a name and a `send` method:
+
+```ts
+interface ChannelDriver {
+  readonly channel: string;
+  send(notifiable: Notifiable, notification: Notification): Promise<void>;
+}
+```
+
+Mail, database, broadcast and Slack are channels. Each is its own package, and each reads its own
+`to<Channel>()` method off the notification. You enable a channel by importing its module — the
+core discovers it from the Nest container automatically, so there's no registration array to keep
+in sync.
+
+See [Channels](/docs/channels) for the built-ins, and [Custom channels](/docs/recipes/custom-channel)
+to write your own.
+
+## Dispatch drivers — *where & when* it runs
+
+A **dispatcher** decides how the work is processed: inline now, or somewhere else later.
+
+```ts
+interface DispatchDriver {
+  dispatch(job: NotificationJob): Promise<void>;
+}
+```
+
+The default is the synchronous dispatcher — it runs the channels inline, in the current process.
+Set `shouldQueue` on a notification and the configured dispatcher takes over: in-process events,
+Redis, or BullMQ. See [Dispatchers](/docs/dispatchers).
+
+## They are orthogonal
+
+This is the point. The channel is *what leaves*; the dispatcher is *where it runs*. They compose
+freely:
+
+| | Sync | BullMQ | Redis |
+| --- | --- | --- | --- |
+| **mail** | email, inline | email, on a worker | email, on a worker |
+| **database** | row, inline | row, on a worker | row, on a worker |
+| **broadcast** | push, inline | push, on a worker | push, on a worker |
+
+You can send by mail (channel) asynchronously through BullMQ (dispatch), or persist to the
+database (channel) inline (sync) — any combination, chosen per notification with `shouldQueue`,
+without the channel knowing or caring which dispatcher ran it.
+
+## How a send flows
+
+1. `notifications.send(user, notification)` asks the notification for its channels via `via(user)`.
+2. If `shouldQueue` is false (default), the **sync dispatcher** runs the channels inline.
+3. If `shouldQueue` is true, the job goes to the configured **dispatch driver**, which processes
+   it — possibly on another process — and then runs the same channels there.
+4. Each channel resolves its address with `routeNotificationFor`, reads its `to<Channel>()`
+   payload, and delivers. Failures are isolated per channel and surfaced as
+   [events](/docs/reference/configuration#events).
+
+<Callout type="info">
+  Because both ends run the *same* channel code, switching a notification from sync to queued
+  changes nothing about how it's delivered — only where.
+</Callout>

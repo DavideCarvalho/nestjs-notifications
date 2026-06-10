@@ -1,0 +1,72 @@
+---
+title: Channels
+description: A channel is a transport — mail, database, broadcast, Slack. Import a channel's module and it registers itself; the notification's to<Channel>() method shapes the payload.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+A **channel** is a transport: it takes a notification and delivers it over one medium — an email,
+a persisted row, a websocket push, a Slack message. A notification's `via()` lists the channels
+to use, and each channel reads one `to<Channel>()` method off the notification for its payload.
+
+For the conceptual split between channels (where it goes) and dispatchers (when it goes), see
+[Channels vs. dispatchers](/docs/concepts/channels-and-dispatchers).
+
+## Built-in channels
+
+| Channel | Package | Reads | Notification interface |
+| --- | --- | --- | --- |
+| `mail` | `@nestjs-notifications/mail` | `toMail()` | `MailNotification` |
+| `database` | `@nestjs-notifications/database` | `toDatabase()` | `DatabaseNotification` |
+| `broadcast` | `@nestjs-notifications/broadcast` | `toBroadcast()` | `BroadcastNotification` |
+| `slack` | `@nestjs-notifications/slack` | `toSlack()` | `SlackNotification` |
+
+Each channel ships as its own package, so you only pull in what you send.
+
+## Registration is just an import
+
+There is no channels array to maintain. Each `*ChannelModule.forRoot()` provides a `ChannelDriver`,
+and the core finds it through Nest's `DiscoveryService` at startup. Import the module once in your
+root module and the channel is live — referenceable by name from any notification's `via()`.
+
+```ts title="app.module.ts"
+import { NotificationsModule } from '@nestjs-notifications/core';
+import { MailChannelModule } from '@nestjs-notifications/mail';
+import { SlackChannelModule } from '@nestjs-notifications/slack';
+
+@Module({
+  imports: [
+    NotificationsModule.forRoot(),
+    MailChannelModule.forRoot({ from: 'no-reply@example.com' }),
+    SlackChannelModule.forRoot({ webhookUrl: process.env.SLACK_WEBHOOK_URL }),
+  ],
+})
+export class AppModule {}
+```
+
+Every channel module is `global: true` by default, so a single registration in the root module
+makes it discoverable app-wide. Set `global: false` to scope it to the importing module.
+
+## When a payload method is missing
+
+If `via()` routes a notification to a channel but the notification doesn't implement that channel's
+method, the channel throws a `MissingChannelMethodError` at send time:
+
+```
+Notification "InvoicePaid" is routed to the "mail" channel but does not implement
+toMail(). Implement it to define the channel payload.
+```
+
+Implement the channel's notification interface (`MailNotification`, `SlackNotification`, …) to turn
+that runtime error into a compile-time one.
+
+<Callout type="info">
+  Routing a channel that no module registered throws a different error —
+  `ChannelNotRegisteredError` — which lists the channels that *are* registered. That usually means
+  you forgot to import the channel's module.
+</Callout>
+
+## Build your own
+
+Need SMS, push, or an internal webhook? A channel is just a class with a `channel` name and a
+`send()` method. See [Writing a custom channel](/docs/recipes/custom-channel).

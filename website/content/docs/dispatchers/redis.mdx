@@ -1,0 +1,103 @@
+---
+title: Redis
+description: A dedicated notification worker without BullMQ. The dispatcher pushes serialized jobs onto a Redis list; a long-running worker drains it with a blocking BRPOP loop and isolates per-job failures.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Want out-of-process delivery on a dedicated worker, but you're not running BullMQ? The Redis
+dispatcher is a lean alternative. It pushes serialized jobs onto a Redis list, and a long-running
+worker pops and delivers them — no queue framework, just `ioredis`.
+
+Like BullMQ, it crosses a process boundary, so it serializes the job and rehydrates it on the
+worker. See [Async dispatch](/docs/concepts/async-dispatch).
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @nestjs-notifications/redis ioredis
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @nestjs-notifications/redis ioredis
+    ```
+  </Tab>
+</Tabs>
+
+## Wire it up
+
+Import `RedisDispatcherModule.forRoot()` to provide the client, dispatcher, and worker, then set
+`RedisNotificationDispatcher` as the dispatcher. Add the `notifications` registry and
+`resolveNotifiable` the worker needs to rebuild jobs.
+
+```ts title="app.module.ts"
+import { Module } from '@nestjs/common';
+import { NotificationsModule } from '@nestjs-notifications/core';
+import {
+  RedisDispatcherModule,
+  RedisNotificationDispatcher,
+} from '@nestjs-notifications/redis';
+import { InvoicePaid } from './invoice-paid.notification';
+
+@Module({
+  imports: [
+    NotificationsModule.forRoot({
+      dispatcher: RedisNotificationDispatcher, // [!code highlight]
+      imports: [
+        RedisDispatcherModule.forRoot({ connection: 'redis://localhost:6379' }),
+      ],
+      notifications: [InvoicePaid],
+      resolveNotifiable: (ref) => users.findById(ref.id), // reload the recipient
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+`resolveNotifiable` usually needs an injected repository — use `forRootAsync` when it does.
+
+## Connection options
+
+`RedisDispatcherModule.forRoot()` takes a `RedisDispatcherOptions`:
+
+```ts title="redis-options.ts"
+interface RedisDispatcherOptions {
+  /** ioredis connection: a URL string or a host/port (+optional password) object. */
+  connection: string | { host: string; port: number; password?: string };
+  /** Redis list key used as the job queue. Defaults to `nestjs-notifications:jobs`. */
+  key?: string;
+}
+```
+
+The dispatcher `LPUSH`es serialized jobs onto `key`; the worker `BRPOP`s from the same key.
+Override `key` if you run multiple independent queues against one Redis instance.
+
+## The dedicated worker
+
+`RedisNotificationWorker` is a long-running worker that drains the list and delivers
+notifications. Key behaviours:
+
+- **Blocking loop.** It runs a `BRPOP` loop on its **own** ioredis connection, separate from the
+  dispatcher's client, so a blocking pop never starves other commands.
+- **Per-job error isolation.** A single failing job is logged and skipped — the loop keeps
+  running. Notifications don't get stuck behind one bad payload.
+- **Clean shutdown.** On module destroy it stops the loop and disconnects, unblocking any
+  in-flight `BRPOP` immediately.
+
+The module registers both the dispatcher and the worker, so it works whether you run one process
+or split API and worker.
+
+<Callout type="info">
+  This dispatcher is for a dedicated worker **without** BullMQ. If you already run BullMQ, prefer
+  the [BullMQ dispatcher](/docs/dispatchers/bullmq) and reuse that infrastructure instead.
+</Callout>
+
+<Callout type="warn">
+  The worker must run somewhere — in the same process, or a separate worker process that imports
+  `RedisDispatcherModule.forRoot()` along with `NotificationsModule` and your channel modules. If
+  nothing drains the list, jobs accumulate undelivered.
+</Callout>

@@ -1,0 +1,169 @@
+---
+title: Writing a custom channel
+description: Implement a ChannelDriver and the library discovers it automatically. Build an SMS channel end to end — the driver, a type-safe notification interface, and a global module.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+A channel is just a class that implements `ChannelDriver`: a `channel` name and a `send()` method.
+Register it as a provider and the [`ChannelRegistry`](/docs/concepts/channels-and-dispatchers)
+discovers it via Nest's `DiscoveryService` — no registration array, no central list. Let's build an
+SMS channel against a fictional SMS API.
+
+<Steps>
+
+<Step>
+
+### Export a notification interface
+
+First, define the contract notifications opt into for type safety. A notification routed to `sms`
+should implement `toSms()`. Exporting this interface means forgetting the method is a compile error,
+not a runtime surprise.
+
+```ts title="sms-notification.ts"
+export interface SmsMessage {
+  body: string;
+}
+
+/** Implement this on any notification routed to the `sms` channel. */
+export interface SmsNotification {
+  toSms(notifiable: unknown): SmsMessage;
+}
+```
+
+</Step>
+
+<Step>
+
+### Implement the driver
+
+The driver reads the recipient's phone number from `routeNotificationFor('sms')`, pulls the payload
+from the notification's `toSms()`, and calls the API. If the notification was routed to `sms` but
+never implemented `toSms()`, throw `MissingChannelMethodError` — the same error the built-in
+channels raise, so the failure is consistent and clear.
+
+```ts title="sms.channel.ts"
+import {
+  type ChannelDriver,
+  MissingChannelMethodError,
+  type Notifiable,
+  type Notification,
+} from '@nestjs-notifications/core';
+import { Injectable } from '@nestjs/common';
+import type { SmsNotification } from './sms-notification';
+import { SmsClient } from './sms-client';
+
+@Injectable()
+export class SmsChannel implements ChannelDriver {
+  readonly channel = 'sms';
+
+  constructor(private readonly client: SmsClient) {}
+
+  async send(notifiable: Notifiable, notification: Notification): Promise<void> {
+    const to = notifiable.routeNotificationFor(this.channel, notification) as string | undefined;
+    if (!to) return; // no SMS address for this recipient — nothing to do
+
+    const candidate = notification as Partial<SmsNotification>;
+    if (typeof candidate.toSms !== 'function') {
+      throw new MissingChannelMethodError(
+        this.channel,
+        'toSms',
+        (notification.constructor as { notificationName?: string }).notificationName ??
+          notification.constructor.name,
+      );
+    }
+
+    const message = candidate.toSms(notifiable);
+    await this.client.send({ to, body: message.body });
+  }
+}
+```
+
+`MissingChannelMethodError` takes the channel name, the missing method name, and the notification
+name — it builds the message for you.
+
+</Step>
+
+<Step>
+
+### Provide it as a global module
+
+Expose the driver as a provider in a **global** module. Global registration is what lets the
+registry discover the channel app-wide, the same pattern the built-in channels use.
+
+```ts title="sms-channel.module.ts"
+import { type DynamicModule, Module } from '@nestjs/common';
+import { SmsChannel } from './sms.channel';
+import { SmsClient } from './sms-client';
+
+@Module({})
+export class SmsChannelModule {
+  static forRoot(): DynamicModule {
+    return {
+      module: SmsChannelModule,
+      global: true, // discoverable everywhere [!code highlight]
+      providers: [SmsClient, SmsChannel],
+      exports: [SmsChannel],
+    };
+  }
+}
+```
+
+Then import it alongside `NotificationsModule`:
+
+```ts title="app.module.ts"
+@Module({
+  imports: [
+    EventEmitterModule.forRoot(),
+    NotificationsModule.forRoot(),
+    SmsChannelModule.forRoot(), // [!code highlight]
+  ],
+})
+export class AppModule {}
+```
+
+</Step>
+
+</Steps>
+
+<Callout type="info">
+  Discovery is structural, not nominal. `ChannelRegistry` scans every provider in the container and
+  keeps any whose instance has a string `channel` and a `send()` method — keyed by `channel`. If two
+  drivers claim the same name, the last one discovered wins, so keep channel names unique.
+</Callout>
+
+## Use it in a notification
+
+A notification opts into the channel by listing it in `via()` and implementing the interface:
+
+```ts title="otp-code.notification.ts"
+import type { Notification } from '@nestjs-notifications/core';
+import type { SmsMessage, SmsNotification } from './sms-notification';
+
+export class OtpCode implements Notification, SmsNotification {
+  constructor(private readonly code: string) {}
+
+  via(): string[] {
+    return ['sms'];
+  }
+
+  toSms(): SmsMessage {
+    return { body: `Your verification code is ${this.code}` };
+  }
+}
+```
+
+```ts
+await notifications.send(user, new OtpCode('492013'));
+```
+
+That's the whole contract. The recipient supplies the address through
+`routeNotificationFor('sms')`, the notification supplies the payload through `toSms()`, and the
+runner handles events and the [error policy](/docs/reference/configuration#events) for you.
+
+## See also
+
+- [Channels and dispatchers](/docs/concepts/channels-and-dispatchers) — how discovery works
+- [Notifications](/docs/concepts/notifications) — `via()` and per-channel payloads
+- [Reference: configuration](/docs/reference/configuration) — error classes and the error policy

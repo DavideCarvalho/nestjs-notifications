@@ -1,0 +1,98 @@
+---
+title: Dispatchers
+description: A dispatcher decides where and when a notification is processed — inline now, or on a worker later. The default is synchronous; opt into async per notification with shouldQueue and swap the driver in forRoot.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+A **dispatcher** is one of the two pluggable abstractions in the library. Channels decide *how* a
+notification leaves; dispatchers decide *where and when* it runs. They are independent — see
+[Channels & Dispatchers](/docs/concepts/channels-and-dispatchers).
+
+A dispatcher is small. One method:
+
+```ts
+interface DispatchDriver {
+  dispatch(job: NotificationJob): Promise<void>;
+}
+```
+
+A `NotificationJob` carries the notifiable, the notification, the resolved channel list, and an
+optional `queue` hint. What the dispatcher does with it is up to the driver: run it inline, defer
+it to a later tick, or push it to a worker on another process.
+
+## The default: synchronous
+
+Out of the box, `NotificationsModule.forRoot()` wires the `SyncDispatcher`. It runs the channels
+inline, in the current process — no queue, no serialization. The happy path passes the live
+objects straight through; if a job arrives already serialized, the same dispatcher rehydrates it,
+so it doubles as a worker-side runner.
+
+Synchronous is the right default. You install, write one class, call `send()`, and the work
+happens now. Reach for an async dispatcher only when you want delivery off the request path.
+
+## Sync vs. async, per notification
+
+A notification opts into async delivery by setting `shouldQueue`:
+
+```ts title="invoice-paid.notification.ts"
+export class InvoicePaid implements Notification {
+  shouldQueue = true; // [!code highlight]
+  queue = 'mail';     // optional hint passed through to the dispatcher
+
+  via(): string[] {
+    return ['mail'];
+  }
+}
+```
+
+`NotificationService.send()` reads `shouldQueue` and routes accordingly:
+
+- `shouldQueue` falsy (default) → channels run inline.
+- `shouldQueue = true` → the job goes to the configured dispatcher.
+
+You can also force a route regardless of the flag:
+
+- `sendNow(notifiable, notification)` — always inline.
+- `sendAsync(notifiable, notification)` — always through the configured dispatcher.
+
+The call site never changes. Switching a notification from sync to queued changes *where* it
+runs, never *how* it's delivered — both ends run the same channel code.
+
+## Overriding the dispatcher
+
+Pass a dispatcher class to `forRoot`. Supply its dependencies through `imports` and `providers`:
+
+```ts title="app.module.ts"
+NotificationsModule.forRoot({
+  dispatcher: EventEmitterDispatcher, // [!code highlight]
+});
+```
+
+The `SyncDispatcher` stays registered even when you override it, so a custom dispatcher can
+delegate to inline delivery if it wants. Use `forRootAsync` when the configuration (or
+`resolveNotifiable`) needs injected dependencies.
+
+<Callout type="info">
+  The dispatcher is resolved through the `NOTIFICATION_DISPATCHER` token. A custom dispatcher is
+  just a provider that implements `DispatchDriver` and is passed as the `dispatcher` option — wire
+  any transport you like.
+</Callout>
+
+## Choosing a dispatcher
+
+Four dispatchers ship with the library. The split that matters: in-process drivers pass live
+objects and never serialize; cross-process drivers serialize the job and rehydrate it on the
+worker — which means they need a `notifications` registry and a `resolveNotifiable` function.
+See [Async dispatch](/docs/concepts/async-dispatch) for the full round trip.
+
+| Dispatcher | Process | Serializes | Needs `resolveNotifiable` |
+| --- | --- | --- | --- |
+| Sync (default) | same, inline | no | no |
+| [event-emitter](/docs/dispatchers/event-emitter) | same, deferred | no | no |
+| [BullMQ](/docs/dispatchers/bullmq) | worker | yes | yes |
+| [Redis](/docs/dispatchers/redis) | worker | yes | yes |
+
+- Want async without infrastructure? Use [event-emitter](/docs/dispatchers/event-emitter).
+- Already running [BullMQ](/docs/dispatchers/bullmq)? Reuse it.
+- Want a dedicated worker without BullMQ? Use the [Redis](/docs/dispatchers/redis) dispatcher.

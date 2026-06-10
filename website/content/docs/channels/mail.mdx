@@ -1,0 +1,172 @@
+---
+title: Mail
+description: Send email notifications. A fluent MailMessage builder, an HTML + text renderer, and a swappable transport — nodemailer SMTP out of the box.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The mail channel turns a notification into an email. You shape the message with a fluent builder,
+a renderer produces the HTML and plain-text bodies, and a transport delivers it. The defaults —
+a semantic HTML renderer and a nodemailer SMTP transport — work out of the box, and every piece is
+swappable.
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @nestjs-notifications/mail
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @nestjs-notifications/mail
+    ```
+  </Tab>
+</Tabs>
+
+## Register the channel
+
+```ts title="app.module.ts"
+import { MailChannelModule } from '@nestjs-notifications/mail';
+
+@Module({
+  imports: [
+    MailChannelModule.forRoot({
+      from: 'billing@example.com',
+      smtp: { host: 'smtp.example.com', port: 587, auth: { user: '…', pass: '…' } },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+`MailChannelModule.forRoot()` takes:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `from` | `string` | — | Default sender used when a message doesn't set its own `from`. |
+| `transport` | `Type<MailTransport>` | `NodemailerTransport` | Transport class that delivers the rendered mail. |
+| `renderer` | `Type<MailRenderer>` | `DefaultMailRenderer` | Renderer that produces the HTML + text bodies. |
+| `smtp` | `SMTPOptions` | `{}` | SMTP options forwarded to the default nodemailer transport. |
+| `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+## The notification side
+
+Implement `MailNotification` to make `toMail()` type-checked. It returns a `MailMessage`:
+
+```ts title="invoice-paid.notification.ts"
+import type { Notifiable, Notification } from '@nestjs-notifications/core';
+import { MailMessage, type MailNotification } from '@nestjs-notifications/mail';
+
+export class InvoicePaid implements Notification, MailNotification {
+  constructor(private invoiceId: string) {}
+
+  via(): string[] {
+    return ['mail'];
+  }
+
+  toMail(notifiable: Notifiable): MailMessage {
+    return new MailMessage()
+      .subject(`Invoice ${this.invoiceId} paid`)
+      .greeting('Thanks for your payment!')
+      .line('We received your payment. No further action is needed.')
+      .action('View invoice', `https://app.example.com/invoices/${this.invoiceId}`)
+      .salutation('— The billing team');
+  }
+}
+```
+
+### MailMessage builder
+
+`MailMessage` is a fluent builder. Each method returns `this`, so calls chain:
+
+| Method | Effect |
+| --- | --- |
+| `.from(addr)` | Override the sender for this message (otherwise the module's `from`). |
+| `.subject(s)` | Set the subject line. |
+| `.greeting(s)` | Set the leading greeting (rendered as a heading). |
+| `.line(s)` | Append a body paragraph. Call it more than once for multiple paragraphs. |
+| `.action(text, url)` | Add a single call-to-action button. |
+| `.salutation(s)` | Set the closing line. |
+
+## Recipient address
+
+The recipient comes from the notifiable's `routeNotificationFor('mail')` — return the email
+address there:
+
+```ts title="user.ts"
+export class User implements Notifiable {
+  constructor(public id: number, public email: string) {}
+
+  routeNotificationFor(channel: string) {
+    if (channel === 'mail') return this.email;
+    return undefined;
+  }
+}
+```
+
+The channel sends with that address as `to`, and uses the message's `from` (falling back to the
+module's `from`) as the sender.
+
+## Transports
+
+The default transport, `NodemailerTransport`, wraps nodemailer's SMTP transport and is configured
+through the `smtp` option:
+
+```ts
+MailChannelModule.forRoot({
+  from: 'no-reply@example.com',
+  smtp: { host: 'smtp.example.com', port: 587, secure: false, auth: { user, pass } },
+});
+```
+
+`SMTPOptions` requires `host` and `port`, with optional `secure` and `auth`; any extra keys pass
+straight through to nodemailer.
+
+To use a provider's HTTP API instead of SMTP, implement `MailTransport` and pass it as `transport`:
+
+```ts title="resend.transport.ts"
+import { Injectable } from '@nestjs/common';
+import type { MailTransport, MailTransportPayload } from '@nestjs-notifications/mail';
+
+@Injectable()
+export class ResendTransport implements MailTransport {
+  async send(payload: MailTransportPayload): Promise<void> {
+    // payload: { to, from?, subject, html, text }
+    await resend.emails.send({ to: payload.to, from: payload.from, subject: payload.subject, html: payload.html });
+  }
+}
+
+MailChannelModule.forRoot({ from: 'no-reply@example.com', transport: ResendTransport });
+```
+
+The transport class is registered in DI, so it can inject its own dependencies (config, an HTTP
+client, your provider SDK).
+
+## Renderers
+
+`DefaultMailRenderer` turns a `MailMessage` into semantic HTML — the greeting becomes an `<h1>`,
+each line a `<p>`, the action a styled `<a>` button — plus a plain-text fallback. To render with
+your own templates (MJML, React Email, Handlebars), implement `MailRenderer`:
+
+```ts title="mjml.renderer.ts"
+import { Injectable } from '@nestjs/common';
+import type { MailMessage, MailRenderer } from '@nestjs-notifications/mail';
+
+@Injectable()
+export class MjmlRenderer implements MailRenderer {
+  render(message: MailMessage): { html: string; text: string } {
+    return { html: renderMjml(message), text: message.lines.join('\n\n') };
+  }
+}
+
+MailChannelModule.forRoot({ from: 'no-reply@example.com', renderer: MjmlRenderer });
+```
+
+<Callout type="info">
+  `MailMessage` exposes read-only getters (`subjectLine`, `greetingText`, `lines`, `actionText`,
+  `actionUrl`, `salutationText`, `fromAddress`) so a custom renderer can read everything the builder
+  collected.
+</Callout>

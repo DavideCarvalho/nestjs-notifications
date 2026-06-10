@@ -1,0 +1,101 @@
+---
+title: On-demand notifications
+description: Send to a raw address — an email, a Slack webhook, a phone number — without a Notifiable entity. Use notifications.route(channel, value).notify(notification) for one-off and ops alerts.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Not every notification has a user behind it. An ops alert goes to a shared inbox, a deploy hook
+fires at a Slack URL, a webhook posts to a number you have on hand. For these there's no entity to
+make `Notifiable` — so you route the channel to a literal value instead.
+
+```ts
+await notifications.route('mail', 'ops@example.com').notify(new DeployFinished(build));
+```
+
+`route()` returns a fluent builder. `notify()` sends the notification just like `send()` would —
+same channels, same lifecycle events, same error policy.
+
+## Multiple routes
+
+Chain `.route()` to address several channels in one go. Each call sets the address for one channel:
+
+```ts
+await notifications
+  .route('mail', 'ops@example.com')
+  .route('slack', 'https://hooks.slack.com/services/…')
+  .notify(new IncidentOpened(incident));
+```
+
+The notification's `via()` still decides which channels actually fire. Routes you don't list in
+`via()` are simply ignored; channels in `via()` with no matching route get an `undefined` address.
+
+## How it works
+
+Under the hood `route()` builds an **`AnonymousNotifiable`** — a notifiable backed by a plain map
+rather than an entity. Each `.route(channel, value)` stores one entry, and when a channel asks for
+its address via `routeNotificationFor(channel)`, it gets the value you set:
+
+```ts
+class AnonymousNotifiable implements Notifiable {
+  private readonly routes = new Map<string, unknown>();
+  route(channel: string, value: unknown) { this.routes.set(channel, value); return this; }
+  routeNotificationFor(channel: string) { return this.routes.get(channel); }
+}
+```
+
+So from a channel's point of view there's nothing special about an on-demand send — it's a regular
+`Notifiable` whose addresses happen to be hard-coded. Your `toMail()` / `toSlack()` methods work
+unchanged.
+
+## A real example
+
+An ops alert with no user attached, fanning out to email and Slack:
+
+```ts title="incident-opened.notification.ts"
+import type { Notification } from '@nestjs-notifications/core';
+import { MailMessage, type MailNotification } from '@nestjs-notifications/mail';
+
+export class IncidentOpened implements Notification, MailNotification {
+  constructor(private readonly incident: Incident) {}
+
+  via(): string[] {
+    return ['mail', 'slack'];
+  }
+
+  toMail(): MailMessage {
+    return new MailMessage()
+      .subject(`Incident #${this.incident.id} opened`)
+      .line(this.incident.summary);
+  }
+
+  toSlack() {
+    return { text: `:rotating_light: Incident #${this.incident.id}: ${this.incident.summary}` };
+  }
+}
+```
+
+```ts title="incidents.service.ts"
+@Injectable()
+export class IncidentsService {
+  constructor(private readonly notifications: NotificationService) {}
+
+  async open(incident: Incident) {
+    await this.notifications
+      .route('mail', 'ops@example.com')
+      .route('slack', process.env.SLACK_OPS_WEBHOOK)
+      .notify(new IncidentOpened(incident));
+  }
+}
+```
+
+<Callout type="info">
+  On-demand sends are sync by default like any other. They respect `shouldQueue` too — but a
+  queued anonymous notifiable can't be rehydrated on a worker (it has no `toNotifiableRef`), so
+  keep on-demand sends inline or on an [in-process dispatcher](/docs/dispatchers/event-emitter).
+</Callout>
+
+## See also
+
+- [Notifiables](/docs/concepts/notifiables) — the `Notifiable` contract
+- [Reference: configuration](/docs/reference/configuration) — error policy and events

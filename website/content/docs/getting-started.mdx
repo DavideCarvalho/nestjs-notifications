@@ -1,0 +1,228 @@
+---
+title: Getting Started
+description: Send your first notification in an existing NestJS app — install the core and a channel, write a notification class, and call send(). Synchronous by default; add a queue when you're ready.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+The fastest way to get going is the core plus one channel. Channels register themselves, the
+service is injectable everywhere, and delivery is synchronous by default — so you install, write
+one class, and call `send()`. Most apps send their first notification in under five minutes.
+
+---
+
+## Prerequisites
+
+- **Node.js 20+**
+- **NestJS 10+** (11 recommended)
+- **`@nestjs/event-emitter`** — the core uses it for lifecycle events
+
+---
+
+<Steps>
+
+<Step>
+
+### Install
+
+Install the core, the mail channel, and the event emitter:
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @nestjs-notifications/core @nestjs-notifications/mail @nestjs/event-emitter
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @nestjs-notifications/core @nestjs-notifications/mail @nestjs/event-emitter
+    ```
+  </Tab>
+</Tabs>
+
+</Step>
+
+<Step>
+
+### Import the modules
+
+Add the modules to your root module. `EventEmitterModule.forRoot()` powers the lifecycle events;
+`NotificationsModule.forRoot()` provides the service; `MailChannelModule.forRoot()` registers the
+mail channel and is discovered automatically.
+
+```ts title="app.module.ts"
+import { Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { NotificationsModule } from '@nestjs-notifications/core';
+import { MailChannelModule } from '@nestjs-notifications/mail';
+
+@Module({
+  imports: [
+    EventEmitterModule.forRoot(),
+    NotificationsModule.forRoot(),
+    MailChannelModule.forRoot({
+      from: 'billing@example.com',
+      smtp: { host: 'smtp.example.com', port: 587, auth: { user: '…', pass: '…' } },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+</Step>
+
+<Step>
+
+### Make a recipient notifiable
+
+A recipient implements `Notifiable`. `routeNotificationFor` returns the per-channel address —
+an email here. Anything can be notifiable: an entity, a DTO, a plain object.
+
+```ts title="user.ts"
+import type { Notifiable } from '@nestjs-notifications/core';
+
+export class User implements Notifiable {
+  constructor(
+    public id: number,
+    public email: string,
+  ) {}
+
+  routeNotificationFor(channel: string) {
+    if (channel === 'mail') return this.email;
+    return undefined;
+  }
+}
+```
+
+</Step>
+
+<Step>
+
+### Write a notification
+
+A notification is a plain class. `via()` lists the channels for this recipient, and `toMail()`
+shapes the email. Implementing `MailNotification` makes `toMail` type-checked.
+
+```ts title="invoice-paid.notification.ts"
+import type { Notification } from '@nestjs-notifications/core';
+import { MailMessage, type MailNotification } from '@nestjs-notifications/mail';
+
+export class InvoicePaid implements Notification, MailNotification {
+  constructor(private invoiceId: string) {}
+
+  via(): string[] {
+    return ['mail'];
+  }
+
+  toMail(): MailMessage {
+    return new MailMessage()
+      .subject(`Invoice ${this.invoiceId} paid`)
+      .greeting('Thanks for your payment!')
+      .line('We received your payment. No further action is needed.');
+  }
+}
+```
+
+</Step>
+
+<Step>
+
+### Send it
+
+Inject `NotificationService` and call `send`. That's the whole flow.
+
+```ts title="billing.service.ts"
+import { Injectable } from '@nestjs/common';
+import { NotificationService } from '@nestjs-notifications/core';
+import { InvoicePaid } from './invoice-paid.notification';
+import { User } from './user';
+
+@Injectable()
+export class BillingService {
+  constructor(private readonly notifications: NotificationService) {}
+
+  async paid(user: User, invoiceId: string) {
+    await this.notifications.send(user, new InvoicePaid(invoiceId));
+  }
+}
+```
+
+</Step>
+
+</Steps>
+
+---
+
+## Add a second channel
+
+Want the same notification to also land in an in-app feed? Add the database channel — no change
+to the call site, just one more module and one more method.
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @nestjs-notifications/database
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @nestjs-notifications/database
+    ```
+  </Tab>
+</Tabs>
+
+```ts title="app.module.ts"
+import { DatabaseChannelModule } from '@nestjs-notifications/database';
+
+// inside imports:
+DatabaseChannelModule.forRoot(), // bundled in-memory store; swap for a real one later
+```
+
+```ts title="invoice-paid.notification.ts"
+import type { DatabaseNotification } from '@nestjs-notifications/database';
+
+// add to the class:
+via(): string[] {
+  return ['mail', 'database']; // [!code highlight]
+}
+
+toDatabase() {
+  return { invoiceId: this.invoiceId };
+}
+```
+
+`send()` now fans out to both. If the mail channel throws, the database row still gets written —
+channels are isolated by default.
+
+<Callout type="info">
+  The in-memory store is for development and tests. For production, plug the
+  [TypeORM or MikroORM adapter](/docs/channels/database#persistence-adapters) or your own store.
+</Callout>
+
+---
+
+## Going async
+
+When you're ready to move delivery off the request, set `shouldQueue` on the notification and
+pick a [dispatcher](/docs/dispatchers). The call site doesn't change.
+
+```ts
+export class InvoicePaid implements Notification, MailNotification {
+  shouldQueue = true; // [!code highlight]
+  // …
+}
+```
+
+See [Async dispatch](/docs/concepts/async-dispatch) for how recipients and notifications are
+rehydrated inside a worker.
+
+---
+
+## Next steps
+
+- [Concepts](/docs/concepts) — notifiables, notifications, channels vs. dispatchers
+- [Channels](/docs/channels) — mail, database, broadcast, Slack
+- [Dispatchers](/docs/dispatchers) — sync, in-process events, Redis, BullMQ
+- [Testing](/docs/reference/testing) — assert sends without delivering

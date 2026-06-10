@@ -1,0 +1,83 @@
+---
+title: Event emitter
+description: In-process, fire-and-forget async on a later tick. No queue, no serialization, no resolveNotifiable — the simplest way to move delivery off the request without any infrastructure.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The event-emitter dispatcher moves delivery off the request path without adding any
+infrastructure. No Redis, no worker — just `@nestjs/event-emitter`, which the core already
+depends on for lifecycle events.
+
+It's the simplest way to go async. `dispatch()` emits an internal event carrying the **live** job
+and returns immediately, so the caller is never blocked on channel delivery. An async `@OnEvent`
+handler then picks the job up on a later tick and runs the channels.
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @nestjs-notifications/event-emitter @nestjs/event-emitter
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @nestjs-notifications/event-emitter @nestjs/event-emitter
+    ```
+  </Tab>
+</Tabs>
+
+## Wire it up
+
+Pass `EventEmitterDispatcher` as the `dispatcher`. Make sure `EventEmitterModule.forRoot()` is
+imported (it usually already is — the core uses it for events).
+
+```ts title="app.module.ts"
+import { Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { NotificationsModule } from '@nestjs-notifications/core';
+import { EventEmitterDispatcher } from '@nestjs-notifications/event-emitter';
+
+@Module({
+  imports: [
+    EventEmitterModule.forRoot(),
+    NotificationsModule.forRoot({
+      dispatcher: EventEmitterDispatcher, // [!code highlight]
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+That's the whole setup. `forRoot` registers the dispatcher as a provider, so its `@OnEvent`
+handler is discovered and wired by `@nestjs/event-emitter` automatically.
+
+Now any notification with `shouldQueue = true` is delivered on a later tick instead of inline.
+
+## No serialization, no rehydration
+
+Because delivery stays in the **same process**, the live `Notifiable` and `Notification`
+instances are passed straight through — nothing is serialized. That means:
+
+- No `toNotifiableRef()` on your notifiable.
+- No `notifications: [...]` registry.
+- No `resolveNotifiable` in `forRoot`.
+
+You get fire-and-forget async with zero rehydration cost. Contrast this with the cross-process
+[BullMQ](/docs/dispatchers/bullmq) and [Redis](/docs/dispatchers/redis) dispatchers, which
+serialize the job — see [Async dispatch](/docs/concepts/async-dispatch).
+
+## Errors are surfaced via events
+
+The work runs detached, so a throw inside a channel isn't returned to the caller. Failures are
+isolated per channel and surfaced through the usual lifecycle events
+(`notification.failed`) — subscribe to them to log or alert. See
+[Configuration → events](/docs/reference/configuration#events).
+
+<Callout type="warn">
+  In-process means in-memory: if the process restarts before the deferred handler runs, the job is
+  lost. There's no persistence and no retry. When you need durability or retries, reach for
+  [BullMQ](/docs/dispatchers/bullmq) or [Redis](/docs/dispatchers/redis).
+</Callout>

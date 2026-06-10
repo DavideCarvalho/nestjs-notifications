@@ -1,0 +1,156 @@
+---
+title: Queued notifications
+description: Move delivery off the request, end to end — set shouldQueue, register the notification and resolveNotifiable, and pick a dispatcher. The call site never changes.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+Delivering over SMTP or to a third-party API on the request thread is slow and fragile. Queue it
+instead: the request enqueues a job and returns immediately, and a worker delivers it. The call
+site — `notifications.send(user, …)` — doesn't change at all.
+
+Here's the whole thing, in order.
+
+<Steps>
+
+<Step>
+
+### Mark the notification queueable
+
+Set `shouldQueue` on the notification. From now on `send()` routes it through the configured async
+[dispatcher](/docs/dispatchers) instead of delivering inline.
+
+```ts title="invoice-paid.notification.ts"
+export class InvoicePaid implements Notification, MailNotification {
+  shouldQueue = true; // [!code highlight]
+
+  constructor(private readonly invoiceId: string) {}
+
+  via(): string[] {
+    return ['mail'];
+  }
+
+  toMail(): MailMessage {
+    return new MailMessage().subject(`Invoice ${this.invoiceId} paid`);
+  }
+}
+```
+
+</Step>
+
+<Step>
+
+### Make the recipient resolvable
+
+A worker can't receive a live entity — only JSON. So a queued notifiable serializes to a small
+`{ type, id }` reference via `toNotifiableRef()`:
+
+```ts title="user.ts"
+export class User implements Notifiable {
+  constructor(public id: number, public email: string) {}
+
+  routeNotificationFor(channel: string) {
+    return channel === 'mail' ? this.email : undefined;
+  }
+
+  toNotifiableRef(): NotifiableRef {
+    return { type: 'User', id: this.id }; // [!code highlight]
+  }
+}
+```
+
+</Step>
+
+<Step>
+
+### Register the class and resolver
+
+The worker needs two things to rebuild a job: the **notification class** (to recreate it from its
+serialized name) and a **`resolveNotifiable`** function (to reload the recipient from its
+reference). Because `resolveNotifiable` usually needs an injected repository, use `forRootAsync`.
+
+```ts title="app.module.ts"
+NotificationsModule.forRootAsync({
+  inject: [UserRepository],
+  useFactory: (users: UserRepository) => ({
+    notifications: [InvoicePaid], // [!code highlight]
+    resolveNotifiable: (ref) => users.findOneByOrFail({ id: Number(ref.id) }), // [!code highlight]
+  }),
+});
+```
+
+`notifications` is the rehydration registry — list every class that may be queued.
+`resolveNotifiable` receives the `{ type, id }` ref and returns the live recipient.
+
+</Step>
+
+<Step>
+
+### Pick a dispatcher
+
+By default notifications run on the `SyncDispatcher` — even `shouldQueue` ones, inline. To
+actually offload to a worker, choose a cross-process dispatcher. For production, that's usually
+[BullMQ](/docs/dispatchers/bullmq):
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @nestjs-notifications/bullmq @nestjs/bullmq bullmq
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @nestjs-notifications/bullmq @nestjs/bullmq bullmq
+    ```
+  </Tab>
+</Tabs>
+
+Wire it through the module's `dispatcher`, `imports`, and `providers` options — see the
+[BullMQ dispatcher](/docs/dispatchers/bullmq) page for the exact setup.
+
+</Step>
+
+</Steps>
+
+## The rehydration gotcha
+
+The single thing to remember about queued notifications: **the constructor does not run again on
+the worker.** A queued notification serializes to `{ name, data }`, and on the worker the library
+rebuilds it by assigning `data` onto the class prototype. Your `via()` and `to<Channel>()` methods
+(which live on the prototype) work fine — but anything a constructor computed or fetched is gone.
+
+<Callout type="warn">
+  Keep side effects out of constructors, and don't rely on derived fields surviving the trip. When
+  you need control over what crosses the wire, override `serialize()` and add a static
+  `deserialize(data)` to the notification — for example, store just an id and refetch on the
+  worker.
+</Callout>
+
+```ts
+export class InvoicePaid implements Notification {
+  shouldQueue = true;
+  constructor(private readonly invoice: Invoice) {}
+  via() { return ['mail']; }
+
+  serialize() {
+    return { invoiceId: this.invoice.id }; // store only the id
+  }
+
+  static deserialize(data: Record<string, unknown>) {
+    return new InvoicePaid({ id: data.invoiceId } as Invoice);
+  }
+}
+```
+
+Miss `toNotifiableRef()` on a queued recipient, or configure async without `resolveNotifiable`, and
+the library throws a `NotificationSerializationError` at dispatch time — telling you exactly what's
+missing rather than failing silently on the worker.
+
+## See also
+
+- [Async dispatch](/docs/concepts/async-dispatch) — the full round-trip model and which
+  dispatchers serialize
+- [Dispatchers](/docs/dispatchers) — sync, event-emitter, Redis, BullMQ
+- [Reference: configuration](/docs/reference/configuration) — every `forRoot` / `forRootAsync` option

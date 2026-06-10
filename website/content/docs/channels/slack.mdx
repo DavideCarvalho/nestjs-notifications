@@ -1,0 +1,128 @@
+---
+title: Slack
+description: Post notifications to Slack via an incoming webhook or the Web API. A fluent SlackMessage builder with text, Block Kit blocks, and attachments.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The Slack channel posts a notification to Slack — either through an incoming webhook or the Web API
+(`chat.postMessage`) with a bot token. You build the message with a fluent builder that supports
+plain text, Block Kit blocks, and legacy attachments.
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @nestjs-notifications/slack
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @nestjs-notifications/slack
+    ```
+  </Tab>
+</Tabs>
+
+## Register the channel
+
+```ts title="app.module.ts"
+import { SlackChannelModule } from '@nestjs-notifications/slack';
+
+@Module({
+  imports: [
+    // incoming webhook:
+    SlackChannelModule.forRoot({ webhookUrl: process.env.SLACK_WEBHOOK_URL }),
+    // or, with the Web API:
+    // SlackChannelModule.forRoot({ token: process.env.SLACK_BOT_TOKEN, defaultChannel: '#general' }),
+  ],
+})
+export class AppModule {}
+```
+
+`SlackChannelModule.forRoot()` takes:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `webhookUrl` | `string` | — | Default incoming-webhook URL, used when the route doesn't supply one. |
+| `token` | `string` | — | Bot/user token for the Web API. When set, delivery uses `chat.postMessage`. |
+| `defaultChannel` | `string` | — | Default channel id for Web API delivery when the route isn't a webhook. |
+| `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+## The notification side
+
+Implement `SlackNotification` and return a `SlackMessage` from `toSlack()`:
+
+```ts title="deploy-finished.notification.ts"
+import type { Notifiable, Notification } from '@nestjs-notifications/core';
+import { SlackMessage, type SlackNotification } from '@nestjs-notifications/slack';
+
+export class DeployFinished implements Notification, SlackNotification {
+  constructor(private service: string) {}
+
+  via(): string[] {
+    return ['slack'];
+  }
+
+  toSlack(notifiable: Notifiable): SlackMessage {
+    return new SlackMessage()
+      .text(`Deploy finished: ${this.service}`)
+      .block({ type: 'section', text: { type: 'mrkdwn', text: `*${this.service}* is live :rocket:` } });
+  }
+}
+```
+
+### SlackMessage builder
+
+`SlackMessage` is a fluent builder; each method returns `this`:
+
+| Method | Effect |
+| --- | --- |
+| `.text(s)` | Set the fallback/notification text. |
+| `.block(b)` | Append a Block Kit block. Call repeatedly to add several. |
+| `.attachment(a)` | Append a legacy attachment. |
+| `.toPayload()` | Serialize to the JSON body Slack expects, omitting empty collections. |
+
+`toPayload()` returns a `SlackPayload` (`{ text?, blocks?, attachments? }`) — the channel calls it
+for you, but it's there if you need to inspect the body.
+
+## Webhook vs. bot token
+
+The channel picks its delivery mode from the options:
+
+- **Bot token** — if `token` is set, every message goes through the Web API (`chat.postMessage`)
+  with an `Authorization: Bearer` header. The channel id comes from the route (a non-URL string) or
+  falls back to `defaultChannel`.
+- **Incoming webhook** — without a token, the channel POSTs to a webhook URL. It uses the route if it
+  returned an `https://` URL, otherwise the module's `webhookUrl`.
+
+If neither a webhook URL nor a token is available, the channel throws asking you to provide one.
+
+## Routing
+
+`routeNotificationFor('slack')` controls the target per notifiable. What you return depends on the
+mode:
+
+```ts title="team.ts"
+export class Team implements Notifiable {
+  constructor(public slackWebhook: string, public slackChannelId: string) {}
+
+  routeNotificationFor(channel: string) {
+    if (channel !== 'slack') return undefined;
+    // Webhook mode: return an https:// URL to override the default webhook.
+    return this.slackWebhook;
+    // Web API mode (token set): return a channel id like '#alerts' or 'C0123456789'.
+    // return this.slackChannelId;
+  }
+}
+```
+
+In webhook mode an `https://` route overrides `webhookUrl`; in Web API mode a non-URL route is used
+as the channel id, overriding `defaultChannel`.
+
+<Callout type="info">
+  Block Kit blocks and attachments take raw Slack JSON, so you have the full Slack message format
+  available — buttons, fields, images, context blocks. Build them in [Block Kit
+  Builder](https://app.slack.com/block-kit-builder) and pass each block to `.block()`.
+</Callout>

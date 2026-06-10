@@ -1,0 +1,91 @@
+---
+title: BullMQ
+description: Out-of-process delivery on a BullMQ worker, reusing your app's existing @nestjs/bullmq and Redis connection. Jobs serialize, enqueue with retry and backoff, and rehydrate on the worker.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+If your app already runs [BullMQ](https://docs.bullmq.io), this dispatcher is the natural fit. It
+enqueues notifications onto a BullMQ queue for out-of-process delivery, reusing your existing
+`@nestjs/bullmq` setup and Redis connection — no new infrastructure.
+
+The dispatcher serializes the job and adds it to the queue; a processor on the worker side pops
+it, rehydrates the notification and recipient, and runs the channels. See
+[Async dispatch](/docs/concepts/async-dispatch) for the round trip.
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @nestjs-notifications/bullmq @nestjs/bullmq bullmq
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @nestjs-notifications/bullmq @nestjs/bullmq bullmq
+    ```
+  </Tab>
+</Tabs>
+
+## Wire it up
+
+Use the `bullmqDispatcher()` helper and spread it into `forRoot`. It contributes the dispatcher,
+registers the queue, and registers the processor for you. Pair it with `BullModule.forRoot()` for
+the connection, plus the `notifications` registry and `resolveNotifiable` the worker needs to
+rebuild jobs.
+
+```ts title="app.module.ts"
+import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
+import { NotificationsModule } from '@nestjs-notifications/core';
+import { bullmqDispatcher } from '@nestjs-notifications/bullmq';
+import { InvoicePaid } from './invoice-paid.notification';
+
+@Module({
+  imports: [
+    BullModule.forRoot({ connection: { host: 'localhost', port: 6379 } }),
+    NotificationsModule.forRoot({
+      ...bullmqDispatcher(), // [!code highlight]
+      notifications: [InvoicePaid],
+      resolveNotifiable: (ref) => users.findById(ref.id), // reload the recipient
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+`resolveNotifiable` usually needs an injected repository, so reach for `forRootAsync` in real
+apps — see [Async dispatch](/docs/concepts/async-dispatch#notifiables-a-reference-not-the-object).
+
+## What the helper does
+
+`bullmqDispatcher()` returns a slice of `forRoot` options:
+
+- `dispatcher` → `BullmqNotificationDispatcher`
+- `imports` → `BullModule.registerQueue({ name: NOTIFICATIONS_QUEUE })`
+- `providers` → `BullmqNotificationProcessor`
+
+The queue name is the fixed constant `NOTIFICATIONS_QUEUE` (`'nestjs-notifications'`), exported
+from the package. It registers the queue against the connection you configured with
+`BullModule.forRoot()`, so the dispatcher and the app share one Redis connection.
+
+## Retry and backoff
+
+Jobs are added with retry built in — `3` attempts with exponential backoff starting at one
+second. A transient failure (SMTP hiccup, network blip) is retried automatically rather than
+dropped.
+
+## On the worker
+
+The `BullmqNotificationProcessor` consumes jobs from the queue. For each job it rehydrates the
+notification (by name, from the `notifications` registry) and the notifiable (via
+`resolveNotifiable`), then runs the same channels — on the worker.
+
+<Callout type="warn">
+  The processor only runs where a BullMQ **worker** is active. In a split deployment (API process
+  + worker process), the worker process must import `NotificationsModule` with
+  `...bullmqDispatcher()` too, so the processor and channel modules are registered there. If
+  nothing consumes the queue, jobs pile up undelivered.
+</Callout>

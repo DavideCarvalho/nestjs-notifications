@@ -1,0 +1,233 @@
+---
+title: Database
+description: Persist notifications so you can show an in-app feed. A NotificationStore interface, a bundled in-memory store, and TypeORM / MikroORM adapters.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The database channel writes a notification to a store so you can render an in-app feed — an unread
+count, a notifications dropdown, a "mark all as read" button. It persists through a
+`NotificationStore` abstraction: a bundled in-memory store for development, and ORM adapters
+(TypeORM, MikroORM) for production. The row shape mirrors Laravel's `notifications` table.
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @nestjs-notifications/database
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @nestjs-notifications/database
+    ```
+  </Tab>
+</Tabs>
+
+## Register the channel
+
+```ts title="app.module.ts"
+import { DatabaseChannelModule } from '@nestjs-notifications/database';
+
+@Module({
+  imports: [
+    DatabaseChannelModule.forRoot(), // bundled in-memory store
+  ],
+})
+export class AppModule {}
+```
+
+`DatabaseChannelModule.forRoot()` takes:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `store` | `Type<NotificationStore>` | `InMemoryStore` | Store class to instantiate. |
+| `imports` | `DynamicModule['imports']` | `[]` | Extra modules to import (e.g. the ORM module the store depends on). |
+| `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+There's also `DatabaseChannelModule.forFeature()`, which registers only the channel and reuses a
+`NOTIFICATION_STORE` token provided elsewhere — that's how the ORM adapter modules below wire in.
+
+## The notification side
+
+Implement `DatabaseNotification` and return a plain object from `toDatabase()` — that object becomes
+the persisted `data`:
+
+```ts title="invoice-paid.notification.ts"
+import type { Notifiable, Notification } from '@nestjs-notifications/core';
+import type { DatabaseNotification } from '@nestjs-notifications/database';
+
+export class InvoicePaid implements Notification, DatabaseNotification {
+  constructor(private invoiceId: string, private amount: number) {}
+
+  via(): string[] {
+    return ['database'];
+  }
+
+  toDatabase(notifiable: Notifiable): Record<string, unknown> {
+    return { invoiceId: this.invoiceId, amount: this.amount };
+  }
+}
+```
+
+`toDatabase()` is optional. If it's absent the channel falls back to `toArray()` (Laravel parity),
+and finally to a structural copy of the notification's own properties.
+
+### The notifiable reference
+
+Persisting needs to know *whose* notification this is, as a `{ type, id }` pair. The channel resolves
+it in two ways:
+
+1. `routeNotificationFor('database')` may return a `{ type, id }` reference directly.
+2. Otherwise it calls the notifiable's `toNotifiableRef()`.
+
+If neither is available it throws, asking you to provide one:
+
+```ts title="user.ts"
+export class User implements Notifiable {
+  constructor(public id: number) {}
+
+  routeNotificationFor() {
+    return undefined;
+  }
+
+  toNotifiableRef() {
+    return { type: 'User', id: this.id };
+  }
+}
+```
+
+### Stored shape
+
+Each persisted notification is a `StoredNotification`:
+
+```ts
+interface StoredNotification {
+  id: string;
+  type: string;            // notification class name, e.g. "InvoicePaid"
+  notifiableType: string;  // reference type, e.g. "User"
+  notifiableId: string;    // reference id
+  data: Record<string, unknown>; // what toDatabase() returned
+  readAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+The stored `type` uses the notification class's static `notificationName` if set, otherwise its
+class name.
+
+## The store
+
+A store implements `NotificationStore`. These are the methods you get for reading and managing a
+feed:
+
+| Method | Returns | Description |
+| --- | --- | --- |
+| `save(notification)` | `Promise<StoredNotification>` | Persist a new row (the channel calls this). |
+| `markAsRead(id)` | `Promise<void>` | Mark one notification read. |
+| `markAllAsRead(notifiableType, notifiableId)` | `Promise<void>` | Mark every unread row for a notifiable read. |
+| `getForNotifiable(notifiableType, notifiableId)` | `Promise<StoredNotification[]>` | All notifications for a notifiable, newest first. |
+| `getUnread(notifiableType, notifiableId)` | `Promise<StoredNotification[]>` | Unread notifications for a notifiable. |
+| `delete(id)` | `Promise<void>` | Remove one notification. |
+
+The store is bound to the `NOTIFICATION_STORE` token, so inject it to build your feed endpoints:
+
+```ts
+import { Inject } from '@nestjs/common';
+import { NOTIFICATION_STORE, type NotificationStore } from '@nestjs-notifications/database';
+
+constructor(@Inject(NOTIFICATION_STORE) private store: NotificationStore) {}
+```
+
+The bundled `InMemoryStore` keeps rows in a `Map`. It's perfect for tests and prototyping — but it's
+not durable, so use a persistence adapter in production.
+
+## Persistence adapters [#persistence-adapters]
+
+For real persistence, pair the channel with an ORM adapter. Each adapter provides a store bound to
+the `NOTIFICATION_STORE` token, plus a `NotificationEntity` mapping the `notifications` table. You
+register the adapter's `*StoreModule.forFeature()` alongside `DatabaseChannelModule.forFeature()` —
+the adapter provides the store token, `forFeature()` registers the channel that consumes it.
+
+<Tabs items={['TypeORM', 'MikroORM']}>
+  <Tab value="TypeORM">
+
+    <Tabs items={['pnpm', 'npm']}>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add @nestjs-notifications/database-typeorm @nestjs/typeorm typeorm
+        ```
+      </Tab>
+      <Tab value="npm">
+        ```bash
+        npm install @nestjs-notifications/database-typeorm @nestjs/typeorm typeorm
+        ```
+      </Tab>
+    </Tabs>
+
+    Add the adapter's `NotificationEntity` to your `TypeOrmModule.forRoot()` entities (or migrations),
+    then wire the store and channel:
+
+    ```ts title="app.module.ts"
+    import { DatabaseChannelModule } from '@nestjs-notifications/database';
+    import { TypeOrmNotificationStoreModule } from '@nestjs-notifications/database-typeorm';
+
+    @Module({
+      imports: [
+        // ...TypeOrmModule.forRoot({ entities: [NotificationEntity, ...] })
+        TypeOrmNotificationStoreModule.forFeature(),
+        DatabaseChannelModule.forFeature(),
+      ],
+    })
+    export class AppModule {}
+    ```
+
+    `TypeOrmNotificationStoreModule.forFeature()` registers `TypeOrmModule.forFeature([NotificationEntity])`
+    internally and binds `TypeOrmNotificationStore` to `NOTIFICATION_STORE`. The entity (`NotificationEntity`)
+    is exported if you'd rather register it yourself.
+
+  </Tab>
+  <Tab value="MikroORM">
+
+    <Tabs items={['pnpm', 'npm']}>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add @nestjs-notifications/database-mikro-orm @mikro-orm/core @mikro-orm/nestjs
+        ```
+      </Tab>
+      <Tab value="npm">
+        ```bash
+        npm install @nestjs-notifications/database-mikro-orm @mikro-orm/core @mikro-orm/nestjs
+        ```
+      </Tab>
+    </Tabs>
+
+    Register the adapter's `NotificationEntity` with MikroORM, then wire the store and channel:
+
+    ```ts title="app.module.ts"
+    import { DatabaseChannelModule } from '@nestjs-notifications/database';
+    import { MikroOrmNotificationStoreModule } from '@nestjs-notifications/database-mikro-orm';
+
+    @Module({
+      imports: [
+        // ...MikroOrmModule.forRoot({ entities: [NotificationEntity, ...] })
+        MikroOrmNotificationStoreModule.forFeature(),
+        DatabaseChannelModule.forFeature(),
+      ],
+    })
+    export class AppModule {}
+    ```
+
+    `MikroOrmNotificationStoreModule.forFeature()` registers `MikroOrmModule.forFeature([NotificationEntity])`
+    and binds `MikroOrmNotificationStore` to `NOTIFICATION_STORE`.
+
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  Neither adapter fits your schema? Implement `NotificationStore` yourself and pass it as the `store`
+  option to `DatabaseChannelModule.forRoot()`. The interface is six methods.
+</Callout>

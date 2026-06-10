@@ -1,0 +1,110 @@
+---
+title: Telescope integration
+description: Record every notification delivery in the nestjs-telescope dashboard with one watcher. It listens to the events the core already emits — no monkey-patching, no call-site changes.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+If you run [nestjs-telescope](https://github.com/dudousxd/nestjs-telescope), you can see every
+notification — sent or failed, with its payload — right in the dashboard. The
+`@nestjs-notifications/telescope` package ships a watcher that plugs straight in. It works by
+listening to the `notification.sent` / `notification.failed` events the core already emits, so
+there's nothing to wire at your call sites.
+
+<Steps>
+
+<Step>
+
+### Install
+
+The package has `@dudousxd/nestjs-telescope` as a peer dependency — you'll already have it if
+you're using Telescope.
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @nestjs-notifications/telescope @dudousxd/nestjs-telescope
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @nestjs-notifications/telescope @dudousxd/nestjs-telescope
+    ```
+  </Tab>
+</Tabs>
+
+</Step>
+
+<Step>
+
+### Register the watcher
+
+Add `NotificationsWatcher` to Telescope's `watchers` array:
+
+```ts title="app.module.ts"
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { NotificationsModule } from '@nestjs-notifications/core';
+import { TelescopeModule } from '@dudousxd/nestjs-telescope';
+import { NotificationsWatcher } from '@nestjs-notifications/telescope';
+
+@Module({
+  imports: [
+    EventEmitterModule.forRoot(), // required — the watcher subscribes to its events
+    NotificationsModule.forRoot(),
+    TelescopeModule.forRoot({
+      watchers: [new NotificationsWatcher()], // [!code highlight]
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+</Step>
+
+</Steps>
+
+<Callout type="warn">
+  The watcher subscribes to the core's events through `@nestjs/event-emitter`. You must have
+  `EventEmitterModule.forRoot()` in the app — without it the watcher logs a warning and records
+  nothing. (You already need it for `NotificationsModule` anyway.)
+</Callout>
+
+## What gets recorded
+
+Every successful or failed channel delivery becomes one Telescope entry of type `notification`. The
+entry content captures:
+
+| Field | What it holds |
+| --- | --- |
+| `channel` | The channel that delivered (`mail`, `sms`, …) |
+| `notifiable` | A label for the recipient — `Type#id` if it has `toNotifiableRef()`, else the class name, or `null` |
+| `notificationClass` | The notification's `notificationName` or class name |
+| `status` | `'sent'` or `'failed'` |
+| `payload` | A structural snapshot of the notification (functions stripped), or `null` |
+| `failureReason` | The error message when `status` is `'failed'`, else `null` |
+
+Entries are tagged `channel:<name>`, `notification:<class>`, and `failed` (on failures) so you can
+filter the dashboard quickly.
+
+<Callout type="info">
+  One notification routed to three channels produces three entries — one per delivery — because the
+  watcher reacts to per-channel events, not per-send.
+</Callout>
+
+## Omitting the payload
+
+By default the watcher snapshots the notification's own data as the entry payload. If your
+notifications carry sensitive fields, turn it off — `payload` will be recorded as `null` while
+everything else still flows:
+
+```ts
+new NotificationsWatcher({ recordPayload: false });
+```
+
+## See also
+
+- [Reference: configuration](/docs/reference/configuration#events) — the lifecycle events the
+  watcher listens to
+- [Async dispatch](/docs/concepts/async-dispatch) — how notifiables are labeled via `toNotifiableRef()`

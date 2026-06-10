@@ -1,0 +1,172 @@
+---
+title: Configuration
+description: Every NotificationsModule.forRoot and forRootAsync option, the three lifecycle events, the error policy, and the error classes — the full reference for wiring the core.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+`NotificationsModule.forRoot(options)` provides the `NotificationService` and the delivery engine.
+Most apps call it with no arguments — the defaults are sensible. Reach for options when you queue
+notifications or swap the dispatcher.
+
+```ts
+NotificationsModule.forRoot({
+  notifications: [InvoicePaid, PaymentFailed],
+  resolveNotifiable: (ref) => users.findOneByOrFail({ id: Number(ref.id) }),
+  errorPolicy: 'continueOnError',
+  global: true,
+  dispatcher: BullmqDispatcher,
+  imports: [BullModule.registerQueue({ name: 'notifications' })],
+  providers: [{ provide: BULLMQ_OPTIONS, useValue: { queue: 'notifications' } }],
+});
+```
+
+## Options
+
+All options are optional.
+
+### notifications
+
+`NotificationClass[]` — the rehydration registry. List every notification class that may be
+dispatched asynchronously so a worker can rebuild it from its serialized name. Not needed for
+sync-only apps. See [Async dispatch](/docs/concepts/async-dispatch).
+
+### resolveNotifiable
+
+`(ref: NotifiableRef) => Promise<Notifiable> | Notifiable` — reloads a recipient from its
+`{ type, id }` reference inside an async worker. Required if any notification sets `shouldQueue` and
+is processed out of process. Because it usually needs an injected repository, configure it with
+[`forRootAsync`](#forrootasync).
+
+### errorPolicy
+
+`'continueOnError' | 'failFast'` — what happens when one channel throws. **Defaults to
+`'continueOnError'`.** See [Error handling](#error-handling) below.
+
+### global
+
+`boolean` — register the module globally so `NotificationService` is injectable everywhere without
+re-importing. **Defaults to `true`.**
+
+### dispatcher
+
+`Type<DispatchDriver>` — override the async dispatch driver. Defaults to the `SyncDispatcher`
+(inline delivery). Provide the dispatcher's own dependencies through `imports` / `providers`. The
+`SyncDispatcher` stays registered even when you override this, so custom dispatchers can delegate to
+inline delivery. See [Dispatchers](/docs/dispatchers).
+
+### imports
+
+`ModuleMetadata['imports']` — extra modules the dispatcher or channels need, e.g.
+`BullModule.registerQueue(...)` for the BullMQ dispatcher.
+
+### providers
+
+`Provider[]` — extra providers, e.g. the dispatcher's config token.
+
+## forRootAsync
+
+When `resolveNotifiable` (or a dispatcher's config) depends on other providers, use
+`forRootAsync`. It mirrors `forRoot` but resolves the options through a factory:
+
+```ts
+NotificationsModule.forRootAsync({
+  inject: [UserRepository],
+  useFactory: (users: UserRepository) => ({
+    notifications: [InvoicePaid],
+    resolveNotifiable: (ref) => users.findOneByOrFail({ id: Number(ref.id) }),
+  }),
+});
+```
+
+The async options accept `useFactory`, `inject`, `imports`, `providers`, `dispatcher`, and `global`.
+`errorPolicy` still defaults to `'continueOnError'` if your factory doesn't set it.
+
+## Events
+
+The runner emits three lifecycle events through `@nestjs/event-emitter` for **each channel** of
+each send. The event names live on `NotificationEvents`:
+
+| Name | Constant | Event class | When |
+| --- | --- | --- | --- |
+| `notification.sending` | `NotificationEvents.sending` | `NotificationSendingEvent` | Before a channel attempts delivery |
+| `notification.sent` | `NotificationEvents.sent` | `NotificationSentEvent` | After a channel delivers successfully |
+| `notification.failed` | `NotificationEvents.failed` | `NotificationFailedEvent` | When a channel throws |
+
+Every event carries `notifiable`, `notification`, and `channel`. `NotificationFailedEvent` adds the
+thrown `error`.
+
+Listen with `@OnEvent`:
+
+```ts title="notification-metrics.listener.ts"
+import { Injectable } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
+import {
+  NotificationEvents,
+  type NotificationSentEvent,
+  type NotificationFailedEvent,
+} from '@nestjs-notifications/core';
+
+@Injectable()
+export class NotificationMetrics {
+  @OnEvent(NotificationEvents.sent)
+  onSent(event: NotificationSentEvent) {
+    metrics.increment('notification.sent', { channel: event.channel });
+  }
+
+  @OnEvent(NotificationEvents.failed)
+  onFailed(event: NotificationFailedEvent) {
+    metrics.increment('notification.failed', { channel: event.channel });
+    logger.error(event.error);
+  }
+}
+```
+
+<Callout type="info">
+  Because events are per-channel, a notification routed to three channels emits three `sending`
+  events and three `sent`/`failed` events. This is what powers the
+  [Telescope watcher](/docs/recipes/telescope).
+</Callout>
+
+## Error handling
+
+The `errorPolicy` decides what happens when a single channel's `send()` throws.
+
+### continueOnError (default)
+
+Channels are isolated. Every channel runs (in parallel), and a failure in one **does not** prevent
+the others. Each failure is logged and surfaced through the `notification.failed` event — it is
+**not** rethrown, so `send()` resolves regardless. Use this so a flaky SMTP server can't stop the
+in-app database row from being written.
+
+### failFast
+
+Channels run sequentially, and the **first** failure rethrows out of `send()` — remaining channels
+don't run. The `notification.failed` event still fires for the channel that threw. Use this when a
+delivery failure should abort the operation that triggered it.
+
+```ts
+NotificationsModule.forRoot({ errorPolicy: 'failFast' });
+```
+
+### Error classes
+
+The core exports these error types:
+
+- **`ChannelNotRegisteredError`** — a notification's `via()` named a channel no driver was
+  registered for. The message lists the registered channels. Under `continueOnError` it's emitted as
+  a `failed` event and logged; under `failFast` it's rethrown. (Usually means a channel module wasn't
+  imported.)
+- **`MissingChannelMethodError`** — a notification was routed to a channel but doesn't implement the
+  channel's `to<Channel>()` method. Thrown from inside the channel; follows the same policy. See the
+  [custom channel recipe](/docs/recipes/custom-channel).
+- **`NotificationSerializationError`** — a queued notification can't be serialized or rehydrated:
+  e.g. a queued notifiable without `toNotifiableRef()`, or async dispatch configured without
+  `resolveNotifiable`. Thrown at dispatch time so you find out immediately. See
+  [Async dispatch](/docs/concepts/async-dispatch).
+
+## See also
+
+- [Async dispatch](/docs/concepts/async-dispatch) — the `notifications` / `resolveNotifiable` round trip
+- [Dispatchers](/docs/dispatchers) — choosing and configuring a `dispatcher`
+- [Testing](/docs/reference/testing) — assert sends without delivering

@@ -1,0 +1,107 @@
+---
+title: Notifications
+description: A notification is a plain class. via() lists the channels, and a to<Channel>() method shapes the payload for each — type-checked by implementing the channel's interface.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+A **notification** is a plain class that answers two questions: *which channels* should this go
+to (`via`), and *what* should each channel send (`to<Channel>()`). One class, one event — the
+payload for every channel lives in one place.
+
+```ts
+import type { Notifiable, Notification } from '@nestjs-notifications/core';
+import { MailMessage, type MailNotification } from '@nestjs-notifications/mail';
+import type { DatabaseNotification } from '@nestjs-notifications/database';
+
+export class InvoicePaid implements Notification, MailNotification, DatabaseNotification {
+  constructor(private invoice: Invoice) {}
+
+  via(notifiable: Notifiable): string[] {
+    return ['mail', 'database'];
+  }
+
+  toMail(): MailMessage {
+    return new MailMessage()
+      .subject('Invoice paid')
+      .line(`We received your payment of $${this.invoice.amount}.`);
+  }
+
+  toDatabase() {
+    return { invoiceId: this.invoice.id, amount: this.invoice.amount };
+  }
+}
+```
+
+## via
+
+`via` returns the channel names to use for a given recipient. It receives the notifiable, so you
+can branch on the recipient's preferences:
+
+```ts
+via(notifiable: User): string[] {
+  const channels = ['database'];
+  if (notifiable.wantsEmail) channels.push('mail');
+  if (notifiable.phone) channels.push('sms');
+  return channels;
+}
+```
+
+Return an empty array to send nothing for this recipient.
+
+## Per-channel payloads
+
+Each channel reads one method off the notification, by convention `to<Channel>()` — `toMail`,
+`toDatabase`, `toBroadcast`, `toSlack`. The method's return type is defined by the channel:
+`toMail` returns a `MailMessage`, `toDatabase` returns a plain object, and so on.
+
+To get **compile-time safety**, implement the interface each channel exports. Then forgetting a
+method, or returning the wrong shape, is a type error rather than a runtime surprise:
+
+```ts
+// MailNotification requires toMail(): MailMessage
+class InvoicePaid implements Notification, MailNotification {
+  via() { return ['mail']; }
+  // ❌ omit toMail → TypeScript error
+}
+```
+
+If a notification is routed to a channel but doesn't implement its method, the channel throws a
+clear `MissingChannelMethodError` at send time.
+
+## shouldQueue
+
+Set `shouldQueue = true` to route the notification through the configured async
+[dispatcher](/docs/dispatchers) instead of delivering inline:
+
+```ts
+export class InvoicePaid implements Notification, MailNotification {
+  shouldQueue = true;
+  // …
+}
+```
+
+You can also pass a `queue` hint that dispatchers may use to target a specific queue.
+
+## serialize — for the queue
+
+When queued, a notification is serialized to `{ name, data }`. By default `data` is a structural
+copy of the instance's own properties, which is right for most notifications. Override
+`serialize()` (and optionally a static `deserialize()`) when you need control:
+
+```ts
+export class InvoicePaid implements Notification {
+  constructor(private invoice: Invoice) {}
+  via() { return ['mail']; }
+
+  serialize() {
+    return { invoiceId: this.invoice.id }; // store only the id, refetch later
+  }
+}
+```
+
+<Callout type="warn">
+  Queued notifications are rebuilt on the worker by assigning `data` onto the prototype — the
+  constructor does **not** run again. Keep constructor side effects out, or use a custom
+  `deserialize()`. See [Async dispatch](/docs/concepts/async-dispatch).
+</Callout>

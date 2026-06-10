@@ -4,6 +4,8 @@ Laravel-style notifications for NestJS. Define a notification once and send it a
 channels — mail, database, broadcast, Slack — synchronously or through a pluggable async
 dispatcher (in-process events, Redis, or your app's existing BullMQ setup).
 
+📚 **Documentation: https://davidecarvalho.github.io/nestjs-notifications/**
+
 ```ts
 class InvoicePaid implements Notification, MailNotification, DatabaseNotification {
   constructor(private invoice: Invoice) {}

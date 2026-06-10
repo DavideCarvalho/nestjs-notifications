@@ -1,0 +1,187 @@
+---
+title: Testing
+description: Assert what your code would send without delivering anything. The @nestjs-notifications/testing package gives you a NotificationFake with Laravel-style assertions and a RecordingChannel for end-to-end tests.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Tests shouldn't send real emails. The `@nestjs-notifications/testing` package gives you two test
+doubles: a **`NotificationFake`** that records sends instead of delivering them (and asserts on
+them), and a **`RecordingChannel`** for integration tests that run through the real service and
+registry.
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add -D @nestjs-notifications/testing
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install -D @nestjs-notifications/testing
+    ```
+  </Tab>
+</Tabs>
+
+## NotificationFake
+
+`NotificationFake` is a drop-in replacement for `NotificationService`. It implements the same
+surface — `send`, `notify`, `sendNow`, `sendAsync`, and `route()` — but instead of delivering, it
+records every send and lets you assert on it. The mode (`'sync'` / `'async'`) is derived from the
+notification's `shouldQueue`.
+
+### Wiring it into a test module
+
+Use `provideNotificationFake()` to swap the real service in a Nest `TestingModule`:
+
+```ts
+import { NotificationService } from '@nestjs-notifications/core';
+import { provideNotificationFake, NotificationFake } from '@nestjs-notifications/testing';
+
+const moduleRef = await Test.createTestingModule({
+  providers: [BillingService, provideNotificationFake()],
+}).compile();
+
+const fake = moduleRef.get(NotificationService) as unknown as NotificationFake;
+```
+
+`provideNotificationFake()` returns `{ provide: NotificationService, useClass: NotificationFake }`.
+If you already build the module elsewhere, override the provider instead:
+
+```ts
+.overrideProvider(NotificationService).useClass(NotificationFake)
+```
+
+### Assertions
+
+All assertions throw with a descriptive message on failure.
+
+| Method | Asserts |
+| --- | --- |
+| `assertNothingSent()` | No notification was recorded |
+| `assertCount(n)` | Exactly `n` sends were recorded in total |
+| `assertSentTimes(NotificationClass, n)` | Exactly `n` records are instances of the class |
+| `assertSent(NotificationClass, predicate?)` | At least one record matches the class (and optional predicate over the record) |
+| `assertSentTo(target, NotificationClass)` | At least one class record went to `target` — a `Notifiable` (by reference) or a predicate over the notifiable |
+| `assertSentOnChannel(channel, NotificationClass?)` | Some record's channels include `channel` (optionally restricted to the class) |
+
+Two non-asserting helpers:
+
+- `sent(NotificationClass?)` — returns the recorded sends (`SentNotificationRecord[]`), optionally
+  filtered to instances of the class.
+- `reset()` — clears all recorded sends. Call it in `beforeEach` if you share a fake.
+
+Each record is a `SentNotificationRecord`: `{ notifiable, notification, channels, mode }`.
+
+### A full example
+
+<Tabs items={['Vitest', 'Jest']}>
+  <Tab value="Vitest">
+    ```ts title="billing.service.spec.ts"
+    import { Test } from '@nestjs/testing';
+    import { beforeEach, describe, expect, it } from 'vitest';
+    import { NotificationService } from '@nestjs-notifications/core';
+    import { provideNotificationFake, NotificationFake } from '@nestjs-notifications/testing';
+    import { BillingService } from './billing.service';
+    import { InvoicePaid } from './invoice-paid.notification';
+    import { User } from './user';
+
+    describe('BillingService', () => {
+      let service: BillingService;
+      let fake: NotificationFake;
+
+      beforeEach(async () => {
+        const moduleRef = await Test.createTestingModule({
+          providers: [BillingService, provideNotificationFake()],
+        }).compile();
+
+        service = moduleRef.get(BillingService);
+        fake = moduleRef.get(NotificationService) as unknown as NotificationFake;
+      });
+
+      it('notifies the user when an invoice is paid', async () => {
+        const user = new User(1, 'a@b.com');
+
+        await service.paid(user, 'INV-42');
+
+        fake.assertCount(1);
+        fake.assertSentTo(user, InvoicePaid);
+        fake.assertSentOnChannel('mail', InvoicePaid);
+        fake.assertSent(InvoicePaid, (record) => record.mode === 'sync');
+      });
+    });
+    ```
+  </Tab>
+  <Tab value="Jest">
+    ```ts title="billing.service.spec.ts"
+    import { Test } from '@nestjs/testing';
+    import { NotificationService } from '@nestjs-notifications/core';
+    import { provideNotificationFake, NotificationFake } from '@nestjs-notifications/testing';
+    import { BillingService } from './billing.service';
+    import { InvoicePaid } from './invoice-paid.notification';
+    import { User } from './user';
+
+    describe('BillingService', () => {
+      let service: BillingService;
+      let fake: NotificationFake;
+
+      beforeEach(async () => {
+        const moduleRef = await Test.createTestingModule({
+          providers: [BillingService, provideNotificationFake()],
+        }).compile();
+
+        service = moduleRef.get(BillingService);
+        fake = moduleRef.get(NotificationService) as unknown as NotificationFake;
+      });
+
+      it('notifies the user when an invoice is paid', async () => {
+        const user = new User(1, 'a@b.com');
+
+        await service.paid(user, 'INV-42');
+
+        fake.assertCount(1);
+        fake.assertSentTo(user, InvoicePaid);
+        fake.assertSentOnChannel('mail', InvoicePaid);
+      });
+    });
+    ```
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  The fake records channels by calling the notification's `via()`. It never invokes a
+  channel's `to<Channel>()` methods or any driver — nothing is delivered, so SMTP, Redis, and
+  external APIs are never touched.
+</Callout>
+
+## RecordingChannel
+
+`NotificationFake` stubs the service. When you want to test through the **real**
+`NotificationService`, runner, and registry — exercising `via()`, the error policy, and the
+lifecycle events — register a `RecordingChannel` instead. It's a real `ChannelDriver` that records
+deliveries rather than performing them.
+
+```ts
+import { ChannelRegistry } from '@nestjs-notifications/core';
+import { RecordingChannel } from '@nestjs-notifications/testing';
+
+const mail = new RecordingChannel('mail');
+moduleRef.get(ChannelRegistry).register(mail); // ChannelRegistry.register() is built for this
+
+await notifications.send(user, new InvoicePaid('INV-42'));
+
+expect(mail.sent).toHaveLength(1);
+expect(mail.sent[0].notification).toBeInstanceOf(InvoicePaid);
+```
+
+Each entry in `channel.sent` is a `RecordedDelivery`: `{ notifiable, notification }`. Construct it
+with a channel name (defaults to `'test'`), and call `reset()` to clear recorded deliveries. Because
+the send goes through the real runner, the `notification.sending` / `sent` events fire and the
+error policy applies — making this the right tool for testing fan-out, channel selection, and event
+listeners.
+
+## See also
+
+- [Configuration](/docs/reference/configuration) — the error policy and lifecycle events these doubles interact with
+- [Getting started](/docs/getting-started) — the `BillingService` / `InvoicePaid` example used above
