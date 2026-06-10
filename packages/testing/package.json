@@ -1,7 +1,7 @@
 {
   "name": "@dudousxd/nestjs-notifications-testing",
-  "version": "0.2.0",
-  "description": "Testing utilities for nestjs-notifications \u2014 a notification fake and recording channel with Laravel-style assertions",
+  "version": "0.3.0",
+  "description": "Testing utilities for nestjs-notifications — a notification fake and recording channel with Laravel-style assertions",
   "license": "MIT",
   "author": "Davide Carvalho",
   "repository": {
@@ -12,7 +12,9 @@
   "type": "commonjs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
