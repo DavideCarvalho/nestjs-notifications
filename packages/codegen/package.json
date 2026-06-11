@@ -1,0 +1,37 @@
+{
+  "name": "@dudousxd/nestjs-notifications-codegen",
+  "version": "0.1.0",
+  "description": "nestjs-codegen extension for @dudousxd/nestjs-notifications — emits the inbox + preference-center API into your generated client",
+  "license": "MIT",
+  "author": "Davide Carvalho",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
+    "directory": "packages/codegen"
+  },
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "nestjs",
+    "notifications",
+    "nestjs-codegen",
+    "codegen",
+    "inertia",
+    "tanstack-query"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@dudousxd/nestjs-codegen": ">=0.2.0"
+  },
+  "devDependencies": {
+    "@dudousxd/nestjs-codegen": "0.3.0",
+    "typescript": "5.9.3"
+  }
+}

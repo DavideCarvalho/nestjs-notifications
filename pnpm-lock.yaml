@@ -136,6 +136,15 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  packages/codegen:
+    devDependencies:
+      '@dudousxd/nestjs-codegen':
+        specifier: 0.3.0
+        version: 0.3.0(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(tsx@4.22.4)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
   packages/core:
     devDependencies:
       '@nestjs/common':
@@ -852,6 +861,20 @@ packages:
 
   '@dudousxd/nestjs-codegen@0.2.1':
     resolution: {integrity: sha512-1pWa9xxDEjH7idjisruqQ1fn4LJbRrWdvaProp8h4Oz1cG5JxUiBaKPgyKPl9H/8/Bre5PpXYG6za1vQWD7xXQ==}
+    engines: {node: '>=20'}
+    hasBin: true
+    peerDependencies:
+      '@nestjs/common': '>=9.0.0'
+      tsx: '>=4.0.0'
+      typescript: '>=5.0.0'
+    peerDependenciesMeta:
+      '@nestjs/common':
+        optional: true
+      tsx:
+        optional: true
+
+  '@dudousxd/nestjs-codegen@0.3.0':
+    resolution: {integrity: sha512-TQ7BpumR3NCDRcJSLErY0y/RBn3/CpzN2fDfTVAeFfB5H+yBvSH0zXu3kcuZLsR7eA2ryeHZKy3qAnJIVhZSGA==}
     engines: {node: '>=20'}
     hasBin: true
     peerDependencies:
@@ -6743,6 +6766,17 @@ snapshots:
   '@dudousxd/nestjs-client@0.2.1': {}
 
   '@dudousxd/nestjs-codegen@0.2.1(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(tsx@4.22.4)(typescript@5.9.3)':
+    dependencies:
+      cac: 6.7.14
+      chokidar: 3.6.0
+      fast-glob: 3.3.3
+      ts-morph: 28.0.0
+      typescript: 5.9.3
+    optionalDependencies:
+      '@nestjs/common': 11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      tsx: 4.22.4
+
+  '@dudousxd/nestjs-codegen@0.3.0(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(tsx@4.22.4)(typescript@5.9.3)':
     dependencies:
       cac: 6.7.14
       chokidar: 3.6.0

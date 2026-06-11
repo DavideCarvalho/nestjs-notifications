@@ -1,11 +1,18 @@
 import { type DynamicModule, Module, type Provider } from '@nestjs/common';
+import type { SseBackplane } from './backplane';
 import { SseChannel, type SseChannelOptions } from './sse.channel';
 import { SseHub } from './sse.hub';
-import { SSE_OPTIONS } from './tokens';
+import { SSE_BACKPLANE, SSE_OPTIONS } from './tokens';
 
 export interface SseChannelModuleOptions {
   /** SSE event name (`type`) emitted to clients. Defaults to `'notification'`. */
   event?: string;
+  /**
+   * Cross-pod fan-out backplane (e.g. {@link import('./redis.backplane').RedisSseBackplane}). Omit
+   * for in-process delivery (single node). Required when publishers and SSE connections live on
+   * different processes.
+   */
+  backplane?: SseBackplane;
   /** Register globally so the channel is discoverable app-wide. Default true. */
   global?: boolean;
 }
@@ -31,6 +38,7 @@ export class SseChannelModule {
 
     const providers: Provider[] = [
       { provide: SSE_OPTIONS, useValue: channelOptions },
+      { provide: SSE_BACKPLANE, useValue: options.backplane ?? null },
       SseHub,
       SseChannel,
     ];
