@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-mail",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Mail channel for nestjs-notifications — render and send email notifications over SMTP",
   "license": "MIT",
   "author": "Davide Carvalho",

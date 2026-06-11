@@ -1,5 +1,37 @@
 # @dudousxd/nestjs-notifications-core
 
+## 0.4.0
+
+### Minor Changes
+
+- 09170d8: Per-tenant channel config, rich email, and an app-wide preference gate.
+
+  - **Per-tenant config**: mail/sms/push take `resolveTransport(tenant)` and slack/webhook take
+    `resolveOptions(tenant)` — a send scoped with `forTenant(id)` uses that tenant's credentials,
+    falling back to the default when none.
+  - **Rich email**: `MarkdownMailRenderer` + `MailMessage.markdown()` render Markdown to HTML (via
+    the optional `marked` peer).
+  - **Preference gate**: core gained an optional `PreferenceGate` (token
+    `NOTIFICATION_PREFERENCE_GATE`) consulted before every channel delivery — muted channels are
+    reported as `skipped`. See the new `@dudousxd/nestjs-notifications-preferences` package.
+
+- 88aa12f: Multi-tenancy + use NestJS's own `@Inject` for service injection.
+
+  **Multi-tenancy** (the same user can live in many workspaces — each with an isolated feed):
+
+  - `notifications.forTenant(id)` / `forTenants([...])` scope a send to one or many tenants; a
+    `@Tenant()` property on the notification (or notifiable) infers it, and may be a `string` or
+    `string[]` (the send fans out to each tenant, one delivery + storage row per tenant).
+  - The database channel stores a `tenantId` (column auto-created); the read API scopes by it:
+    `notificationsQuery.forTenant(id).unread(user)`. TypeORM / MikroORM / Prisma adapters all carry
+    `tenantId` and filter by it (undefined = all tenants). `SendResult` carries the `tenant`.
+  - The tenant is threaded through the sync, event-emitter, BullMQ and Redis dispatchers, and is
+    available to channels via the new `DeliveryContext` (3rd arg of `ChannelDriver.send`).
+
+  **BREAKING (0.x): `@InjectService` removed.** Use NestJS's own `@Inject(TOKEN)` on a notification
+  property — the library populates it from the container at delivery time by reading Nest's
+  `PROPERTY_DEPS_METADATA`. One documented primitive instead of a custom decorator.
+
 ## 0.3.0
 
 ### Minor Changes

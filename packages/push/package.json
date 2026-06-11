@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-push",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Push channel for nestjs-notifications — deliver push notifications via Web Push (VAPID), Firebase Cloud Messaging, or Expo",
   "license": "MIT",
   "author": "Davide Carvalho",
