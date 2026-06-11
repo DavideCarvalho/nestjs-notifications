@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-push
 
+## 0.4.0
+
+### Minor Changes
+
+- 67db54f: Add APNs (native iOS) push transport, and Vonage + AWS SNS SMS transports.
+
 ## 0.3.0
 
 ### Minor Changes

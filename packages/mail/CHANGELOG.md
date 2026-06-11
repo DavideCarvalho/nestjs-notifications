@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-mail
 
+## 0.4.0
+
+### Minor Changes
+
+- 67db54f: Add built-in `ReactEmailRenderer` (React Email) and `MjmlMailRenderer` (MJML) renderers, plus `MailMessage.react()` / `.mjml()`. Add `FailoverMailTransport` for multi-provider failover (e.g. SES → Resend) and `transportInstance` / `rendererInstance` module options. `MailRenderer.render` may now be async.
+
 ## 0.3.0
 
 ### Minor Changes

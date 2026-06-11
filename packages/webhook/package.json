@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-webhook",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Webhook channel for nestjs-notifications — deliver notifications by POSTing JSON to an HTTP endpoint",
   "license": "MIT",
   "author": "Davide Carvalho",

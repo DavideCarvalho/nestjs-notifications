@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-webhook
 
+## 0.4.0
+
+### Minor Changes
+
+- 67db54f: Sign webhook requests with HMAC-SHA256 — set a `secret` and every request gets an `X-Signature-256: sha256=<hex>` header (header name configurable, per-tenant secrets via `resolveOptions`).
+
 ## 0.3.0
 
 ### Minor Changes
