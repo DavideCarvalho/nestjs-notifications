@@ -1,5 +1,12 @@
 # @dudousxd/nestjs-notifications-sse
 
+## 0.4.0
+
+### Minor Changes
+
+- 4c9c2ea: Add `SseChannelModule.forRootAsync({ useFactory, inject })` so the cross-pod `backplane` (and event name) can be built from DI — e.g. constructing a `RedisSseBackplane` from your app's Redis config service.
+- e3fbd5e: Add `createNotificationsStreamController({ resolveRoute, resolveTenant?, path?, streamPath?, heartbeatMs? })` — a factory that mounts the native `@Sse()` streaming endpoint (subscribing to `SseHub` under the channel's `sseKey`), with a built-in heartbeat, so apps don't hand-write the SSE endpoint.
+
 ## 0.3.0
 
 ### Minor Changes
