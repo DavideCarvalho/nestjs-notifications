@@ -1,1 +1,1 @@
-{ "title": "Recipes", "pages": ["index", "on-demand", "queued-notifications", "in-app-notifications", "react-inbox", "live-badge", "delivery-tracking", "codegen", "preferences", "injecting-services", "custom-channel", "telescope"] }
+{ "title": "Recipes", "pages": ["index", "on-demand", "queued-notifications", "in-app-notifications", "react-inbox", "headless-sdk", "live-badge", "delivery-tracking", "codegen", "preferences", "pruning", "injecting-services", "custom-channel", "telescope"] }

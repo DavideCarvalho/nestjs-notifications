@@ -106,6 +106,13 @@ export class MikroOrmNotificationStore implements NotificationStore {
     await this.em.nativeDelete(NotificationEntity, { id });
   }
 
+  async prune(options: { before: Date; onlyRead?: boolean }): Promise<number> {
+    return this.em.nativeDelete(NotificationEntity, {
+      createdAt: { $lte: options.before },
+      ...(options.onlyRead ? { readAt: { $ne: null } } : {}),
+    });
+  }
+
   /** Create/patch the notifications table if needed (non-destructive). */
   async ensureSchema(): Promise<void> {
     await ensureNotificationsTable(this.em);

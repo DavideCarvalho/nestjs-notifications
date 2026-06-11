@@ -1,5 +1,9 @@
-// Client
-export { NotificationsClient, NotificationsApiError } from './client';
+// Client (re-exported from the headless core for convenience / back-compat)
+export {
+  NotificationsClient,
+  NotificationsApiError,
+  createNotificationsClient,
+} from '@dudousxd/nestjs-notifications-client';
 
 // Types
 export type {
@@ -7,7 +11,7 @@ export type {
   PaginatedNotifications,
   NotificationsClientOptions,
   ListParams,
-} from './types';
+} from '@dudousxd/nestjs-notifications-client';
 
 // Pure helpers (also useful for custom renderers)
 export {

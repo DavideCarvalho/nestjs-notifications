@@ -1,6 +1,6 @@
+import { NotificationsClient } from '@dudousxd/nestjs-notifications-client';
+import type { NotificationsClientOptions } from '@dudousxd/nestjs-notifications-client';
 import { type ReactNode, createContext, createElement, useContext, useMemo } from 'react';
-import { NotificationsClient } from '../client';
-import type { NotificationsClientOptions } from '../types';
 
 /** Value held by the {@link NotificationsContext}. */
 export interface NotificationsContextValue {

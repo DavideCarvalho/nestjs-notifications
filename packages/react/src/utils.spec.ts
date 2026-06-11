@@ -1,5 +1,5 @@
+import type { NotificationItem } from '@dudousxd/nestjs-notifications-client';
 import { describe, expect, it } from 'vitest';
-import type { NotificationItem } from './types';
 import {
   formatRelativeTime,
   isUnread,

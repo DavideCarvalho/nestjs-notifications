@@ -1,0 +1,104 @@
+---
+title: Headless SDK & TanStack Query
+description: A framework-neutral client for the inbox API + SSE — fetch functions, a live subscribe(), and TanStack Query option factories that work in React and Vue. For frontends separate from the backend.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The [`<Inbox/>` widget](/docs/recipes/react-inbox) is React-specific. When your frontend lives in a
+separate repo, points at a different backend, or isn't React, reach for
+`@dudousxd/nestjs-notifications-client` — a **headless, framework-neutral** SDK: typed fetch methods, a
+live `subscribe()` over SSE, and TanStack Query option factories.
+
+```bash
+pnpm add @dudousxd/nestjs-notifications-client
+```
+
+<Callout type="info">
+  On NestJS and want the client generated (and kept in lockstep with your routes)? Use
+  [codegen](/docs/recipes/codegen) instead. This package is the hand-written, zero-config alternative.
+</Callout>
+
+## The client
+
+```ts
+import { createNotificationsClient } from '@dudousxd/nestjs-notifications-client';
+
+const client = createNotificationsClient({
+  baseUrl: 'https://api.example.com/',                       // read API mounted at /notifications
+  sseUrl: 'https://api.example.com/notifications/stream',    // optional live stream
+  headers: { Authorization: `Bearer ${token}` },            // or credentials: 'include'
+});
+
+await client.list({ page: 1 });
+await client.unread();
+await client.unreadCount();
+await client.markAsRead(id);
+await client.markAllAsRead();
+await client.remove(id);
+```
+
+It uses the global `fetch`; pass a `fetch` impl for non-browser runtimes.
+
+## Live updates with `subscribe()`
+
+```ts
+const stop = client.subscribe(({ count }) => {
+  // `count` is set when the server pushes it in the SSE payload; otherwise re-fetch.
+  if (count != null) setBadge(count);
+  else client.unreadCount().then(setBadge);
+});
+// later: stop()
+```
+
+`subscribe()` is **SSR-safe** — when there's no `EventSource` (or no `sseUrl`), it returns a no-op
+unsubscribe, so it's safe to call during server rendering.
+
+## TanStack Query
+
+The `/tanstack` subpath exports framework-neutral option factories — they return plain
+`queryOptions`/`mutationOptions`-shaped objects, so they drop into **`@tanstack/react-query`** and
+**`@tanstack/vue-query`** alike.
+
+```tsx title="React"
+import { createNotificationsClient } from '@dudousxd/nestjs-notifications-client';
+import {
+  notificationKeys,
+  notificationQueries,
+  notificationMutations,
+} from '@dudousxd/nestjs-notifications-client/tanstack';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+const client = createNotificationsClient({ baseUrl: '/' });
+
+function Bell() {
+  const { data: count } = useQuery(notificationQueries.unreadCount(client));
+  return <span>🔔 {count}</span>;
+}
+
+function useMarkRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    ...notificationMutations.markAsRead(client),
+    onSuccess: () => qc.invalidateQueries({ queryKey: notificationKeys.all }),
+  });
+}
+```
+
+```ts title="Vue"
+import { useQuery } from '@tanstack/vue-query';
+import { notificationQueries } from '@dudousxd/nestjs-notifications-client/tanstack';
+
+const { data } = useQuery(notificationQueries.list(client, { page: 1 }));
+```
+
+`notificationKeys` gives you the stable query keys for cache reads and invalidation
+(`notificationKeys.all`, `.list(params)`, `.unread()`, `.unreadCount()`).
+
+## Which client should I use?
+
+| You are… | Use |
+| --- | --- |
+| React app, want a drop-in UI | [`<Inbox/>`](/docs/recipes/react-inbox) |
+| Any frontend, want headless fns + TanStack | this package |
+| On NestJS, want a generated typed client | [codegen](/docs/recipes/codegen) |

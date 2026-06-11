@@ -1,0 +1,43 @@
+{
+  "name": "@dudousxd/nestjs-notifications-client",
+  "version": "0.1.0",
+  "description": "Framework-neutral headless SDK for nestjs-notifications — fetch client + SSE subscribe + TanStack Query factories",
+  "license": "MIT",
+  "author": "Davide Carvalho",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
+    "directory": "packages/client"
+  },
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tanstack": {
+      "types": "./dist/tanstack.d.ts",
+      "default": "./dist/tanstack.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "nestjs",
+    "notifications",
+    "sdk",
+    "client",
+    "tanstack-query",
+    "sse"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

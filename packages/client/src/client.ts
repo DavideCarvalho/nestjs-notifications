@@ -29,11 +29,13 @@ export class NotificationsClient {
   private readonly headers: NotificationsClientOptions['headers'];
   private readonly credentials?: RequestCredentials;
   private readonly fetchImpl: typeof fetch;
+  private readonly sseUrl?: string;
 
   constructor(options: NotificationsClientOptions = {}) {
     this.baseUrl = normalizeBaseUrl(options.baseUrl ?? '/');
     this.headers = options.headers;
     this.credentials = options.credentials;
+    this.sseUrl = options.sseUrl;
     const f = options.fetch ?? (typeof fetch !== 'undefined' ? fetch : undefined);
     if (!f) {
       throw new Error(
@@ -80,6 +82,39 @@ export class NotificationsClient {
     await this.request<void>('DELETE', `notifications/${encodeURIComponent(id)}`);
   }
 
+  /**
+   * Subscribe to the SSE stream for live updates. Calls `listener` on each push; the event carries
+   * the unread `count` when the server includes one in the payload (else `count` is undefined and the
+   * caller should re-fetch). Returns an unsubscribe function. SSR-safe: a no-op (returns () => {}) when
+   * `EventSource` is unavailable or no `sseUrl` is configured.
+   */
+  subscribe(listener: (event: { count?: number }) => void, opts?: { sseUrl?: string }): () => void {
+    const url = opts?.sseUrl ?? this.sseUrl;
+    if (!url || !hasEventSource()) return () => {};
+
+    let source: EventSource | null = null;
+    try {
+      source = new EventSource(url, { withCredentials: this.credentials === 'include' });
+    } catch {
+      return () => {};
+    }
+
+    const onMessage = (event: MessageEvent) => {
+      const count = extractCount(event.data);
+      listener({ count: count ?? undefined });
+    };
+
+    source.addEventListener('message', onMessage);
+    // The SSE channel defaults to the `notification` event name.
+    source.addEventListener('notification', onMessage as EventListener);
+
+    return () => {
+      source?.removeEventListener('message', onMessage);
+      source?.removeEventListener('notification', onMessage as EventListener);
+      source?.close();
+    };
+  }
+
   private async request<T>(method: string, path: string): Promise<T> {
     const headers = await this.resolveHeaders();
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
@@ -102,6 +137,13 @@ export class NotificationsClient {
     const resolved = typeof this.headers === 'function' ? await this.headers() : this.headers;
     return { ...base, ...resolved };
   }
+}
+
+/** Create a {@link NotificationsClient}. */
+export function createNotificationsClient(
+  options?: NotificationsClientOptions,
+): NotificationsClient {
+  return new NotificationsClient(options);
 }
 
 /** Thrown when the read API responds with a non-2xx status. */
@@ -143,4 +185,27 @@ async function parseBody<T>(response: Response): Promise<T> {
   const text = await response.text();
   if (!text) return undefined as T;
   return JSON.parse(text) as T;
+}
+
+/** True when the runtime exposes `EventSource` (browser or polyfilled). */
+function hasEventSource(): boolean {
+  return typeof EventSource !== 'undefined';
+}
+
+/** Try to read a numeric count out of an SSE payload (number, or `{ count }`). */
+function extractCount(data: unknown): number | null {
+  if (typeof data === 'number') return data;
+  if (typeof data !== 'string') return null;
+  const trimmed = data.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed === 'number') return parsed;
+    if (parsed && typeof parsed === 'object' && typeof parsed.count === 'number') {
+      return parsed.count;
+    }
+  } catch {
+    // Not JSON — caller will re-fetch.
+  }
+  return null;
 }

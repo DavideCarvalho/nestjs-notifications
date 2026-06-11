@@ -1,6 +1,6 @@
+import type { NotificationsClient } from '@dudousxd/nestjs-notifications-client';
+import type { NotificationsClientOptions } from '@dudousxd/nestjs-notifications-client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { NotificationsClient } from '../client';
-import type { NotificationsClientOptions } from '../types';
 import { useResolvedContext } from './use-notifications-provider';
 
 /** Options for {@link useUnreadCount}. */

@@ -53,6 +53,13 @@ export interface NotificationStore {
    * (in-memory, or schema-first ORMs like Prisma) may omit it or make it a no-op.
    */
   ensureSchema?(): Promise<void>;
+  /**
+   * Optionally bulk-delete notifications older than a cutoff, for the scheduled
+   * {@link import('./notification-pruner').NotificationPruner}. Removes rows created at or
+   * before `before`; `onlyRead` limits deletion to rows that have been read. Returns how many
+   * were deleted. Stores that don't implement it are skipped (the pruner logs a warning).
+   */
+  prune?(options: { before: Date; onlyRead?: boolean }): Promise<number>;
 }
 
 /**

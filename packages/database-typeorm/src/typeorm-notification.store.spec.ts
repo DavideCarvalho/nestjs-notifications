@@ -84,4 +84,17 @@ describe('TypeOrmNotificationStore', () => {
       expect.objectContaining({ readAt: expect.any(Date) }),
     );
   });
+
+  it('prune() deletes by cutoff and returns the affected count', async () => {
+    const repo = makeRepo();
+    repo.delete = vi.fn(async () => ({ affected: 3 }) as never);
+    const store = new TypeOrmNotificationStore(repo as unknown as Repository<NotificationEntity>);
+
+    const deleted = await store.prune({ before: new Date('2026-01-01T00:00:00Z'), onlyRead: true });
+
+    expect(repo.delete).toHaveBeenCalledWith(
+      expect.objectContaining({ createdAt: expect.anything(), readAt: expect.anything() }),
+    );
+    expect(deleted).toBe(3);
+  });
 });

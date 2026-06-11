@@ -77,6 +77,18 @@ export class InMemoryStore implements NotificationStore {
     this.rows.delete(id);
   }
 
+  async prune(options: { before: Date; onlyRead?: boolean }): Promise<number> {
+    const cutoff = options.before.getTime();
+    let deleted = 0;
+    for (const [id, row] of this.rows) {
+      if (row.createdAt.getTime() <= cutoff && (!options.onlyRead || row.readAt != null)) {
+        this.rows.delete(id);
+        deleted++;
+      }
+    }
+    return deleted;
+  }
+
   private all(): StoredNotification[] {
     return [...this.rows.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }

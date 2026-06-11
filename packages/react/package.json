@@ -19,6 +19,9 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "dependencies": {
+    "@dudousxd/nestjs-notifications-client": "workspace:^"
+  },
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18"

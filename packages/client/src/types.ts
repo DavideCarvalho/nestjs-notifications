@@ -50,6 +50,8 @@ export interface NotificationsClientOptions {
   credentials?: RequestCredentials;
   /** Custom `fetch` implementation (e.g. for tests or non-browser runtimes). */
   fetch?: typeof fetch;
+  /** SSE endpoint for live updates, consumed by `client.subscribe()`. */
+  sseUrl?: string;
 }
 
 /** Query params for listing notifications. */

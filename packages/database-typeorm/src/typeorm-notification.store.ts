@@ -6,7 +6,7 @@ import type {
 } from '@dudousxd/nestjs-notifications-database';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, type Repository } from 'typeorm';
+import { IsNull, LessThanOrEqual, Not, type Repository } from 'typeorm';
 import { NotificationEntity } from './notification.entity';
 import { ensureNotificationsTable } from './schema';
 
@@ -103,6 +103,14 @@ export class TypeOrmNotificationStore implements NotificationStore {
 
   async delete(id: string): Promise<void> {
     await this.repo.delete(id);
+  }
+
+  async prune(options: { before: Date; onlyRead?: boolean }): Promise<number> {
+    const result = await this.repo.delete({
+      createdAt: LessThanOrEqual(options.before),
+      ...(options.onlyRead ? { readAt: Not(IsNull()) } : {}),
+    });
+    return result.affected ?? 0;
   }
 
   /** Create the notifications table if missing (non-destructive). */

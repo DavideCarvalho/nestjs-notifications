@@ -101,6 +101,16 @@ export class PrismaNotificationStore implements NotificationStore {
     await this.client.notification.delete({ where: { id } });
   }
 
+  async prune(options: { before: Date; onlyRead?: boolean }): Promise<number> {
+    const result = await this.client.notification.deleteMany({
+      where: {
+        createdAt: { lte: options.before },
+        ...(options.onlyRead ? { readAt: { not: null } } : {}),
+      },
+    });
+    return result.count;
+  }
+
   /**
    * No-op: Prisma is schema-first. Create the `Notification` model in your `schema.prisma`
    * and apply it with `prisma migrate` / `prisma db push` — the library won't run DDL here.

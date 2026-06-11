@@ -1,4 +1,4 @@
-import type { NotificationItem } from './types';
+import type { NotificationItem } from '@dudousxd/nestjs-notifications-client';
 
 /**
  * Merge two lists of notifications, de-duplicating by `id` and keeping the

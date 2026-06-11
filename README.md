@@ -47,6 +47,7 @@ await notifications.send(user, new InvoicePaid(invoice));
 | `@dudousxd/nestjs-notifications-webhook` | Webhook channel — HMAC-signed HTTP callbacks |
 | `@dudousxd/nestjs-notifications-preferences` | Channel opt-out + full preference center (category × channel × digest) |
 | `@dudousxd/nestjs-notifications-delivery-tracking` | Persisted per-channel delivery status + Twilio/SES inbound status webhooks |
+| `@dudousxd/nestjs-notifications-client` | Framework-neutral headless SDK — fetch client + SSE subscribe + TanStack Query factories |
 | `@dudousxd/nestjs-notifications-react` | Drop-in `<Inbox/>` widget + `useNotifications` / `useUnreadCount` hooks |
 | `@dudousxd/nestjs-notifications-event-emitter` | In-process async dispatch via `@nestjs/event-emitter` |
 | `@dudousxd/nestjs-notifications-bullmq` | Async dispatch reusing your app's BullMQ |

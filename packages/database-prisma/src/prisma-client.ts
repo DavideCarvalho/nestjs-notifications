@@ -40,6 +40,7 @@ export interface PrismaNotificationDelegate {
   updateMany(args: { where: any; data: any }): Promise<any>;
   findMany(args: { where: any; orderBy?: any }): Promise<any[]>;
   delete(args: { where: any }): Promise<any>;
+  deleteMany(args: { where: any }): Promise<{ count: number }>;
 }
 
 /** Minimal structural view of a Prisma client exposing the `notification` model. */

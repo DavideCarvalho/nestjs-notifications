@@ -1,0 +1,67 @@
+---
+title: Pruning old notifications
+description: Keep the notifications table from growing forever — schedule automatic deletion of old (or old-and-read) notifications with the database channel's built-in pruner.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Persisted notifications pile up. The [database channel](/docs/channels/database) ships a built-in
+**pruner** that periodically deletes old rows — configure it once on `forRoot` and forget it.
+
+## Enable it
+
+```ts title="app.module.ts"
+DatabaseChannelModule.forRoot({
+  prune: {
+    olderThan: 90 * 24 * 60 * 60 * 1000, // delete notifications older than 90 days
+    onlyRead: true,                      // ...but only ones the user has read
+    every: 6 * 60 * 60 * 1000,           // sweep every 6 hours (default: 1 hour)
+    runOnStartup: true,                  // also sweep once on boot (default: false)
+  },
+});
+```
+
+| Option | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `olderThan` | `number` (ms) | — | Delete notifications created at least this long ago. **Required.** |
+| `onlyRead` | `boolean` | `false` | Only delete notifications that have been read. |
+| `every` | `number` (ms) | `3600000` | How often the sweep runs. |
+| `runOnStartup` | `boolean` | `false` | Run one sweep on bootstrap, before the first interval. |
+
+That's it — omit `prune` entirely and nothing is scheduled.
+
+<Callout type="info">
+  The pruner runs on a plain `setInterval` (no extra scheduler dependency) and the timer is `unref`'d,
+  so it never keeps your process alive on its own. It's torn down on module destroy.
+</Callout>
+
+## How it works
+
+On each sweep the pruner calls the store's `prune({ before, onlyRead })`, where `before` is
+`now - olderThan`. The bundled in-memory store implements this; ORM stores implement it against their
+table.
+
+<Callout type="warn">
+  A custom `NotificationStore` that doesn't implement the optional `prune()` method is simply skipped
+  (the pruner logs a warning). Implement `prune(options: { before: Date; onlyRead?: boolean }): Promise<number>`
+  to opt in — it returns the number of rows deleted.
+</Callout>
+
+## Pruning on demand
+
+`NotificationPruner` is injectable, so you can also trigger a sweep yourself — from an admin endpoint,
+a cron job, or a test:
+
+```ts
+import { NotificationPruner } from '@dudousxd/nestjs-notifications-database';
+
+@Injectable()
+export class MaintenanceService {
+  constructor(private readonly pruner: NotificationPruner) {}
+
+  async runNow() {
+    const deleted = await this.pruner.sweep(); // uses the configured prune options
+    return { deleted };
+  }
+}
+```

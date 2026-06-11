@@ -56,10 +56,29 @@ the request:
 await this.notifications.unreadCount({ type: 'User', id: req.user.id });
 ```
 
-## Mount the REST controller
+## The REST controller
 
-Rather than write inbox endpoints by hand, `createNotificationsController()` builds a
-`@Controller('notifications')` for you. Tell it how to resolve the current notifiable from the
+`DatabaseChannelModule.forRoot()` **auto-mounts** the inbox controller by default — you get
+`GET/POST/DELETE /notifications` out of the box, with the current notifiable resolved from
+`req.user` (`{ type: 'User', id: req.user.id }`). Customize the resolver, or turn it off:
+
+```ts
+// Default: controller on, resolveRef reads req.user.
+DatabaseChannelModule.forRoot();
+
+// Custom resolver (e.g. a different id field or notifiable type):
+DatabaseChannelModule.forRoot({
+  controller: { resolveRef: (req) => ({ type: 'User', id: req.auth.sub }) },
+});
+
+// Off — mount it yourself, or expose your own endpoints:
+DatabaseChannelModule.forRoot({ controller: false });
+```
+
+### Mounting it yourself
+
+When you pass `controller: false` (or want it in a specific module), `createNotificationsController()`
+builds the same `@Controller('notifications')`. Tell it how to resolve the current notifiable from the
 request, then add the returned class to a module's `controllers`:
 
 ```ts title="inbox.module.ts"

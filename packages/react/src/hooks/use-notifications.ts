@@ -1,6 +1,9 @@
+import type { NotificationsClient } from '@dudousxd/nestjs-notifications-client';
+import type {
+  NotificationItem,
+  NotificationsClientOptions,
+} from '@dudousxd/nestjs-notifications-client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { NotificationsClient } from '../client';
-import type { NotificationItem, NotificationsClientOptions } from '../types';
 import { mergeNotifications } from '../utils';
 import { useResolvedContext } from './use-notifications-provider';
 

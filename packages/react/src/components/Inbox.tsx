@@ -1,3 +1,8 @@
+import type { NotificationsClient } from '@dudousxd/nestjs-notifications-client';
+import type {
+  NotificationItem,
+  NotificationsClientOptions,
+} from '@dudousxd/nestjs-notifications-client';
 import {
   type CSSProperties,
   type ReactNode,
@@ -6,10 +11,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { NotificationsClient } from '../client';
 import { useNotifications } from '../hooks/use-notifications';
 import { useUnreadCount } from '../hooks/use-unread-count';
-import type { NotificationItem, NotificationsClientOptions } from '../types';
 import { formatRelativeTime, isUnread, notificationBody, notificationTitle } from '../utils';
 import { NotificationBell } from './NotificationBell';
 
