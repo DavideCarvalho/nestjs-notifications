@@ -1,0 +1,129 @@
+---
+title: Adopting in an existing app
+description: Already have a notifications table and endpoints? Adopt nestjs-notifications gradually — wrap your table with a custom NotificationStore, route writes through the library, and keep your current API working the whole time.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Most apps that reach for this library already have *some* notifications — a table, a couple of
+endpoints, a "mark as read" button. You don't have to throw that away. The library is built around a
+single persistence seam — the **`NotificationStore`** interface — so you can point it at your existing
+table and adopt the rest incrementally.
+
+This recipe is the gradual path: keep your data and API working, gain the library's channels,
+preferences, delivery tracking, and clients over time.
+
+## 1. Wrap your table with a custom store
+
+`NotificationStore` is the whole contract the database channel talks to. Implement it against your
+existing table/ORM — this is where you bridge any shape differences:
+
+```ts title="my-notification.store.ts"
+import type {
+  NewStoredNotification,
+  NotificationStore,
+  StoredNotification,
+} from '@dudousxd/nestjs-notifications-database';
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class MyNotificationStore implements NotificationStore {
+  constructor(private readonly repo: MyExistingRepository) {}
+
+  async save(n: NewStoredNotification): Promise<StoredNotification> { /* insert a row */ }
+  async markAsRead(id: string): Promise<void> { /* ... */ }
+  async markAllAsRead(notifiableType: string, notifiableId: string, tenantId?: string): Promise<void> { /* ... */ }
+  async getForNotifiable(notifiableType: string, notifiableId: string, tenantId?: string): Promise<StoredNotification[]> { /* ... */ }
+  async getUnread(notifiableType: string, notifiableId: string, tenantId?: string): Promise<StoredNotification[]> { /* ... */ }
+  async delete(id: string): Promise<void> { /* ... */ }
+  // optional: prune(options), ensureSchema()
+}
+
+// register it:
+DatabaseChannelModule.forRoot({ store: MyNotificationStore });
+```
+
+The model the library works in is `{ id, type, notifiableType, notifiableId, tenantId, data, readAt,
+createdAt, updatedAt }`. Your store maps that to/from your columns.
+
+### Bridging the common mismatches
+
+Existing schemas rarely match exactly. The store is where you reconcile:
+
+| Library field | Your table often has | Bridge |
+| --- | --- | --- |
+| `type` | a `name`/`kind` string | map directly |
+| `data` | a `metadata`/`payload` JSON column | map directly |
+| `readAt` (`Date \| null`) | a **`seen`/`read` boolean** | `readAt != null` ⇄ `seen = true` (and stamp `now()` when marking read) |
+| `notifiableType` + `notifiableId` | a single `user_id` FK | if you only notify users: `type = 'User'`, `id = user_id` |
+| `tenantId` | (often nothing) | `null`, or derive from your org/workspace column |
+
+<Callout type="info">
+  The boolean `seen` ⇄ timestamp `readAt` mapping is the most common one. Your `getUnread` filters
+  `seen = false`; your `markAsRead` sets `seen = true`. The library never sees the boolean — it only
+  ever asks for `readAt`.
+</Callout>
+
+## 2. Route writes through the library
+
+Wherever you currently `repo.insert(...)` a notification, send it instead — so it flows through every
+channel you configure (in-app + mail + push + …), not just the table:
+
+```ts
+// before
+await this.notifications.insert({ userId, name: 'INVOICE_PAID', metadata });
+
+// after
+await this.notifications.send(user, new InvoicePaid(invoice));
+```
+
+```ts title="invoice-paid.notification.ts"
+@Notification()
+export class InvoicePaid {
+  constructor(private readonly invoice: Invoice) {}
+  via() {
+    return [Database]; // add Mail, Push, … when you're ready
+  }
+  toDatabase() {
+    return { invoiceId: this.invoice.id, amount: this.invoice.total };
+  }
+}
+```
+
+Do this one notification type at a time — the rest keep using your old insert path until you migrate
+them.
+
+## 3. Keep your existing endpoints (for now)
+
+The library is **additive**. Your current `GET /notifications` / "mark seen" endpoints keep working —
+they read the same table your custom store writes to. Nothing forces you to swap them.
+
+When you're ready, you can replace them with the library's
+[auto-mounted controller](/docs/recipes/in-app-notifications) (`DatabaseChannelModule.forRoot()`
+mounts it by default) or the [REST controller factory](/docs/recipes/in-app-notifications#the-rest-controller),
+and the [React widget](/docs/recipes/react-inbox) / [headless SDK](/docs/recipes/headless-sdk) on the
+frontend — but that's a later step, not a prerequisite.
+
+## 4. Two levels of adoption
+
+**Light — no migration.** Custom store maps to your existing columns (including the `seen` ⇄ `readAt`
+trick). Existing endpoints stay. Lowest risk; you mainly gain a clean `send()` path and the ability to
+add channels.
+
+**Full — a small migration.** Add `read_at`, `notifiable_type`, `notifiable_id`, `tenant_id` columns
+(migrate `seen = true → read_at = now()`); now your store is a thin one-to-one mapping. This unlocks
+the library cleanly: multi-channel delivery, [preferences](/docs/recipes/preferences),
+[delivery tracking](/docs/recipes/delivery-tracking), [scheduled prune](/docs/recipes/pruning), and the
+ready-made [controller](/docs/recipes/in-app-notifications) / [clients](/docs/recipes/headless-sdk).
+
+<Callout type="info">
+  Use the bundled ORM adapters (`@dudousxd/nestjs-notifications-database-typeorm` / `-mikro-orm` /
+  `-prisma`) as a reference for what a clean store + entity looks like once you've migrated — or adopt
+  one of them outright if your migrated table matches.
+</Callout>
+
+## What stays separate
+
+If you have an **ops alerting** path (Slack/PagerDuty for errors), that's a different concern from
+user notifications — leave it as is. This library is for notifying your users across channels, not for
+infrastructure alerts (though a Slack *user* notification channel exists if you want one).
