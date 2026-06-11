@@ -13,6 +13,10 @@ export {
 } from './sse.module';
 export { SSE_OPTIONS, SSE_BACKPLANE } from './tokens';
 export { sseKey } from './sse-key';
+export {
+  createNotificationsStreamController,
+  type NotificationsStreamControllerOptions,
+} from './stream-controller';
 export type { SseBackplane, SseBackplaneMessage } from './backplane';
 export {
   RedisSseBackplane,
