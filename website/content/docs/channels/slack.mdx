@@ -48,6 +48,7 @@ export class AppModule {}
 | `webhookUrl` | `string` | — | Default incoming-webhook URL, used when the route doesn't supply one. |
 | `token` | `string` | — | Bot/user token for the Web API. When set, delivery uses `chat.postMessage`. |
 | `defaultChannel` | `string` | — | Default channel id for Web API delivery when the route isn't a webhook. |
+| `resolveOptions` | `(tenant: string) => SlackChannelOptions` | — | Per-tenant options resolver. See [Per-tenant config](#per-tenant-config). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
 
 ## The notification side
@@ -128,3 +129,20 @@ as the channel id, overriding `defaultChannel`.
   available — buttons, fields, images, context blocks. Build them in [Block Kit
   Builder](https://app.slack.com/block-kit-builder) and pass each block to `.block()`.
 </Callout>
+
+## Per-tenant config
+
+In a multi-tenant app each tenant can post to its own workspace. Pass `resolveOptions` — when a send
+is scoped to a tenant (via [`forTenant(id)`](/docs/concepts/multi-tenancy) or a `@Tenant()`
+property), the channel uses the options you return (webhook URL, token, default channel) instead of
+the module defaults:
+
+```ts title="app.module.ts"
+SlackChannelModule.forRoot({
+  webhookUrl: process.env.SLACK_WEBHOOK_URL,
+  resolveOptions: (tenant) => ({ webhookUrl: tenantWebhooks.get(tenant) }),
+});
+```
+
+Sends with no tenant scope keep the module defaults. See
+[Multi-tenancy](/docs/concepts/multi-tenancy) for the full picture.

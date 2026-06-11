@@ -108,6 +108,7 @@ Pick exactly one transport and supply its matching options:
 | `webPush` | `WebPushOptions` | — | VAPID options. Supply with `WebPushTransport`. |
 | `fcm` | `FcmOptions` | — | Firebase Admin app options. Supply with `FcmTransport`. |
 | `expo` | `ExpoOptions` | — | Expo client options. Supply with `ExpoTransport`. |
+| `resolveTransport` | `(tenant: string) => PushTransport` | — | Per-tenant transport resolver. See [Per-tenant config](#per-tenant-config). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
 
 ## The notification side
@@ -173,3 +174,20 @@ export class User implements Notifiable {
 
 The concrete shape of the target depends on the transport — a Web Push subscription object, an FCM
 device token, or an Expo push token.
+
+## Per-tenant config
+
+In a multi-tenant app each tenant can push through its own project/credentials. Pass
+`resolveTransport` — when a send is scoped to a tenant (via
+[`forTenant(id)`](/docs/concepts/multi-tenancy) or a `@Tenant()` property), the channel uses the
+`PushTransport` you return instead of the default:
+
+```ts title="app.module.ts"
+PushChannelModule.forRoot({
+  transport: FcmTransport,
+  resolveTransport: (tenant) => tenantPushTransports.get(tenant) ?? defaultTransport,
+});
+```
+
+Sends with no tenant scope keep the default transport. See
+[Multi-tenancy](/docs/concepts/multi-tenancy) for the full picture.

@@ -54,6 +54,7 @@ export class AppModule {}
 | `from` | `string` | — | Default sender number for messages that don't set their own. |
 | `transport` | `Type<SmsTransport>` | `TwilioTransport` | Transport class used to deliver. |
 | `twilio` | `{ accountSid, authToken, from? }` | — | Credentials for the built-in `TwilioTransport`. |
+| `resolveTransport` | `(tenant: string) => SmsTransport` | — | Per-tenant transport resolver. See [Per-tenant config](#per-tenant-config). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
 
 ## The notification side
@@ -143,3 +144,20 @@ SmsChannelModule.forRoot({ from: '+15555550100', transport: VonageTransport });
   A custom transport is a normal Nest provider, so you can inject config or an HTTP client into it.
   The `twilio` option is ignored unless you use the default `TwilioTransport`.
 </Callout>
+
+## Per-tenant config
+
+In a multi-tenant app each tenant can text from its own provider/credentials. Pass
+`resolveTransport` — when a send is scoped to a tenant (via
+[`forTenant(id)`](/docs/concepts/multi-tenancy) or a `@Tenant()` property), the channel uses the
+`SmsTransport` you return instead of the default:
+
+```ts title="app.module.ts"
+SmsChannelModule.forRoot({
+  from: '+15555550100',
+  resolveTransport: (tenant) => tenantSmsTransports.get(tenant) ?? defaultTransport,
+});
+```
+
+Sends with no tenant scope keep the default transport. See
+[Multi-tenancy](/docs/concepts/multi-tenancy) for the full picture.

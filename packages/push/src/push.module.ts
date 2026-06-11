@@ -1,8 +1,14 @@
 import { type DynamicModule, Module, type Provider, type Type } from '@nestjs/common';
 import type { ExpoOptions } from './expo.transport';
 import type { FcmOptions } from './fcm.transport';
-import { PushChannel } from './push.channel';
-import { EXPO_OPTIONS, FCM_OPTIONS, PUSH_TRANSPORT, WEB_PUSH_OPTIONS } from './tokens';
+import { PushChannel, type PushTransportResolver } from './push.channel';
+import {
+  EXPO_OPTIONS,
+  FCM_OPTIONS,
+  PUSH_TRANSPORT,
+  PUSH_TRANSPORT_RESOLVER,
+  WEB_PUSH_OPTIONS,
+} from './tokens';
 import type { PushTransport } from './transport';
 import type { WebPushOptions } from './web-push.transport';
 
@@ -19,6 +25,11 @@ export interface PushChannelModuleOptions {
   fcm?: FcmOptions;
   /** Expo client options. Supply when using {@link ExpoTransport}. */
   expo?: ExpoOptions;
+  /**
+   * Optional per-tenant transport resolver. When a notification is delivered with a
+   * `context.tenant`, the returned transport is used instead of the default one.
+   */
+  resolveTransport?: PushTransportResolver;
   /** Register globally so the channel is discoverable app-wide. Default true. */
   global?: boolean;
 }
@@ -59,6 +70,7 @@ export class PushChannelModule {
       { provide: EXPO_OPTIONS, useValue: options.expo ?? {} },
       transportClass,
       { provide: PUSH_TRANSPORT, useExisting: transportClass },
+      { provide: PUSH_TRANSPORT_RESOLVER, useValue: options.resolveTransport ?? null },
       PushChannel,
     ];
 

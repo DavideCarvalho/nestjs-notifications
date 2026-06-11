@@ -65,17 +65,18 @@ You only reach for an explicit `via()` when routing must vary **per recipient** 
 ## Injecting services
 
 A notification is `new`-able with plain data, but sometimes building a payload needs a service — a
-`UrlService` to sign links, a `ConfigService` to read a base URL. Use `@InjectService(Token)` on a
-property and the library populates it from the Nest container at delivery time:
+`UrlService` to sign links, a `ConfigService` to read a base URL. Mark a property with NestJS's own
+`@Inject(Token)` and the library populates it from the Nest container at delivery time:
 
 ```ts title="invoice-paid.notification.ts"
-import { InjectService, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Inject } from '@nestjs/common';
+import { Notification } from '@dudousxd/nestjs-notifications-core';
 import { Mail, MailMessage } from '@dudousxd/nestjs-notifications-mail';
 import { UrlService } from '../url.service';
 
 @Notification()
 export class InvoicePaid {
-  @InjectService(UrlService)
+  @Inject(UrlService)
   private readonly urls!: UrlService;
 
   constructor(private readonly invoiceId: string) {}
@@ -90,9 +91,11 @@ export class InvoicePaid {
 ```
 
 You still construct it with just data — `new InvoicePaid(invoiceId)` — and the `urls` property is
-filled in before the channel runs. Injection is also re-run after async rehydration, so a queued
-notification gets its services back on the worker too. See the
-[Injecting services recipe](/docs/recipes/injecting-services) for the full pattern.
+filled in before the channel runs. Because a notification is `new`-ed (not created by Nest), Nest
+never wires it; the library reads Nest's property-injection metadata and fills it in itself.
+Injection is also re-run after async rehydration, so a queued notification gets its services back on
+the worker too. See the [Injecting services recipe](/docs/recipes/injecting-services) for the full
+pattern.
 
 <Callout type="info">
   Injection is idempotent and only fills properties that are still undefined, so it's safe whether
@@ -246,7 +249,7 @@ export class InvoicePaid {
 <Callout type="warn">
   Queued notifications are rebuilt on the worker by assigning `data` onto the prototype — the
   constructor does **not** run again. Keep constructor side effects out, or use a custom
-  `deserialize()`. `@InjectService` properties are re-populated automatically after the rebuild.
+  `deserialize()`. `@Inject` properties are re-populated automatically after the rebuild.
   See [Async dispatch](/docs/concepts/async-dispatch).
 </Callout>
 

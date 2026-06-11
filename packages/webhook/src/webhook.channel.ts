@@ -1,5 +1,6 @@
 import {
   type ChannelDriver,
+  type DeliveryContext,
   MissingChannelMethodError,
   type Notifiable,
   type Notification,
@@ -7,8 +8,8 @@ import {
   getHandler,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
-import { Inject, Injectable } from '@nestjs/common';
-import { WEBHOOK_OPTIONS } from './tokens';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { WEBHOOK_OPTIONS, WEBHOOK_OPTIONS_RESOLVER } from './tokens';
 import { WebhookMessage } from './webhook-message';
 import type { WebhookMethod } from './webhook-message';
 
@@ -32,6 +33,9 @@ export interface WebhookNotification extends Notification {
   toWebhook(notifiable: Notifiable): WebhookMessage | Record<string, unknown>;
 }
 
+/** Resolves per-tenant {@link WebhookChannelOptions} from a tenant id. */
+export type WebhookOptionsResolver = (tenant: string) => WebhookChannelOptions;
+
 /**
  * Delivers a notification by sending an HTTP request (JSON body) to a webhook endpoint.
  * The target URL comes from the {@link WebhookMessage}, else from
@@ -44,9 +48,19 @@ export class WebhookChannel implements ChannelDriver {
   constructor(
     @Inject(WEBHOOK_OPTIONS)
     private readonly options: WebhookChannelOptions,
+    @Optional()
+    @Inject(WEBHOOK_OPTIONS_RESOLVER)
+    private readonly resolveOptions?: WebhookOptionsResolver,
   ) {}
 
-  async send(notifiable: Notifiable, notification: Notification): Promise<void> {
+  async send(
+    notifiable: Notifiable,
+    notification: Notification,
+    context?: DeliveryContext,
+  ): Promise<void> {
+    const options =
+      context?.tenant && this.resolveOptions ? this.resolveOptions(context.tenant) : this.options;
+
     const handler = getHandler(notification, 'webhook', 'toWebhook');
     if (!handler) {
       const name =
@@ -61,7 +75,7 @@ export class WebhookChannel implements ChannelDriver {
     const request = message.toRequest();
 
     const route = routeFor(notifiable, 'webhook', notification);
-    const url = request.url ?? (typeof route === 'string' ? route : undefined) ?? this.options.url;
+    const url = request.url ?? (typeof route === 'string' ? route : undefined) ?? options.url;
 
     if (!url) {
       throw new Error(
@@ -70,17 +84,18 @@ export class WebhookChannel implements ChannelDriver {
       );
     }
 
-    await this.post(url, request.method, request.body, request.headers);
+    await this.post(options, url, request.method, request.body, request.headers);
   }
 
   private async post(
+    options: WebhookChannelOptions,
     url: string,
     method: WebhookMethod,
     body: Record<string, unknown>,
     messageHeaders: Record<string, string>,
   ): Promise<void> {
     const headers: Record<string, string> = {
-      ...this.options.headers,
+      ...options.headers,
       ...messageHeaders,
       'Content-Type': 'application/json',
     };

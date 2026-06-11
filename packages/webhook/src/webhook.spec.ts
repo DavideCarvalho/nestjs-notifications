@@ -79,6 +79,37 @@ describe('WebhookChannel', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(URL);
   });
 
+  it('uses the per-tenant options (url and headers) when a tenant is in the context', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const tenantUrl = 'https://acme.example.com/hooks';
+    const resolveOptions = vi
+      .fn()
+      .mockReturnValue({ url: tenantUrl, headers: { 'X-Tenant': 'acme' } });
+    const channel = new WebhookChannel({ url: URL }, resolveOptions);
+
+    await channel.send(new TestUser(undefined), new OrderPaidPlain(), { tenant: 'acme' });
+
+    expect(resolveOptions).toHaveBeenCalledWith('acme');
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe(tenantUrl);
+    expect(init.headers['X-Tenant']).toBe('acme');
+  });
+
+  it('uses the default options when no tenant is provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolveOptions = vi.fn().mockReturnValue({ url: 'https://acme.example.com/hooks' });
+    const channel = new WebhookChannel({ url: URL }, resolveOptions);
+
+    await channel.send(new TestUser(undefined), new OrderPaidPlain());
+
+    expect(resolveOptions).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(URL);
+  });
+
   it('throws a clear error when no target url can be resolved', async () => {
     vi.stubGlobal('fetch', vi.fn());
 

@@ -209,5 +209,22 @@ export interface DispatchDriver {
   dispatch(job: NotificationJob): Promise<void>;
 }
 
+/** Context handed to a {@link PreferenceGate} before a channel is delivered. */
+export interface ChannelGateContext {
+  notifiable: Notifiable;
+  notification: Notification;
+  channel: string;
+  tenant?: string;
+}
+
+/**
+ * Optional app-wide gate consulted before each channel delivery — return `false` to skip the
+ * channel (recorded as `skipped`). The preferences package provides one backed by a store; bind
+ * your own under the `NOTIFICATION_PREFERENCE_GATE` token.
+ */
+export interface PreferenceGate {
+  isAllowed(context: ChannelGateContext): boolean | Promise<boolean>;
+}
+
 /** Behaviour when a single channel throws. */
 export type ErrorPolicy = 'continueOnError' | 'failFast';

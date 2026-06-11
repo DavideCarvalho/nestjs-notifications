@@ -1,0 +1,127 @@
+---
+title: Channel preferences
+description: Let users mute channels they don't want. Register PreferencesModule, mute/unmute per user (and per tenant), and muted channels are auto-skipped because the package binds the core PreferenceGate.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Users want control: email me invoices, but not in Slack. The preferences package adds an **opt-out**
+layer — a channel is allowed unless a user has explicitly muted it — and wires it straight into
+delivery, so a muted channel is **skipped automatically**. No `shouldSend` boilerplate on every
+notification.
+
+## Register the module
+
+```ts title="app.module.ts"
+import { PreferencesModule } from '@dudousxd/nestjs-notifications-preferences';
+
+@Module({
+  imports: [
+    PreferencesModule.forRoot(), // in-memory store
+    // PreferencesModule.forRoot({ store: PrismaPrefStore }), // your own store
+  ],
+})
+export class AppModule {}
+```
+
+`PreferencesModule.forRoot()` defaults to an in-memory store; pass a `store` class implementing
+`PreferenceStore` to persist preferences in your database. It registers globally by default.
+
+<Callout type="info">
+  Registering the module is all the wiring there is. It binds the core `NOTIFICATION_PREFERENCE_GATE`
+  token to a store-backed gate, which the channel runner consults before every delivery.
+</Callout>
+
+## Mute and unmute
+
+Inject `NotificationPreferences` and toggle channels for a user:
+
+```ts title="preferences.service.ts"
+import { Injectable } from '@nestjs/common';
+import { NotificationPreferences } from '@dudousxd/nestjs-notifications-preferences';
+
+@Injectable()
+export class PreferencesService {
+  constructor(private readonly prefs: NotificationPreferences) {}
+
+  async muteEmail(user: User) {
+    await this.prefs.mute(user, 'mail');
+  }
+
+  async unmuteEmail(user: User) {
+    await this.prefs.unmute(user, 'mail');
+  }
+
+  async emailMuted(user: User) {
+    return this.prefs.isMuted(user, 'mail'); // boolean
+  }
+}
+```
+
+| Method | Effect |
+| --- | --- |
+| `mute(target, channel)` | Mute a channel for the target. Idempotent. |
+| `unmute(target, channel)` | Un-mute a channel. Idempotent. |
+| `isMuted(target, channel)` | Whether the channel is muted for the target. |
+| `muted(target)` | List the channels currently muted for the target. |
+
+The **target** is any notifiable (its reference is derived via the core `notifiableRef` — so it needs
+a `@NotifiableId()`/`toNotifiableRef()`), or a plain `{ type, id }` reference.
+
+## Muted channels are auto-skipped
+
+You don't check preferences when sending — the gate does it for you. A send to a user who muted
+`mail` simply skips that channel; the result records it as `skipped`, and the channel never runs:
+
+```ts
+await this.prefs.mute(user, 'mail');
+
+const [result] = await notifications.send(user, new InvoicePaid(invoice));
+result.results;
+// [
+//   { channel: 'mail', status: 'skipped' },
+//   { channel: 'database', status: 'sent' },
+// ]
+```
+
+This is the same `skipped` status produced by a notification's own
+[`shouldSend`](/docs/concepts/notifications#conditional-channels-with-shouldsend) — the preference
+gate just applies it app-wide from stored user choices.
+
+## Per-tenant preferences
+
+In a [multi-tenant](/docs/concepts/multi-tenancy) app a user's choices differ per workspace. Scope
+preferences with `forTenant(id)` — a mute is then keyed by user **and** tenant:
+
+```ts
+await this.prefs.forTenant('acme').mute(user, 'mail');   // muted only in Acme
+await this.prefs.forTenant('globex').isMuted(user, 'mail'); // false — different workspace
+```
+
+The gate is tenant-aware to match: a send scoped to `acme` honours the `acme`-scoped mutes, while a
+send to another tenant (or an unscoped one) is unaffected.
+
+<Callout type="info">
+  Mutes are opt-out: a channel with no stored preference is always allowed. A target with no stable
+  reference (e.g. an anonymous on-demand route) can't be muted, so it's allowed by default.
+</Callout>
+
+## Bring your own store
+
+The default `InMemoryPreferenceStore` is fine for tests and single-process apps. For production,
+implement `PreferenceStore` against your database and pass it to `forRoot({ store })`:
+
+```ts
+import type { PreferenceKey, PreferenceScope, PreferenceStore } from '@dudousxd/nestjs-notifications-preferences';
+
+@Injectable()
+export class PrismaPrefStore implements PreferenceStore {
+  isMuted(key: PreferenceKey): Promise<boolean> { /* … */ }
+  mute(key: PreferenceKey): Promise<void> { /* … */ }
+  unmute(key: PreferenceKey): Promise<void> { /* … */ }
+  mutedChannels(scope: PreferenceScope): Promise<string[]> { /* … */ }
+}
+```
+
+Each `PreferenceKey` carries the optional `tenant`, the notifiable's `type`/`id`, and the `channel` —
+everything you need to store and query a row.

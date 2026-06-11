@@ -1,12 +1,21 @@
 import { type DynamicModule, Module, type Provider } from '@nestjs/common';
-import { WEBHOOK_OPTIONS } from './tokens';
-import { WebhookChannel, type WebhookChannelOptions } from './webhook.channel';
+import { WEBHOOK_OPTIONS, WEBHOOK_OPTIONS_RESOLVER } from './tokens';
+import {
+  WebhookChannel,
+  type WebhookChannelOptions,
+  type WebhookOptionsResolver,
+} from './webhook.channel';
 
 export interface WebhookChannelModuleOptions {
   /** Default URL used when neither the message nor the route supplies one. */
   url?: string;
   /** Default headers merged into every request. */
   headers?: Record<string, string>;
+  /**
+   * Optional per-tenant options resolver. When a notification is delivered with a
+   * `context.tenant`, the returned options are used instead of the defaults.
+   */
+  resolveOptions?: WebhookOptionsResolver;
   /** Register globally so the channel is discoverable app-wide. Default true. */
   global?: boolean;
 }
@@ -28,6 +37,7 @@ export class WebhookChannelModule {
 
     const providers: Provider[] = [
       { provide: WEBHOOK_OPTIONS, useValue: webhookOptions },
+      { provide: WEBHOOK_OPTIONS_RESOLVER, useValue: options.resolveOptions ?? null },
       WebhookChannel,
     ];
 

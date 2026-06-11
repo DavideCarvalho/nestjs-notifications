@@ -1,13 +1,19 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ChannelRegistry } from './channel-registry';
 import { injectServices } from './decorators';
 import { ChannelNotRegisteredError } from './errors';
 import { NotificationFailedEvent, NotificationSendingEvent, NotificationSentEvent } from './events';
-import type { ChannelResult, DeliveryContext, Notifiable, Notification } from './interfaces';
+import type {
+  ChannelResult,
+  DeliveryContext,
+  Notifiable,
+  Notification,
+  PreferenceGate,
+} from './interfaces';
 import type { NotificationsModuleOptions } from './options';
-import { NOTIFICATION_OPTIONS, NotificationEvents } from './tokens';
+import { NOTIFICATION_OPTIONS, NOTIFICATION_PREFERENCE_GATE, NotificationEvents } from './tokens';
 
 /**
  * Runs a notification across its channels and emits lifecycle events. This is the shared
@@ -29,6 +35,9 @@ export class ChannelRunner {
     private readonly moduleRef: ModuleRef,
     @Inject(NOTIFICATION_OPTIONS)
     private readonly options: NotificationsModuleOptions,
+    @Optional()
+    @Inject(NOTIFICATION_PREFERENCE_GATE)
+    private readonly gate?: PreferenceGate,
   ) {}
 
   async run(
@@ -71,6 +80,14 @@ export class ChannelRunner {
     if (
       typeof notification.shouldSend === 'function' &&
       !notification.shouldSend(notifiable, channel)
+    ) {
+      return { channel, status: 'skipped' };
+    }
+
+    // Preferences gate (app-wide, e.g. per-user/per-tenant opt-out): skip when not allowed.
+    if (
+      this.gate &&
+      !(await this.gate.isAllowed({ notifiable, notification, channel, tenant: context.tenant }))
     ) {
       return { channel, status: 'skipped' };
     }

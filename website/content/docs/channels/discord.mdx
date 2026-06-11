@@ -1,0 +1,103 @@
+---
+title: Discord
+description: Post notifications to Discord via an incoming webhook. A fluent DiscordMessage builder with plain content and rich embeds, routed per notifiable.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The Discord channel posts a notification to a Discord channel through an incoming webhook. You build
+the message with a fluent builder that supports plain content and rich embeds. Delivery uses the
+platform `fetch`.
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @dudousxd/nestjs-notifications-discord
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @dudousxd/nestjs-notifications-discord
+    ```
+  </Tab>
+</Tabs>
+
+## Register the channel
+
+```ts title="app.module.ts"
+import { DiscordChannelModule } from '@dudousxd/nestjs-notifications-discord';
+
+@Module({
+  imports: [
+    DiscordChannelModule.forRoot({ webhookUrl: process.env.DISCORD_WEBHOOK_URL }),
+  ],
+})
+export class AppModule {}
+```
+
+`DiscordChannelModule.forRoot()` takes:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `webhookUrl` | `string` | — | Default incoming-webhook URL, used when the route doesn't supply one. |
+| `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+## The notification side
+
+Annotate the payload method with the `@Discord()` handle and return a `DiscordMessage`:
+
+```ts title="deploy-finished.notification.ts"
+import { type Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Discord, DiscordMessage } from '@dudousxd/nestjs-notifications-discord';
+
+@Notification()
+export class DeployFinished {
+  constructor(private service: string) {}
+
+  @Discord()
+  toDiscord(notifiable: Notifiable): DiscordMessage {
+    return new DiscordMessage()
+      .content(`Deploy finished: ${this.service}`)
+      .embed({ title: 'Done!', description: `**${this.service}** is live`, color: 0x57f287 });
+  }
+}
+```
+
+The `Discord` handle also works as a `via()` token (`via() { return [Discord]; }`) for
+[explicit routing](/docs/concepts/notifications#alternative-explicit-via-and-interfaces); implement
+`DiscordNotification` alongside the decorator for compile-time checks on `toDiscord()`.
+
+### DiscordMessage builder
+
+`DiscordMessage` is a fluent builder; each method returns `this`:
+
+| Method | Effect |
+| --- | --- |
+| `.content(s)` | Set the message content (plain text, up to 2000 chars on Discord). |
+| `.embed(e)` | Append a single embed object. Call repeatedly to add several. |
+| `.embeds(es)` | Append multiple embed objects at once. |
+| `.toPayload()` | Serialize to the JSON body Discord expects, omitting empty collections. |
+
+## Routing
+
+`routeNotificationFor('discord')` controls the target per notifiable. Return an `https://` webhook
+URL to override the module default:
+
+```ts title="team.ts"
+export class Team implements Notifiable {
+  constructor(public discordWebhook: string) {}
+
+  routeNotificationFor(channel: string) {
+    if (channel !== 'discord') return undefined;
+    return this.discordWebhook; // an https:// webhook URL
+  }
+}
+```
+
+<Callout type="info">
+  If the route returns a non-URL value, the channel falls back to the module's `webhookUrl`. If
+  neither supplies a URL, the channel throws asking you to set one.
+</Callout>

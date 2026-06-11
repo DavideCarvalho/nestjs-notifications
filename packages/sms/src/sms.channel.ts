@@ -1,5 +1,6 @@
 import {
   type ChannelDriver,
+  type DeliveryContext,
   MissingChannelMethodError,
   type Notifiable,
   type Notification,
@@ -7,10 +8,13 @@ import {
   getHandler,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { SmsMessage } from './sms-message';
-import { SMS_OPTIONS, SMS_TRANSPORT } from './tokens';
+import { SMS_OPTIONS, SMS_TRANSPORT, SMS_TRANSPORT_RESOLVER } from './tokens';
 import type { SmsTransport } from './transport';
+
+/** Resolves a per-tenant {@link SmsTransport} from a tenant id. */
+export type SmsTransportResolver = (tenant: string) => SmsTransport;
 
 /** Channel handle: use as `@Sms()` on a payload method, or as a token in `via()`. */
 export const Sms = createChannel('sms');
@@ -39,9 +43,20 @@ export class SmsChannel implements ChannelDriver {
     private readonly transport: SmsTransport,
     @Inject(SMS_OPTIONS)
     private readonly options: SmsChannelOptions,
+    @Optional()
+    @Inject(SMS_TRANSPORT_RESOLVER)
+    private readonly resolveTransport?: SmsTransportResolver,
   ) {}
 
-  async send(notifiable: Notifiable, notification: Notification): Promise<void> {
+  async send(
+    notifiable: Notifiable,
+    notification: Notification,
+    context?: DeliveryContext,
+  ): Promise<void> {
+    const transport =
+      context?.tenant && this.resolveTransport
+        ? this.resolveTransport(context.tenant)
+        : this.transport;
     const recipient = String(routeFor(notifiable, 'sms', notification));
 
     const handler = getHandler(notification, 'sms', 'toSms');
@@ -57,7 +72,7 @@ export class SmsChannel implements ChannelDriver {
     const text = typeof result === 'string' ? result : result.text;
     const msgFrom = typeof result === 'string' ? undefined : result.fromNumber;
 
-    await this.transport.send({
+    await transport.send({
       to: recipient,
       from: msgFrom ?? this.options.from,
       text,

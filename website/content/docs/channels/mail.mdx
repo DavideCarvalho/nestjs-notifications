@@ -50,6 +50,7 @@ export class AppModule {}
 | `transport` | `Type<MailTransport>` | `NodemailerTransport` | Transport class that delivers the rendered mail. |
 | `renderer` | `Type<MailRenderer>` | `DefaultMailRenderer` | Renderer that produces the HTML + text bodies. |
 | `smtp` | `SMTPOptions` | `{}` | SMTP options forwarded to the default nodemailer transport. |
+| `resolveTransport` | `(tenant: string) => MailTransport` | — | Per-tenant transport resolver. See [Per-tenant transport](#per-tenant-transport). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
 
 ## The notification side
@@ -173,3 +174,53 @@ MailChannelModule.forRoot({ from: 'no-reply@example.com', renderer: MjmlRenderer
   `actionUrl`, `salutationText`, `fromAddress`) so a custom renderer can read everything the builder
   collected.
 </Callout>
+
+## Markdown
+
+When you'd rather write the body as Markdown than chain `.line()` calls, swap in the
+`MarkdownMailRenderer` and set the body with `.markdown()`:
+
+```ts title="app.module.ts"
+import { MailChannelModule, MarkdownMailRenderer } from '@dudousxd/nestjs-notifications-mail';
+
+MailChannelModule.forRoot({
+  from: 'no-reply@example.com',
+  renderer: MarkdownMailRenderer,
+});
+```
+
+```ts title="invoice-paid.notification.ts"
+import { Mail, MailMessage } from '@dudousxd/nestjs-notifications-mail';
+
+@Mail()
+toMail(): MailMessage {
+  return new MailMessage()
+    .subject(`Invoice ${this.invoiceId} paid`)
+    .markdown(`# Thanks for your payment!\n\nInvoice **${this.invoiceId}** is settled.`);
+}
+```
+
+The renderer parses the Markdown to HTML and uses the raw Markdown as the plain-text fallback. A
+message with no `.markdown()` body falls back to the default renderer's output, so you can mix
+Markdown and builder-style notifications under one renderer.
+
+<Callout type="info">
+  `MarkdownMailRenderer` parses with [`marked`](https://www.npmjs.com/package/marked), an **optional
+  peer dependency** — install it (`pnpm add marked`) only if you use this renderer.
+</Callout>
+
+## Per-tenant transport
+
+In a multi-tenant app each tenant can send through its own SMTP/provider. Pass `resolveTransport` —
+when a send is scoped to a tenant (via [`forTenant(id)`](/docs/concepts/multi-tenancy) or a
+`@Tenant()` property), the channel uses the transport you return instead of the default:
+
+```ts title="app.module.ts"
+MailChannelModule.forRoot({
+  from: 'no-reply@example.com',
+  resolveTransport: (tenant) => tenantTransports.get(tenant) ?? defaultTransport,
+});
+```
+
+The resolver receives the tenant id and returns a `MailTransport`. Sends with no tenant scope keep
+using the default transport. See [Multi-tenancy](/docs/concepts/multi-tenancy) for the full picture.

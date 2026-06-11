@@ -6,3 +6,6 @@ export const SMS_TRANSPORT = Symbol('SMS_TRANSPORT');
 
 /** DI token for the Twilio options handed to the {@link TwilioTransport}. */
 export const SMS_TWILIO_OPTIONS = Symbol('SMS_TWILIO_OPTIONS');
+
+/** DI token for the optional per-tenant {@link SmsTransport} resolver. */
+export const SMS_TRANSPORT_RESOLVER = Symbol('SMS_TRANSPORT_RESOLVER');

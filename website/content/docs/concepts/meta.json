@@ -1,4 +1,10 @@
 {
   "title": "Concepts",
-  "pages": ["notifiables", "notifications", "channels-and-dispatchers", "async-dispatch"]
+  "pages": [
+    "notifiables",
+    "notifications",
+    "channels-and-dispatchers",
+    "async-dispatch",
+    "multi-tenancy"
+  ]
 }

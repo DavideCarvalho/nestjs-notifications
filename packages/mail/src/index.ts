@@ -1,5 +1,5 @@
 export { MailMessage } from './mail-message';
-export { type MailRenderer, DefaultMailRenderer } from './renderer';
+export { type MailRenderer, DefaultMailRenderer, MarkdownMailRenderer } from './renderer';
 export {
   type MailTransport,
   type MailTransportPayload,
@@ -16,4 +16,5 @@ export {
   MAIL_TRANSPORT,
   MAIL_RENDERER,
   MAIL_SMTP_OPTIONS,
+  MAIL_TRANSPORT_RESOLVER,
 } from './tokens';

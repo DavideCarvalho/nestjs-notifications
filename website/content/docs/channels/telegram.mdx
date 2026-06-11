@@ -1,0 +1,110 @@
+---
+title: Telegram
+description: Send notifications through the Telegram Bot API. Return a plain string or a fluent TelegramMessage with a parse mode, routed to a chat id per notifiable.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The Telegram channel sends a notification through the Bot API's `sendMessage` method. Return a plain
+string for the message text, or a fluent `TelegramMessage` when you want to set a parse mode
+(Markdown or HTML). Delivery uses the platform `fetch`.
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @dudousxd/nestjs-notifications-telegram
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @dudousxd/nestjs-notifications-telegram
+    ```
+  </Tab>
+</Tabs>
+
+## Register the channel
+
+```ts title="app.module.ts"
+import { TelegramChannelModule } from '@dudousxd/nestjs-notifications-telegram';
+
+@Module({
+  imports: [
+    TelegramChannelModule.forRoot({ botToken: process.env.TELEGRAM_BOT_TOKEN }),
+  ],
+})
+export class AppModule {}
+```
+
+`TelegramChannelModule.forRoot()` takes:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `botToken` | `string` | — | Bot token for the Telegram Bot API. Used to build the request URL. |
+| `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+## The notification side
+
+Annotate the payload method with the `@Telegram()` handle and return a string:
+
+```ts title="login-code.notification.ts"
+import { type Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Telegram } from '@dudousxd/nestjs-notifications-telegram';
+
+@Notification()
+export class LoginCode {
+  constructor(private code: string) {}
+
+  @Telegram()
+  toTelegram(notifiable: Notifiable): string {
+    return `Your code is ${this.code}`;
+  }
+}
+```
+
+The `Telegram` handle also works as a `via()` token (`via() { return [Telegram]; }`) for
+[explicit routing](/docs/concepts/notifications#alternative-explicit-via-and-interfaces); implement
+`TelegramNotification` alongside the decorator for compile-time checks on `toTelegram()`.
+
+### TelegramMessage builder
+
+Return a `TelegramMessage` when you need a parse mode for rich formatting. Each method returns
+`this`:
+
+```ts title="deploy-finished.notification.ts"
+import { Telegram, TelegramMessage } from '@dudousxd/nestjs-notifications-telegram';
+
+@Telegram()
+toTelegram(notifiable: Notifiable): TelegramMessage {
+  return new TelegramMessage()
+    .text('*Deploy finished*')
+    .parseMode('MarkdownV2');
+}
+```
+
+| Method | Effect |
+| --- | --- |
+| `.text(s)` | Set the message text. |
+| `.parseMode(mode)` | Set the `parse_mode` — `'MarkdownV2'`, `'Markdown'`, or `'HTML'`. |
+
+## Routing the chat
+
+The chat id comes from `routeNotificationFor('telegram')` — return the chat id to message:
+
+```ts title="user.ts"
+export class User implements Notifiable {
+  constructor(public telegramChatId: string) {}
+
+  routeNotificationFor(channel: string) {
+    if (channel !== 'telegram') return undefined;
+    return this.telegramChatId; // a chat id (string or number)
+  }
+}
+```
+
+<Callout type="info">
+  The channel needs both a `botToken` (in `forRoot()`) and a chat id (from the route). It throws a
+  clear error if either is missing.
+</Callout>

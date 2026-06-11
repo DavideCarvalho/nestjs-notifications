@@ -5,7 +5,13 @@ export {
   type TwilioOptions,
   TwilioTransport,
 } from './transport';
-export { Sms, SmsChannel, type SmsChannelOptions, type SmsNotification } from './sms.channel';
+export {
+  Sms,
+  SmsChannel,
+  type SmsChannelOptions,
+  type SmsNotification,
+  type SmsTransportResolver,
+} from './sms.channel';
 export {
   SmsChannelModule,
   type SmsChannelModuleOptions,
@@ -13,5 +19,6 @@ export {
 export {
   SMS_OPTIONS,
   SMS_TRANSPORT,
+  SMS_TRANSPORT_RESOLVER,
   SMS_TWILIO_OPTIONS,
 } from './tokens';

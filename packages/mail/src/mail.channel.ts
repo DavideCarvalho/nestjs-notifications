@@ -1,5 +1,6 @@
 import {
   type ChannelDriver,
+  type DeliveryContext,
   MissingChannelMethodError,
   type Notifiable,
   type Notification,
@@ -7,10 +8,10 @@ import {
   getHandler,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { MailMessage } from './mail-message';
 import type { MailRenderer } from './renderer';
-import { MAIL_OPTIONS, MAIL_RENDERER, MAIL_TRANSPORT } from './tokens';
+import { MAIL_OPTIONS, MAIL_RENDERER, MAIL_TRANSPORT, MAIL_TRANSPORT_RESOLVER } from './tokens';
 import type { MailTransport } from './transport';
 
 /** Channel handle: use as `@Mail()` on a payload method, or as a token in `via()`. */
@@ -37,14 +38,21 @@ export class MailChannel implements ChannelDriver {
 
   constructor(
     @Inject(MAIL_TRANSPORT)
-    private readonly transport: MailTransport,
+    private readonly defaultTransport: MailTransport,
     @Inject(MAIL_RENDERER)
     private readonly renderer: MailRenderer,
     @Inject(MAIL_OPTIONS)
     private readonly options: MailChannelOptions,
+    @Optional()
+    @Inject(MAIL_TRANSPORT_RESOLVER)
+    private readonly resolveTransport?: (tenant: string) => MailTransport,
   ) {}
 
-  async send(notifiable: Notifiable, notification: Notification): Promise<void> {
+  async send(
+    notifiable: Notifiable,
+    notification: Notification,
+    context?: DeliveryContext,
+  ): Promise<void> {
     const recipient = String(routeFor(notifiable, 'mail', notification));
 
     const handler = getHandler(notification, 'mail', 'toMail');
@@ -58,7 +66,12 @@ export class MailChannel implements ChannelDriver {
     const message = handler(notifiable) as MailMessage;
     const rendered = this.renderer.render(message);
 
-    await this.transport.send({
+    const transport =
+      context?.tenant && this.resolveTransport
+        ? this.resolveTransport(context.tenant)
+        : this.defaultTransport;
+
+    await transport.send({
       to: recipient,
       from: message.fromAddress ?? this.options.from,
       subject: message.subjectLine,

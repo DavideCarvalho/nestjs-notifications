@@ -1,0 +1,106 @@
+---
+title: Microsoft Teams
+description: Post notifications to Microsoft Teams via an incoming webhook. A fluent TeamsMessage builder for MessageCards, or post a custom Adaptive Card, routed per notifiable.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The Teams channel posts a notification to Microsoft Teams through an incoming webhook. Build the
+message with a fluent builder that produces a legacy MessageCard, or hand it a fully custom payload
+(for example an Adaptive Card). Delivery uses the platform `fetch`.
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @dudousxd/nestjs-notifications-teams
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @dudousxd/nestjs-notifications-teams
+    ```
+  </Tab>
+</Tabs>
+
+## Register the channel
+
+```ts title="app.module.ts"
+import { TeamsChannelModule } from '@dudousxd/nestjs-notifications-teams';
+
+@Module({
+  imports: [
+    TeamsChannelModule.forRoot({ webhookUrl: process.env.TEAMS_WEBHOOK_URL }),
+  ],
+})
+export class AppModule {}
+```
+
+`TeamsChannelModule.forRoot()` takes:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `webhookUrl` | `string` | — | Default incoming-webhook URL, used when the route doesn't supply one. |
+| `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+## The notification side
+
+Annotate the payload method with the `@Teams()` handle and return a `TeamsMessage`:
+
+```ts title="deploy-finished.notification.ts"
+import { type Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Teams, TeamsMessage } from '@dudousxd/nestjs-notifications-teams';
+
+@Notification()
+export class DeployFinished {
+  constructor(private service: string) {}
+
+  @Teams()
+  toTeams(notifiable: Notifiable): TeamsMessage {
+    return new TeamsMessage()
+      .title('Deploy finished')
+      .text(`**${this.service}** is live.`);
+  }
+}
+```
+
+The `Teams` handle also works as a `via()` token (`via() { return [Teams]; }`) for
+[explicit routing](/docs/concepts/notifications#alternative-explicit-via-and-interfaces); implement
+`TeamsNotification` alongside the decorator for compile-time checks on `toTeams()`.
+
+### TeamsMessage builder
+
+`TeamsMessage` is a fluent builder; each method returns `this`:
+
+| Method | Effect |
+| --- | --- |
+| `.title(s)` | Set the card title. |
+| `.text(s)` | Set the card body text. |
+| `.card(obj)` | Provide a fully custom payload (MessageCard or an Adaptive Card envelope); posted verbatim, and the fluent title/text are ignored. |
+| `.toPayload()` | Serialize to the JSON body Teams expects (a MessageCard, unless a custom card was set). |
+
+You can also return a plain object from `toTeams()` and it is posted verbatim — handy for a
+hand-built Adaptive Card.
+
+## Routing
+
+`routeNotificationFor('teams')` controls the target per notifiable. Return an `https://` webhook URL
+to override the module default:
+
+```ts title="team.ts"
+export class Team implements Notifiable {
+  constructor(public teamsWebhook: string) {}
+
+  routeNotificationFor(channel: string) {
+    if (channel !== 'teams') return undefined;
+    return this.teamsWebhook; // an https:// webhook URL
+  }
+}
+```
+
+<Callout type="info">
+  If the route returns a non-URL value, the channel falls back to the module's `webhookUrl`. If
+  neither supplies a URL, the channel throws asking you to set one.
+</Callout>

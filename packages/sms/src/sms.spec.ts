@@ -61,6 +61,39 @@ describe('SmsChannel', () => {
     expect(payload.text).toBe('Hello from a builder');
   });
 
+  it('uses the per-tenant transport when a tenant is in the delivery context', async () => {
+    const defaultSend = vi.fn().mockResolvedValue(undefined);
+    const defaultTransport: SmsTransport = { send: defaultSend };
+    const tenantSend = vi.fn().mockResolvedValue(undefined);
+    const tenantTransport: SmsTransport = { send: tenantSend };
+    const resolveTransport = vi.fn().mockReturnValue(tenantTransport);
+
+    const channel = new SmsChannel(defaultTransport, { from: '+15555550100' }, resolveTransport);
+
+    await channel.send(new TestUser('+15555551234'), new StringNotification(), {
+      tenant: 'acme',
+    });
+
+    expect(resolveTransport).toHaveBeenCalledWith('acme');
+    expect(tenantSend).toHaveBeenCalledOnce();
+    expect(defaultSend).not.toHaveBeenCalled();
+  });
+
+  it('uses the default transport when no tenant is provided', async () => {
+    const defaultSend = vi.fn().mockResolvedValue(undefined);
+    const defaultTransport: SmsTransport = { send: defaultSend };
+    const tenantSend = vi.fn().mockResolvedValue(undefined);
+    const resolveTransport = vi.fn().mockReturnValue({ send: tenantSend });
+
+    const channel = new SmsChannel(defaultTransport, { from: '+15555550100' }, resolveTransport);
+
+    await channel.send(new TestUser('+15555551234'), new StringNotification());
+
+    expect(resolveTransport).not.toHaveBeenCalled();
+    expect(defaultSend).toHaveBeenCalledOnce();
+    expect(tenantSend).not.toHaveBeenCalled();
+  });
+
   it('throws MissingChannelMethodError when toSms is absent', async () => {
     const transport: SmsTransport = { send: vi.fn() };
     const channel = new SmsChannel(transport, {});

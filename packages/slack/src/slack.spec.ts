@@ -55,6 +55,38 @@ describe('SlackChannel', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe(WEBHOOK);
   });
 
+  it('uses the per-tenant options (token) when a tenant is in the delivery context', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolveOptions = vi
+      .fn()
+      .mockReturnValue({ token: 'xoxb-tenant', defaultChannel: '#ops' });
+    const channel = new SlackChannel({ webhookUrl: WEBHOOK }, resolveOptions);
+
+    await channel.send(new TestUser('#general'), new DeployFinished(), { tenant: 'acme' });
+
+    expect(resolveOptions).toHaveBeenCalledWith('acme');
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe('https://slack.com/api/chat.postMessage');
+    expect(init.headers.Authorization).toBe('Bearer xoxb-tenant');
+    const body = JSON.parse(init.body as string);
+    expect(body.channel).toBe('#general');
+  });
+
+  it('uses the default options when no tenant is provided', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolveOptions = vi.fn().mockReturnValue({ token: 'xoxb-tenant' });
+    const channel = new SlackChannel({ webhookUrl: WEBHOOK }, resolveOptions);
+
+    await channel.send(new TestUser(WEBHOOK), new DeployFinished());
+
+    expect(resolveOptions).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(WEBHOOK);
+  });
+
   it('throws on a non-ok response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 

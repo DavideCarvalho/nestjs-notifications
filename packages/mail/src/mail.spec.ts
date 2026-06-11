@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MailMessage } from './mail-message';
 import { MailChannel } from './mail.channel';
 import type { MailNotification } from './mail.channel';
-import { DefaultMailRenderer } from './renderer';
+import { DefaultMailRenderer, MarkdownMailRenderer } from './renderer';
 import type { MailTransport } from './transport';
 
 class TestUser implements Notifiable {
@@ -70,5 +70,68 @@ describe('MailChannel', () => {
     const bare: Notification = { via: () => ['mail'] };
 
     await expect(channel.send(new TestUser('x@y.com'), bare)).rejects.toThrow(/toMail\(\)/);
+  });
+
+  it('uses the resolved per-tenant transport when context.tenant is set', async () => {
+    const defaultSend = vi.fn().mockResolvedValue(undefined);
+    const tenantSend = vi.fn().mockResolvedValue(undefined);
+    const defaultTransport: MailTransport = { send: defaultSend };
+    const tenantTransport: MailTransport = { send: tenantSend };
+
+    const resolveTransport = vi.fn().mockReturnValue(tenantTransport);
+
+    const channel = new MailChannel(
+      defaultTransport,
+      new DefaultMailRenderer(),
+      { from: 'no-reply@example.com' },
+      resolveTransport,
+    );
+
+    await channel.send(new TestUser('user@example.com'), new WelcomeNotification(), {
+      tenant: 'acme',
+    });
+
+    expect(resolveTransport).toHaveBeenCalledWith('acme');
+    expect(tenantSend).toHaveBeenCalledOnce();
+    expect(defaultSend).not.toHaveBeenCalled();
+  });
+
+  it('uses the default transport when no tenant is in the context', async () => {
+    const defaultSend = vi.fn().mockResolvedValue(undefined);
+    const tenantSend = vi.fn().mockResolvedValue(undefined);
+    const defaultTransport: MailTransport = { send: defaultSend };
+    const resolveTransport = vi.fn().mockReturnValue({ send: tenantSend });
+
+    const channel = new MailChannel(
+      defaultTransport,
+      new DefaultMailRenderer(),
+      {},
+      resolveTransport,
+    );
+
+    await channel.send(new TestUser('user@example.com'), new WelcomeNotification());
+
+    expect(resolveTransport).not.toHaveBeenCalled();
+    expect(defaultSend).toHaveBeenCalledOnce();
+    expect(tenantSend).not.toHaveBeenCalled();
+  });
+});
+
+describe('MarkdownMailRenderer', () => {
+  it('renders a markdown body to html with the raw markdown as text fallback', () => {
+    const message = new MailMessage().subject('Hi').markdown('# Hi\n\nWelcome **aboard**.');
+    const { html, text } = new MarkdownMailRenderer().render(message);
+
+    expect(html).toMatch(/<h1[^>]*>Hi<\/h1>/);
+    expect(html).toContain('<strong>aboard</strong>');
+    expect(text).toBe('# Hi\n\nWelcome **aboard**.');
+  });
+
+  it('falls back to default rendering when no markdown body is set', () => {
+    const message = new WelcomeNotification().toMail();
+    const { html } = new MarkdownMailRenderer().render(message);
+
+    expect(html).toContain('Hello!');
+    expect(html).toContain('Get started');
   });
 });

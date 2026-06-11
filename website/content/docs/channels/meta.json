@@ -1,1 +1,1 @@
-{ "title": "Channels", "pages": ["index", "mail", "database", "broadcast", "slack", "webhook", "sms", "push"] }
+{ "title": "Channels", "pages": ["index", "mail", "database", "broadcast", "slack", "discord", "telegram", "teams", "sse", "webhook", "sms", "push"] }

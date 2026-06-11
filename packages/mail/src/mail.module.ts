@@ -1,7 +1,13 @@
 import { type DynamicModule, Module, type Provider, type Type } from '@nestjs/common';
 import { MailChannel, type MailChannelOptions } from './mail.channel';
 import { DefaultMailRenderer, type MailRenderer } from './renderer';
-import { MAIL_OPTIONS, MAIL_RENDERER, MAIL_SMTP_OPTIONS, MAIL_TRANSPORT } from './tokens';
+import {
+  MAIL_OPTIONS,
+  MAIL_RENDERER,
+  MAIL_SMTP_OPTIONS,
+  MAIL_TRANSPORT,
+  MAIL_TRANSPORT_RESOLVER,
+} from './tokens';
 import { type MailTransport, NodemailerTransport, type SMTPOptions } from './transport';
 
 export interface MailChannelModuleOptions {
@@ -13,6 +19,12 @@ export interface MailChannelModuleOptions {
   renderer?: Type<MailRenderer>;
   /** SMTP options for the default nodemailer transport. */
   smtp?: SMTPOptions;
+  /**
+   * Resolve a per-tenant transport. When delivery runs with a `context.tenant`, the
+   * channel uses the returned transport instead of the default. Lets each tenant use
+   * its own SMTP/provider.
+   */
+  resolveTransport?: (tenant: string) => MailTransport;
   /** Register globally so the channel is discoverable app-wide. Default true. */
   global?: boolean;
 }
@@ -41,6 +53,7 @@ export class MailChannelModule {
       { provide: MAIL_TRANSPORT, useExisting: transportClass },
       rendererClass,
       { provide: MAIL_RENDERER, useExisting: rendererClass },
+      { provide: MAIL_TRANSPORT_RESOLVER, useValue: options.resolveTransport },
       MailChannel,
     ];
 

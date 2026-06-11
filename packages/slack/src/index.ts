@@ -4,9 +4,10 @@ export {
   SlackChannel,
   type SlackChannelOptions,
   type SlackNotification,
+  type SlackOptionsResolver,
 } from './slack.channel';
 export {
   SlackChannelModule,
   type SlackChannelModuleOptions,
 } from './slack.module';
-export { SLACK_OPTIONS } from './tokens';
+export { SLACK_OPTIONS, SLACK_OPTIONS_RESOLVER } from './tokens';

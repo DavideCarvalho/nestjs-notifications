@@ -1,0 +1,114 @@
+---
+title: Multi-tenancy
+description: The same user lives in many workspaces, each with its own feed. Scope any send to one tenant or fan out to many with forTenant — tenant flows into storage, the read API, and per-tenant channel config.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+In a multi-tenant app a single user belongs to several workspaces, organizations, or accounts — and
+each should have its own **isolated notification feed**. The invoice paid in *Acme* doesn't belong in
+the *Globex* inbox. Multi-tenancy threads a tenant id through every send so storage, the read API,
+and channel config all stay scoped to the right workspace.
+
+A tenant is just a string id. Single-tenant apps ignore all of this — nothing here is required until
+you opt in.
+
+## Scope a send to a tenant
+
+`notifications.forTenant(id)` returns the same sending surface (`send`, `sendNow`, `route`, …), with
+every delivery scoped to that tenant:
+
+```ts
+await notifications.forTenant('acme').send(user, new InvoicePaid(invoice));
+```
+
+To deliver the same notification to a user across several workspaces at once, use `forTenants` — the
+send **fans out**, one delivery (and one storage row) per tenant:
+
+```ts
+await notifications.forTenants(['acme', 'globex']).send(user, new Announcement());
+```
+
+## Or declare the tenant on the notification
+
+When the tenant is part of the event itself, mark a property with `@Tenant()` instead of threading it
+through the call site. The value may be a single id or an array — an array fans out per tenant, just
+like `forTenants`:
+
+```ts title="invoice-paid.notification.ts"
+import { Notification, Tenant } from '@dudousxd/nestjs-notifications-core';
+
+@Notification({ name: 'invoice.paid' })
+export class InvoicePaid {
+  @Tenant() workspaceId!: string;
+  // @Tenant() workspaces!: string[]; // delivered once per workspace
+}
+```
+
+An explicit `forTenant(id)` / `forTenants([...])` always wins; otherwise the `@Tenant()` property is
+read — first on the notification, then on the notifiable. With neither, the send is single-tenant.
+
+<Callout type="info">
+  The `@Tenant()` property can also live on the **notifiable** — useful when a user object already
+  carries its current workspace.
+</Callout>
+
+## Tenant flows into storage
+
+The tenant is recorded with each persisted notification. The [database channel](/docs/channels/database)
+writes it as `tenantId` on the `StoredNotification`, so the same user's rows are cleanly partitioned
+per workspace.
+
+## Tenant flows into the read API
+
+The read side mirrors the send side. Scope the query service to a tenant and the feed is isolated:
+
+```ts
+const acmeInbox = await notificationsQuery.forTenant('acme').unread(user);
+const acmeBadge = await notificationsQuery.forTenant('acme').unreadCount(user);
+```
+
+`NotificationsQueryService.forTenant(id)` filters every read (`all`, `unread`, `unreadCount`, …) to
+that tenant, so a user signed into *Acme* never sees *Globex*'s notifications. See
+[In-app notifications](/docs/recipes/in-app-notifications) for the full read API.
+
+## Per-tenant channel config
+
+Channels can resolve their transport or options per tenant, so each workspace sends through its own
+provider, credentials, or endpoint. When a delivery runs with a tenant scope, the channel calls your
+resolver with the tenant id:
+
+- **Transport resolvers** — `resolveTransport(tenant)` on [mail](/docs/channels/mail#per-tenant-transport),
+  [sms](/docs/channels/sms#per-tenant-config), and [push](/docs/channels/push#per-tenant-config).
+- **Options resolvers** — `resolveOptions(tenant)` on [slack](/docs/channels/slack#per-tenant-config)
+  and [webhook](/docs/channels/webhook#per-tenant-config).
+
+```ts title="app.module.ts"
+MailChannelModule.forRoot({
+  from: 'no-reply@example.com',
+  resolveTransport: (tenant) => tenantTransports.get(tenant) ?? defaultTransport,
+});
+```
+
+Sends with no tenant scope keep using the channel's default config, so the resolver is purely
+additive.
+
+## The result carries the tenant
+
+Every `SendResult` reports the tenant it was scoped to, so a fan-out tells you which workspace each
+delivery belongs to:
+
+```ts
+const results = await notifications.forTenants(['acme', 'globex']).send(user, new Announcement());
+
+results.map((r) => r.tenant); // ['acme', 'globex']
+```
+
+`tenant` is `undefined` for single-tenant sends. Each entry still carries its per-channel
+[`results`](/docs/concepts/notifications#send-results).
+
+## How the tenant travels under the hood
+
+The tenant rides along on a `DeliveryContext` passed to each channel's `send()`. Async dispatch
+carries it too — the queued `NotificationJob` includes the `tenant`, so a notification delivered on a
+worker stays scoped to the same workspace it was sent for.

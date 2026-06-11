@@ -1,5 +1,6 @@
 import {
   type ChannelDriver,
+  type DeliveryContext,
   MissingChannelMethodError,
   type Notifiable,
   type Notification,
@@ -7,10 +8,13 @@ import {
   getHandler,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { PushMessage } from './push-message';
-import { PUSH_TRANSPORT } from './tokens';
+import { PUSH_TRANSPORT, PUSH_TRANSPORT_RESOLVER } from './tokens';
 import type { PushTransport } from './transport';
+
+/** Resolves a per-tenant {@link PushTransport} from a tenant id. */
+export type PushTransportResolver = (tenant: string) => PushTransport;
 
 /** Channel handle: use as `@Push()` on a payload method, or as a token in `via()`. */
 export const Push = createChannel('push');
@@ -32,9 +36,20 @@ export class PushChannel implements ChannelDriver {
   constructor(
     @Inject(PUSH_TRANSPORT)
     private readonly transport: PushTransport,
+    @Optional()
+    @Inject(PUSH_TRANSPORT_RESOLVER)
+    private readonly resolveTransport?: PushTransportResolver,
   ) {}
 
-  async send(notifiable: Notifiable, notification: Notification): Promise<void> {
+  async send(
+    notifiable: Notifiable,
+    notification: Notification,
+    context?: DeliveryContext,
+  ): Promise<void> {
+    const transport =
+      context?.tenant && this.resolveTransport
+        ? this.resolveTransport(context.tenant)
+        : this.transport;
     const target = routeFor(notifiable, 'push', notification);
 
     const handler = getHandler(notification, 'push', 'toPush');
@@ -49,11 +64,11 @@ export class PushChannel implements ChannelDriver {
 
     if (Array.isArray(target)) {
       for (const one of target) {
-        await this.transport.send(one, message);
+        await transport.send(one, message);
       }
       return;
     }
 
-    await this.transport.send(target, message);
+    await transport.send(target, message);
   }
 }

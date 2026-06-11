@@ -1,0 +1,32 @@
+{
+  "name": "@dudousxd/nestjs-notifications-teams",
+  "version": "0.2.0",
+  "description": "Microsoft Teams channel for nestjs-notifications — deliver notifications via incoming webhooks",
+  "license": "MIT",
+  "author": "Davide Carvalho",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
+    "directory": "packages/teams"
+  },
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@dudousxd/nestjs-notifications-core": ">=0.1.0 <1.0.0",
+    "@nestjs/common": "^10.0.0 || ^11.0.0"
+  },
+  "devDependencies": {
+    "@dudousxd/nestjs-notifications-core": "workspace:^",
+    "@nestjs/common": "^11.0.0",
+    "reflect-metadata": "^0.2.2",
+    "typescript": "^5.7.2"
+  }
+}

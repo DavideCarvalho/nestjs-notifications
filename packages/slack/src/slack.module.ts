@@ -1,6 +1,6 @@
 import { type DynamicModule, Module, type Provider } from '@nestjs/common';
-import { SlackChannel, type SlackChannelOptions } from './slack.channel';
-import { SLACK_OPTIONS } from './tokens';
+import { SlackChannel, type SlackChannelOptions, type SlackOptionsResolver } from './slack.channel';
+import { SLACK_OPTIONS, SLACK_OPTIONS_RESOLVER } from './tokens';
 
 export interface SlackChannelModuleOptions {
   /** Default incoming-webhook URL. */
@@ -9,6 +9,11 @@ export interface SlackChannelModuleOptions {
   token?: string;
   /** Default channel id for Web API delivery. */
   defaultChannel?: string;
+  /**
+   * Optional per-tenant options resolver. When a notification is delivered with a
+   * `context.tenant`, the returned options are used instead of the defaults.
+   */
+  resolveOptions?: SlackOptionsResolver;
   /** Register globally so the channel is discoverable app-wide. Default true. */
   global?: boolean;
 }
@@ -33,6 +38,7 @@ export class SlackChannelModule {
 
     const providers: Provider[] = [
       { provide: SLACK_OPTIONS, useValue: slackOptions },
+      { provide: SLACK_OPTIONS_RESOLVER, useValue: options.resolveOptions ?? null },
       SlackChannel,
     ];
 

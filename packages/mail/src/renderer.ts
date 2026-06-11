@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { marked } from 'marked';
 import type { MailMessage } from './mail-message';
 
 /** Produces the html + text bodies for a {@link MailMessage}. */
@@ -64,5 +65,31 @@ export class DefaultMailRenderer implements MailRenderer {
     if (message.salutationText) parts.push(message.salutationText);
 
     return parts.join('\n\n');
+  }
+}
+
+/**
+ * Renders a {@link MailMessage}'s Markdown body (set via `.markdown()`) to HTML using
+ * the optional `marked` package. The plain-text fallback is the raw markdown. When a
+ * message has no markdown body it falls back to {@link DefaultMailRenderer}'s output.
+ *
+ * Pick this renderer per app:
+ *
+ * ```ts
+ * MailChannelModule.forRoot({ renderer: MarkdownMailRenderer });
+ * ```
+ */
+@Injectable()
+export class MarkdownMailRenderer implements MailRenderer {
+  private readonly fallback = new DefaultMailRenderer();
+
+  render(message: MailMessage): { html: string; text: string } {
+    const md = message.markdownBody;
+    if (md == null) {
+      return this.fallback.render(message);
+    }
+
+    const html = marked.parse(md, { async: false }) as string;
+    return { html, text: md };
   }
 }

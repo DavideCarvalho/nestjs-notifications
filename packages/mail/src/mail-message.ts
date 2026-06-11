@@ -18,6 +18,7 @@ export class MailMessage {
   private _actionText?: string;
   private _actionUrl?: string;
   private _salutation?: string;
+  private _markdown?: string;
 
   /** Override the sender address for this message. */
   from(addr: string): this {
@@ -56,6 +57,15 @@ export class MailMessage {
     return this;
   }
 
+  /**
+   * Set a Markdown body for this message. Rendered to HTML by
+   * {@link MarkdownMailRenderer}; ignored by the {@link DefaultMailRenderer}.
+   */
+  markdown(md: string): this {
+    this._markdown = md;
+    return this;
+  }
+
   get fromAddress(): string | undefined {
     return this._from;
   }
@@ -82,5 +92,9 @@ export class MailMessage {
 
   get salutationText(): string | undefined {
     return this._salutation;
+  }
+
+  get markdownBody(): string | undefined {
+    return this._markdown;
   }
 }

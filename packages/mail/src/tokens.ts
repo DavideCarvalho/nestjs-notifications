@@ -9,3 +9,6 @@ export const MAIL_RENDERER = Symbol('MAIL_RENDERER');
 
 /** DI token for the SMTP options handed to the {@link NodemailerTransport}. */
 export const MAIL_SMTP_OPTIONS = Symbol('MAIL_SMTP_OPTIONS');
+
+/** DI token for the optional per-tenant transport resolver. */
+export const MAIL_TRANSPORT_RESOLVER = Symbol('MAIL_TRANSPORT_RESOLVER');

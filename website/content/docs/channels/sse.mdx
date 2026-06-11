@@ -1,0 +1,135 @@
+---
+title: Server-Sent Events
+description: Push notifications to the browser over native NestJS Server-Sent Events. This channel feeds an SseHub; you mount the stream with Nest's own @Sse() decorator — tenant-aware.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The SSE channel pushes a notification to a notifiable's live Server-Sent Events stream. It builds on
+**NestJS's native `@Sse()` support** — the channel publishes into an `SseHub`, and you mount the
+streaming endpoint yourself with Nest's own `@Sse()` decorator. No extra transport, no socket server:
+just the SSE Nest already speaks.
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @dudousxd/nestjs-notifications-sse
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @dudousxd/nestjs-notifications-sse
+    ```
+  </Tab>
+</Tabs>
+
+## Register the channel
+
+```ts title="app.module.ts"
+import { SseChannelModule } from '@dudousxd/nestjs-notifications-sse';
+
+@Module({
+  imports: [
+    SseChannelModule.forRoot({ event: 'notification' }),
+  ],
+})
+export class AppModule {}
+```
+
+`SseChannelModule.forRoot()` takes:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `event` | `string` | `'notification'` | SSE event name (`type`) emitted to clients. |
+| `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+The module provides two things: the `SseChannel` (which the core discovers and pushes into) and the
+`SseHub` (an in-memory fan-out you read from in your controller).
+
+## The notification side
+
+Annotate the payload method with the `@Sse()` handle and return a plain object — that's the data
+delivered to subscribers:
+
+```ts title="invoice-paid.notification.ts"
+import { type Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Sse } from '@dudousxd/nestjs-notifications-sse';
+
+@Notification()
+export class InvoicePaid {
+  constructor(private invoiceId: string) {}
+
+  @Sse()
+  toSse(notifiable: Notifiable): Record<string, unknown> {
+    return { type: 'invoice.paid', invoiceId: this.invoiceId };
+  }
+}
+```
+
+The `Sse` handle also works as a `via()` token (`via() { return [Sse]; }`) for
+[explicit routing](/docs/concepts/notifications#alternative-explicit-via-and-interfaces); implement
+`SseNotification` alongside the decorator. If `toSse()` is absent the channel falls back to
+`toArray()`, then to a structural copy of the notification.
+
+<Callout type="info">
+  Don't confuse the two `@Sse()`: the **channel handle** `@Sse()` (from this package) decorates the
+  notification's payload method, while **Nest's `@Sse()`** (from `@nestjs/common`) decorates the
+  controller method that streams to the browser.
+</Callout>
+
+## Mount the stream — native `@Sse()`
+
+This package does **not** mount an endpoint for you. Add a controller method with Nest's native
+`@Sse()` and return `hub.stream(...)`. Build the stream key with `sseKey()` so it matches exactly
+what the channel publishes to:
+
+```ts title="notifications.controller.ts"
+import { Controller, Req, Sse, type MessageEvent } from '@nestjs/common';
+import type { Observable } from 'rxjs';
+import { SseHub, sseKey } from '@dudousxd/nestjs-notifications-sse';
+
+@Controller('notifications')
+export class NotificationsController {
+  constructor(private readonly hub: SseHub) {}
+
+  @Sse('stream')
+  stream(@Req() req: any): Observable<MessageEvent> {
+    // build the SAME key the notifiable routes to (tenant-aware)
+    return this.hub.stream(sseKey(req.tenantId, String(req.user.id)));
+  }
+}
+```
+
+The browser opens an `EventSource('/notifications/stream')`; every notification routed to the SSE
+channel for that user lands as a `MessageEvent` on the stream. The hub keeps one subject per key and
+tears it down when the last subscriber disconnects, so multiple tabs share a stream cleanly.
+
+## Routing and tenant-awareness
+
+The per-user route comes from `routeNotificationFor('sse')` — typically the user id. The channel
+combines it with the delivery's tenant to form the publish key, so a user's stream is **isolated per
+tenant**:
+
+```ts title="user.ts"
+export class User implements Notifiable {
+  constructor(public id: string) {}
+
+  routeNotificationFor(channel: string) {
+    if (channel !== 'sse') return undefined;
+    return this.id;
+  }
+}
+```
+
+`sseKey(tenant, routeValue)` prefixes the route with `${tenant}:` when a tenant is present. As long
+as your controller builds the key with the same `sseKey(req.tenantId, ...)`, a tenant-scoped send
+(via [`forTenant(id)`](/docs/concepts/multi-tenancy) or a `@Tenant()` property) reaches exactly the
+right stream.
+
+<Callout type="info">
+  SSE is fire-and-forget: publishing to a key with no live subscriber is a no-op. To persist
+  notifications for an inbox, also route to the [database channel](/docs/channels/database).
+</Callout>

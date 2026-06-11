@@ -1,5 +1,6 @@
 import {
   type ChannelDriver,
+  type DeliveryContext,
   MissingChannelMethodError,
   type Notifiable,
   type Notification,
@@ -7,9 +8,9 @@ import {
   getHandler,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { SlackMessage, SlackPayload } from './slack-message';
-import { SLACK_OPTIONS } from './tokens';
+import { SLACK_OPTIONS, SLACK_OPTIONS_RESOLVER } from './tokens';
 
 /** Channel handle: use as `@Slack()` on a payload method, or as a token in `via()`. */
 export const Slack = createChannel('slack');
@@ -25,6 +26,9 @@ export interface SlackChannelOptions {
   /** Default channel id used with the Web API when the route isn't a webhook. */
   defaultChannel?: string;
 }
+
+/** Resolves per-tenant {@link SlackChannelOptions} from a tenant id. */
+export type SlackOptionsResolver = (tenant: string) => SlackChannelOptions;
 
 /** Implement this on a notification to define its Slack payload. */
 export interface SlackNotification extends Notification {
@@ -47,9 +51,19 @@ export class SlackChannel implements ChannelDriver {
   constructor(
     @Inject(SLACK_OPTIONS)
     private readonly options: SlackChannelOptions,
+    @Optional()
+    @Inject(SLACK_OPTIONS_RESOLVER)
+    private readonly resolveOptions?: SlackOptionsResolver,
   ) {}
 
-  async send(notifiable: Notifiable, notification: Notification): Promise<void> {
+  async send(
+    notifiable: Notifiable,
+    notification: Notification,
+    context?: DeliveryContext,
+  ): Promise<void> {
+    const options =
+      context?.tenant && this.resolveOptions ? this.resolveOptions(context.tenant) : this.options;
+
     const handler = getHandler(notification, 'slack', 'toSlack');
     if (!handler) {
       const name =
@@ -62,12 +76,12 @@ export class SlackChannel implements ChannelDriver {
     const payload = message.toPayload();
     const route = routeFor(notifiable, 'slack', notification);
 
-    if (this.options.token) {
-      await this.postViaWebApi(payload, route);
+    if (options.token) {
+      await this.postViaWebApi(options, payload, route);
       return;
     }
 
-    const webhookUrl = isHttpsUrl(route) ? route : this.options.webhookUrl;
+    const webhookUrl = isHttpsUrl(route) ? route : options.webhookUrl;
     if (!webhookUrl) {
       throw new Error(
         'The slack channel needs a webhook URL. Return one from ' +
@@ -78,14 +92,18 @@ export class SlackChannel implements ChannelDriver {
     await this.post(webhookUrl, payload);
   }
 
-  private async postViaWebApi(payload: SlackPayload, route: unknown): Promise<void> {
+  private async postViaWebApi(
+    options: SlackChannelOptions,
+    payload: SlackPayload,
+    route: unknown,
+  ): Promise<void> {
     const channel =
-      typeof route === 'string' && !isHttpsUrl(route) ? route : this.options.defaultChannel;
+      typeof route === 'string' && !isHttpsUrl(route) ? route : options.defaultChannel;
 
     await this.post(
       CHAT_POST_MESSAGE_URL,
       { ...payload, channel },
-      { Authorization: `Bearer ${this.options.token}` },
+      { Authorization: `Bearer ${options.token}` },
     );
   }
 

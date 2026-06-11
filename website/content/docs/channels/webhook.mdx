@@ -47,6 +47,7 @@ export class AppModule {}
 | --- | --- | --- | --- |
 | `url` | `string` | — | Default target URL, used when neither the message nor the route supplies one. |
 | `headers` | `Record<string, string>` | — | Default headers merged into every request. |
+| `resolveOptions` | `(tenant: string) => WebhookChannelOptions` | — | Per-tenant options resolver. See [Per-tenant config](#per-tenant-config). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
 
 ## The notification side
@@ -124,3 +125,23 @@ export class Endpoint implements Notifiable {
   If none of the three supply a URL, the channel throws asking you to set one — on the
   `WebhookMessage` via `.url()`, from `routeNotificationFor('webhook')`, or as `url` in `forRoot()`.
 </Callout>
+
+## Per-tenant config
+
+In a multi-tenant app each tenant can post to its own endpoint with its own headers. Pass
+`resolveOptions` — when a send is scoped to a tenant (via
+[`forTenant(id)`](/docs/concepts/multi-tenancy) or a `@Tenant()` property), the channel uses the
+options you return (default `url`, `headers`) instead of the module defaults:
+
+```ts title="app.module.ts"
+WebhookChannelModule.forRoot({
+  url: 'https://example.com/hooks/notifications',
+  resolveOptions: (tenant) => ({
+    url: tenantHooks.get(tenant),
+    headers: { Authorization: `Bearer ${tenantTokens.get(tenant)}` },
+  }),
+});
+```
+
+Sends with no tenant scope keep the module defaults. See
+[Multi-tenancy](/docs/concepts/multi-tenancy) for the full picture.
