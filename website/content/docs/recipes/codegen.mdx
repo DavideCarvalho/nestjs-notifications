@@ -1,0 +1,140 @@
+---
+title: Typed client with codegen
+description: Generate a fully typed HTTP client for the inbox API from your NestJS controllers using nestjs-codegen — no hand-written fetch calls, no drift between server and client.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The [React widget](/docs/recipes/react-inbox) ships a hand-written `NotificationsClient`. If you'd
+rather **generate** the client — and keep it in lockstep with your routes — point
+[`@dudousxd/nestjs-codegen`](https://www.npmjs.com/package/@dudousxd/nestjs-codegen) at your inbox
+controller. It reads your controllers by static analysis and emits a typed `api.ts` + `routes.ts`.
+
+The runnable [`examples/basic`](https://github.com/DavideCarvalho/nestjs-notifications/tree/main/examples/basic)
+app has the whole setup wired; this recipe walks through it.
+
+## 1. A static, decorated controller
+
+Codegen discovers routes by **static AST** — it reads top-level `@Controller` classes with their
+`@Get`/`@Post`/… methods, the `@Query()`/`@Param()`/`@Body()` param types, and each method's return
+type. (The library's `createNotificationsController` factory builds its controller at runtime, so it
+isn't statically visible — write a plain decorated controller for codegen to read.)
+
+```ts title="inbox.controller.ts"
+@Controller('notifications')
+export class NotificationsInboxController {
+  constructor(private readonly notifications: NotificationsQueryService) {}
+
+  @Get()
+  async list(@Query() query: ListNotificationsQueryDto): Promise<PaginatedNotificationsDto> { /* … */ }
+
+  @Get('unread/count')
+  async unreadCount(): Promise<UnreadCountDto> { /* … */ }
+
+  @Post(':id/read')
+  async markAsRead(@Param('id') id: string): Promise<AckDto> { /* … */ }
+
+  // …unread(), markAllAsRead(), remove()
+}
+```
+
+The DTOs are plain classes — no decorators needed, codegen reads their field types:
+
+```ts title="inbox.dto.ts"
+export class NotificationDto {
+  id!: string;
+  type!: string;
+  data!: Record<string, unknown>;
+  readAt!: string | null;
+  createdAt!: string;
+}
+export class PaginatedNotificationsDto {
+  items!: NotificationDto[];
+  page!: number;
+  perPage!: number;
+  total!: number;
+}
+export class UnreadCountDto { count!: number; }
+export class AckDto { ok!: boolean; }
+export class ListNotificationsQueryDto { page?: number; perPage?: number; }
+```
+
+## 2. Configure codegen
+
+```ts title="nestjs-codegen.config.ts"
+import { defineConfig, type ValidationAdapter } from '@dudousxd/nestjs-codegen';
+
+// forms are disabled, so this is never invoked — it only satisfies the required `validation` field.
+// Swap in `zodAdapter` from @dudousxd/nestjs-codegen-zod (and enable forms) to also emit client-side
+// validation schemas.
+const noopAdapter: ValidationAdapter = {
+  name: 'noop',
+  importStatements: () => [],
+  render: () => '',
+  renderModule: () => ({ schemaText: '', namedNestedSchemas: new Map(), warnings: [] }),
+  inferType: () => 'unknown',
+};
+
+export default defineConfig({
+  validation: noopAdapter,
+  contracts: { glob: 'src/**/*.controller.ts' },
+  codegen: { outDir: 'src/generated' },
+  forms: { enabled: false }, // typed client only (routes.ts + api.ts)
+});
+```
+
+```bash
+pnpm add -D @dudousxd/nestjs-codegen tsx
+pnpm add @dudousxd/nestjs-client   # runtime the generated api.ts imports
+```
+
+Add a script and run it:
+
+```json title="package.json"
+{ "scripts": { "codegen": "nestjs-codegen codegen" } }
+```
+
+```bash
+pnpm codegen
+# ✓ Codegen generated artifacts in src/generated
+```
+
+<Callout type="info">
+  Codegen runs entirely off your **source files** — it does not boot your app. `tsx` is needed only
+  to load the TypeScript config file.
+</Callout>
+
+## 3. The generated client
+
+`src/generated/api.ts` gives you a typed client keyed by controller and method:
+
+```ts
+import { createApi } from './generated/api';
+import { createFetcher } from '@dudousxd/nestjs-client';
+
+const api = createApi(createFetcher({ baseUrl: '/' }));
+
+const page = await api.notificationsInbox.list({ query: { page: 1, perPage: 20 } });
+//    ^? PaginatedNotificationsDto
+const { count } = await api.notificationsInbox.unreadCount();
+await api.notificationsInbox.markAsRead({ params: { id } });
+```
+
+Path params are required and typed (`{ params: { id } }`), query/body are inferred from the DTOs, and
+the response type resolves to the controller method's return type. `routes.ts` exposes the matching
+`ROUTES` map and a `route('notificationsInbox.list')` helper.
+
+<Callout type="warn">
+  The generated response types reference the controller's return type via `import('…/inbox.controller')`,
+  so the generated client typechecks **within the same project**. For a separate frontend build, point
+  `outDir` into the frontend and share the DTOs (or the controller's type) across the boundary — e.g.
+  via a small shared `*-contracts` package — so the import resolves on the client side.
+</Callout>
+
+## Pairing with the React widget
+
+The generated `createApi(fetcher)` and the React package's hand-written `NotificationsClient` solve the
+same problem two ways. Use whichever fits: the hand-written client is zero-config and dependency-free;
+the generated client removes manual mirroring and follows your routes automatically. You can back the
+React hooks with the generated client by adapting it behind the `NotificationsClient` shape, or use the
+generated client directly in your own components.

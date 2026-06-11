@@ -133,6 +133,6 @@ a bearer token via `headers`:
 
 <Callout type="info">
   The hand-written `NotificationsClient` mirrors the [REST controller](/docs/recipes/in-app-notifications)
-  exactly. If you generate typed clients with `nestjs-codegen`, the controller is a clean target — a
-  future generator could emit this client straight from your routes.
+  exactly. Prefer to generate it? See [Typed client with codegen](/docs/recipes/codegen) — `nestjs-codegen`
+  emits a typed client straight from your controller, so it can't drift from your routes.
 </Callout>

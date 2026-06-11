@@ -74,6 +74,7 @@ const client = new NotificationsClient({
 
 The `EventSource` is only created inside `useEffect`, guarded on `typeof window !== 'undefined' && typeof EventSource !== 'undefined'`, and closed on unmount — safe under Next.js/Remix server rendering. The `NotificationsClient` uses the global `fetch`; pass a `fetch` impl for non-browser runtimes.
 
-## Codegen note
+## Codegen alternative
 
-The `NotificationsClient` here is hand-written and kept in sync with `createNotificationsController` by hand. A future `nestjs-codegen` generator could emit this client (and types) directly from the controller's decorators, removing the manual mirroring. That generator is not built yet; the hand-written client is the current approach.
+The `NotificationsClient` here is hand-written and zero-config. If you'd rather generate a typed client
+from your controllers (so it can't drift from your routes), use [`@dudousxd/nestjs-codegen`](https://www.npmjs.com/package/@dudousxd/nestjs-codegen) — it emits a typed `api.ts` from a static decorated inbox controller. The runnable [`examples/basic`](https://github.com/DavideCarvalho/nestjs-notifications/tree/main/examples/basic) app wires it end to end, and the docs cover it under **Recipes → Typed client with codegen**.

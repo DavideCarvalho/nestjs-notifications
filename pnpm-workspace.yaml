@@ -24,3 +24,5 @@ minimumReleaseAgeExclude:
   - '@aws-sdk/nested-clients@3.997.20'
   - '@aws-sdk/signature-v4-multi-region@3.996.34'
   - '@aws-sdk/token-providers@3.1066.0'
+  - '@dudousxd/nestjs-client@0.2.1'
+  - '@dudousxd/nestjs-codegen@0.2.1'

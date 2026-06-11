@@ -8,9 +8,11 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "codegen": "nestjs-codegen codegen",
     "start": "node dist/main.js"
   },
   "dependencies": {
+    "@dudousxd/nestjs-client": "0.2.1",
     "@dudousxd/nestjs-notifications-core": "workspace:^",
     "@dudousxd/nestjs-notifications-database": "workspace:^",
     "@dudousxd/nestjs-notifications-mail": "workspace:^",
@@ -22,8 +24,10 @@
     "rxjs": "7.8.2"
   },
   "devDependencies": {
+    "@dudousxd/nestjs-codegen": "0.2.1",
     "@dudousxd/nestjs-notifications-testing": "workspace:^",
     "@nestjs/testing": "11.1.26",
+    "tsx": "4.22.4",
     "typescript": "5.9.3"
   }
 }

@@ -6,6 +6,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MemoryTransport } from './memory-transport';
+import { NotificationsInboxController } from './notifications/inbox.controller';
 import { InvoicePaid } from './notifications/invoice-paid.notification';
 
 @Module({
@@ -19,7 +20,7 @@ import { InvoicePaid } from './notifications/invoice-paid.notification';
     // Database channel persisting to the bundled in-memory store.
     DatabaseChannelModule.forRoot(),
   ],
-  controllers: [AppController],
+  controllers: [AppController, NotificationsInboxController],
   providers: [AppService],
 })
 export class AppModule {}

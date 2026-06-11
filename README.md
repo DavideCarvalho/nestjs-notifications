@@ -31,12 +31,23 @@ await notifications.send(user, new InvoicePaid(invoice));
 | Package | What it does |
 | --- | --- |
 | `@dudousxd/nestjs-notifications-core` | Abstractions, `NotificationService`, synchronous dispatcher, events |
-| `@dudousxd/nestjs-notifications-mail` | Mail channel — fluent `MailMessage`, pluggable transport & renderer |
+| `@dudousxd/nestjs-notifications-mail` | Mail channel — fluent `MailMessage`; Default/Markdown/React-Email/MJML renderers; failover transport |
 | `@dudousxd/nestjs-notifications-database` | Database channel — `NotificationStore` + in-memory store |
 | `@dudousxd/nestjs-notifications-database-typeorm` | TypeORM adapter for the database channel |
 | `@dudousxd/nestjs-notifications-database-mikro-orm` | MikroORM adapter for the database channel |
+| `@dudousxd/nestjs-notifications-database-prisma` | Prisma adapter for the database channel |
 | `@dudousxd/nestjs-notifications-broadcast` | WebSocket (socket.io) channel for realtime in-app notifications |
+| `@dudousxd/nestjs-notifications-sse` | Server-Sent Events channel for live in-app updates |
+| `@dudousxd/nestjs-notifications-push` | Push channel — Web Push, FCM, Expo, APNs |
+| `@dudousxd/nestjs-notifications-sms` | SMS channel — Twilio, Vonage, AWS SNS |
 | `@dudousxd/nestjs-notifications-slack` | Slack channel — webhook or bot token |
+| `@dudousxd/nestjs-notifications-discord` | Discord channel — webhook |
+| `@dudousxd/nestjs-notifications-telegram` | Telegram channel — Bot API |
+| `@dudousxd/nestjs-notifications-teams` | Microsoft Teams channel — incoming webhook |
+| `@dudousxd/nestjs-notifications-webhook` | Webhook channel — HMAC-signed HTTP callbacks |
+| `@dudousxd/nestjs-notifications-preferences` | Channel opt-out + full preference center (category × channel × digest) |
+| `@dudousxd/nestjs-notifications-delivery-tracking` | Persisted per-channel delivery status + Twilio/SES inbound status webhooks |
+| `@dudousxd/nestjs-notifications-react` | Drop-in `<Inbox/>` widget + `useNotifications` / `useUnreadCount` hooks |
 | `@dudousxd/nestjs-notifications-event-emitter` | In-process async dispatch via `@nestjs/event-emitter` |
 | `@dudousxd/nestjs-notifications-bullmq` | Async dispatch reusing your app's BullMQ |
 | `@dudousxd/nestjs-notifications-redis` | Async dispatch via Redis for a dedicated worker |
