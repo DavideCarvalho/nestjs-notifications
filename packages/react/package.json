@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-react",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Drop-in React inbox widget and hooks for nestjs-notifications — consumes the read API and SSE stream",
   "license": "MIT",
   "author": "Davide Carvalho",

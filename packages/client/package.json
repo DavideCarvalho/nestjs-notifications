@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-client",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Framework-neutral headless SDK for nestjs-notifications — fetch client + SSE subscribe + TanStack Query factories",
   "license": "MIT",
   "author": "Davide Carvalho",

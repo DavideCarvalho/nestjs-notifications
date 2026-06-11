@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-database-mikro-orm
 
+## 0.5.0
+
+### Minor Changes
+
+- 39b9152: Implement the optional `NotificationStore.prune()` (scheduled pruning) and `upsert()` (updatable/progress notifications) for the mikro-orm store.
+
 ## 0.4.0
 
 ### Minor Changes

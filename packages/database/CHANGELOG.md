@@ -1,5 +1,12 @@
 # @dudousxd/nestjs-notifications-database
 
+## 0.6.0
+
+### Minor Changes
+
+- 39b9152: Auto-mount the inbox REST controller from `DatabaseChannelModule.forRoot({ controller })` (default true; pass `false` to mount it yourself, or `{ resolveRef }` to customize). Add a configurable scheduled `prune` (`forRoot({ prune: { olderThan, every?, onlyRead?, runOnStartup? } })`) backed by a new optional `NotificationStore.prune()` method (implemented for the in-memory store).
+- 3ddc26c: Support updatable "live"/progress notifications: a notification can return a stable `databaseKey(notifiable)` and the database channel upserts that row in place across sends (updating data and resetting read state) instead of inserting a new one. Backed by a new optional `NotificationStore.upsert()` (implemented for the in-memory store).
+
 ## 0.5.0
 
 ### Minor Changes
