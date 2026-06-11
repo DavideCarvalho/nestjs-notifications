@@ -1,5 +1,15 @@
 import type { NotifiableRef } from '@dudousxd/nestjs-notifications-core';
-import { Body, Controller, Get, Param, Put, Req, type Type } from '@nestjs/common';
+import {
+  Body,
+  type CanActivate,
+  Controller,
+  Get,
+  Param,
+  Put,
+  Req,
+  type Type,
+  UseGuards,
+} from '@nestjs/common';
 import type {
   CategoryDefinition,
   DigestFrequency,
@@ -16,6 +26,10 @@ export interface PreferenceCenterControllerOptions {
   resolveRef: (req: any) => NotifiableRef | Promise<NotifiableRef>;
   /** Optional resolver for the tenant scope (multi-tenant apps). May be async. */
   resolveTenant?: (req: any) => string | undefined | Promise<string | undefined>;
+  /** Controller base path. Default `'preferences'`. */
+  path?: string;
+  /** Guards to protect the endpoints with (e.g. your auth guard). Applied via `@UseGuards`. */
+  guards?: Array<Type<CanActivate> | CanActivate>;
 }
 
 /** Body of `PUT /preferences/:category/channels/:channel`. */
@@ -49,7 +63,7 @@ interface SetDigestBody {
 export function createPreferenceCenterController(
   options: PreferenceCenterControllerOptions,
 ): Type<unknown> {
-  @Controller('preferences')
+  @Controller(options.path ?? 'preferences')
   class PreferenceCenterController {
     constructor(private readonly preferences: PreferenceCenterService) {}
 
@@ -89,6 +103,10 @@ export function createPreferenceCenterController(
       await this.preferences.setDigest(ref, category, body.digest, tenantId);
       return this.preferences.getMatrix(ref, tenantId);
     }
+  }
+
+  if (options.guards && options.guards.length > 0) {
+    UseGuards(...options.guards)(PreferenceCenterController);
   }
 
   return PreferenceCenterController;

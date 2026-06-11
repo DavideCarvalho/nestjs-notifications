@@ -1,4 +1,12 @@
-import { Controller, type MessageEvent, Req, Sse, type Type } from '@nestjs/common';
+import {
+  type CanActivate,
+  Controller,
+  type MessageEvent,
+  Req,
+  Sse,
+  type Type,
+  UseGuards,
+} from '@nestjs/common';
 import { type Observable, from, interval, map, merge, switchMap } from 'rxjs';
 import { sseKey } from './sse-key';
 import { SseHub } from './sse.hub';
@@ -19,6 +27,8 @@ export interface NotificationsStreamControllerOptions {
   path?: string;
   /** Sub-path for the `@Sse()` endpoint. Default `'stream'` → `GET {path}/stream`. */
   streamPath?: string;
+  /** Guards to protect the stream with (e.g. your auth guard). Applied via `@UseGuards`. */
+  guards?: Array<Type<CanActivate> | CanActivate>;
   /**
    * Keep-alive interval (ms) emitting a `{ type: 'heartbeat' }` event so idle connections survive
    * proxy/load-balancer timeouts. Default `25000`; set `0` to disable.
@@ -69,6 +79,10 @@ export function createNotificationsStreamController(
       );
       return merge(events$, heartbeat$);
     }
+  }
+
+  if (options.guards && options.guards.length > 0) {
+    UseGuards(...options.guards)(NotificationsStreamController);
   }
 
   return NotificationsStreamController;
