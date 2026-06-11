@@ -56,6 +56,23 @@ describe('TypeOrmNotificationStore', () => {
     });
   });
 
+  it('getUnread() adds the tenant filter when a tenantId is given', async () => {
+    const repo = makeRepo();
+    const store = new TypeOrmNotificationStore(repo as unknown as Repository<NotificationEntity>);
+
+    await store.getUnread('User', '42', 'tenant-1');
+
+    expect(repo.find).toHaveBeenCalledWith({
+      where: {
+        notifiableType: 'User',
+        notifiableId: '42',
+        tenantId: 'tenant-1',
+        readAt: IsNull(),
+      },
+      order: { createdAt: 'DESC' },
+    });
+  });
+
   it('markAllAsRead() updates only unread rows for the notifiable', async () => {
     const repo = makeRepo();
     const store = new TypeOrmNotificationStore(repo as unknown as Repository<NotificationEntity>);

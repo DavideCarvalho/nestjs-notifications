@@ -18,10 +18,14 @@
  *   type           String
  *   notifiableType String
  *   notifiableId   String
+ *   tenantId       String?
  *   data           Json
  *   readAt         DateTime?
  *   createdAt      DateTime  @default(now())
  *   updatedAt      DateTime  @updatedAt
+ *
+ *   // An index on the tenant + notifiable lookup keys is wise for scoped reads.
+ *   @@index([tenantId, notifiableType, notifiableId])
  * }
  * ```
  *

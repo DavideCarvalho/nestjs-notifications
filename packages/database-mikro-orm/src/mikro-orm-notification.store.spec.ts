@@ -60,6 +60,19 @@ describe('MikroOrmNotificationStore', () => {
     );
   });
 
+  it('getUnread() adds the tenant filter when a tenantId is given', async () => {
+    const { em, inner } = makeEm();
+    const store = new MikroOrmNotificationStore(em as unknown as EntityManager);
+
+    await store.getUnread('User', '42', 'tenant-1');
+
+    expect(inner.find).toHaveBeenCalledWith(
+      NotificationEntity,
+      { notifiableType: 'User', notifiableId: '42', tenantId: 'tenant-1', readAt: null },
+      { orderBy: { createdAt: 'DESC' } },
+    );
+  });
+
   it('delete() issues a nativeDelete by id', async () => {
     const { em } = makeEm();
     const store = new MikroOrmNotificationStore(em as unknown as EntityManager);

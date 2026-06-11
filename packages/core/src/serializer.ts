@@ -18,6 +18,7 @@ export interface SerializedJob {
   notification: SerializedNotification;
   channels: string[];
   queue?: string;
+  tenant?: string;
 }
 
 /**
@@ -111,7 +112,13 @@ export class NotificationSerializer {
     const notification = isSerialized(job.notification)
       ? job.notification
       : this.serializeNotification(job.notification);
-    return { notifiable, notification, channels: job.channels, queue: job.queue };
+    return {
+      notifiable,
+      notification,
+      channels: job.channels,
+      queue: job.queue,
+      tenant: job.tenant,
+    };
   }
 
   async hydrateJob(

@@ -17,6 +17,7 @@ function toStored(row: NotificationEntity): StoredNotification {
     type: row.type,
     notifiableType: row.notifiableType,
     notifiableId: row.notifiableId,
+    tenantId: row.tenantId ?? null,
     data: row.data,
     readAt: row.readAt ?? null,
     createdAt: row.createdAt,
@@ -41,6 +42,7 @@ export class TypeOrmNotificationStore implements NotificationStore {
       type: notification.type,
       notifiableType: notification.notifiableType,
       notifiableId: notification.notifiableId,
+      tenantId: notification.tenantId ?? null,
       data: notification.data,
       readAt: null,
       createdAt: now,
@@ -54,9 +56,18 @@ export class TypeOrmNotificationStore implements NotificationStore {
     await this.repo.update(id, { readAt: new Date(), updatedAt: new Date() });
   }
 
-  async markAllAsRead(notifiableType: string, notifiableId: string): Promise<void> {
+  async markAllAsRead(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+  ): Promise<void> {
     await this.repo.update(
-      { notifiableType, notifiableId, readAt: IsNull() },
+      {
+        notifiableType,
+        notifiableId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
+        readAt: IsNull(),
+      },
       { readAt: new Date(), updatedAt: new Date() },
     );
   }
@@ -64,17 +75,27 @@ export class TypeOrmNotificationStore implements NotificationStore {
   async getForNotifiable(
     notifiableType: string,
     notifiableId: string,
+    tenantId?: string,
   ): Promise<StoredNotification[]> {
     const rows = await this.repo.find({
-      where: { notifiableType, notifiableId },
+      where: { notifiableType, notifiableId, ...(tenantId !== undefined ? { tenantId } : {}) },
       order: { createdAt: 'DESC' },
     });
     return rows.map(toStored);
   }
 
-  async getUnread(notifiableType: string, notifiableId: string): Promise<StoredNotification[]> {
+  async getUnread(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+  ): Promise<StoredNotification[]> {
     const rows = await this.repo.find({
-      where: { notifiableType, notifiableId, readAt: IsNull() },
+      where: {
+        notifiableType,
+        notifiableId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
+        readAt: IsNull(),
+      },
       order: { createdAt: 'DESC' },
     });
     return rows.map(toStored);

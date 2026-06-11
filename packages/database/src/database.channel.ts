@@ -1,5 +1,6 @@
 import {
   type ChannelDriver,
+  type DeliveryContext,
   type Notifiable,
   type NotifiableRef,
   type Notification,
@@ -28,7 +29,11 @@ export class DatabaseChannel implements ChannelDriver {
     private readonly store: NotificationStore,
   ) {}
 
-  async send(notifiable: Notifiable, notification: Notification): Promise<unknown> {
+  async send(
+    notifiable: Notifiable,
+    notification: Notification,
+    context?: DeliveryContext,
+  ): Promise<unknown> {
     const ref = this.referenceFor(notifiable, notification);
     const data = this.payloadFor(notifiable, notification);
     const type =
@@ -40,6 +45,7 @@ export class DatabaseChannel implements ChannelDriver {
       type,
       notifiableType: ref.type,
       notifiableId: String(ref.id),
+      tenantId: context?.tenant ?? null,
       data,
     });
   }

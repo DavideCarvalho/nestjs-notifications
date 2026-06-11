@@ -41,6 +41,6 @@ export class EventEmitterDispatcher implements DispatchDriver {
       await new Promise((resolve) => setTimeout(resolve, job.delay));
     }
     const { notifiable, notification } = await this.serializer.hydrateJob(job);
-    await this.channelRunner.run(notifiable, notification, job.channels);
+    await this.channelRunner.run(notifiable, notification, job.channels, { tenant: job.tenant });
   }
 }

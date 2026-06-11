@@ -1,9 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 import { ChannelRegistry } from './channel-registry';
-import { InjectService, createChannel, getHandler } from './decorators';
+import { createChannel, getHandler } from './decorators';
 import type { ChannelDriver, Notifiable, Notification } from './interfaces';
 import { NotificationService } from './notification.service';
 import { NotificationsModule } from './notifications.module';
@@ -26,9 +26,9 @@ class User implements Notifiable {
   }
 }
 
-// (A) channels inferred from decorators, (C) service injected by the library.
+// (A) channels inferred from decorators, (C) service injected via NestJS's own @Inject.
 class InvoicePaid {
-  @InjectService(UrlService) private urls!: UrlService;
+  @Inject(UrlService) private urls!: UrlService;
 
   constructor(public invoiceId: string) {}
 

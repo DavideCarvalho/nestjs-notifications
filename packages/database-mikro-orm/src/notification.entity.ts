@@ -15,6 +15,9 @@ export class NotificationEntity {
   @Property()
   notifiableId!: string;
 
+  @Property({ nullable: true })
+  tenantId?: string | null;
+
   @Property({ type: 'json' })
   data!: Record<string, unknown>;
 

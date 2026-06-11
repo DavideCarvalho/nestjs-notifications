@@ -30,7 +30,7 @@ describe('PrismaNotificationStore', () => {
     });
 
     expect(notification.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ type: 'InvoicePaid', readAt: null }),
+      data: expect.objectContaining({ type: 'InvoicePaid', readAt: null, tenantId: null }),
     });
     expect(result.id).toEqual(expect.any(String));
     expect(result.type).toBe('InvoicePaid');
@@ -40,6 +40,36 @@ describe('PrismaNotificationStore', () => {
     expect(result.readAt).toBeNull();
     expect(result.createdAt).toBeInstanceOf(Date);
     expect(result.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it('save() passes a provided tenantId through to the create data', async () => {
+    const { client, notification } = makeClient();
+    const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);
+
+    const result = await store.save({
+      type: 'InvoicePaid',
+      notifiableType: 'User',
+      notifiableId: '42',
+      tenantId: 'tenant-1',
+      data: { amount: 100 },
+    });
+
+    expect(notification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ tenantId: 'tenant-1' }),
+    });
+    expect(result.tenantId).toBe('tenant-1');
+  });
+
+  it('getUnread() adds the tenant filter when a tenantId is given', async () => {
+    const { client, notification } = makeClient();
+    const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);
+
+    await store.getUnread('User', '42', 'tenant-1');
+
+    expect(notification.findMany).toHaveBeenCalledWith({
+      where: { notifiableType: 'User', notifiableId: '42', tenantId: 'tenant-1', readAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
   });
 
   it('getUnread() queries with readAt null ordered by createdAt desc', async () => {

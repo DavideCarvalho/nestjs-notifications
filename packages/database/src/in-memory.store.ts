@@ -14,6 +14,7 @@ export class InMemoryStore implements NotificationStore {
       type: input.type,
       notifiableType: input.notifiableType,
       notifiableId: input.notifiableId,
+      tenantId: input.tenantId ?? null,
       data: input.data,
       readAt: null,
       createdAt: now,
@@ -31,11 +32,16 @@ export class InMemoryStore implements NotificationStore {
     }
   }
 
-  async markAllAsRead(notifiableType: string, notifiableId: string): Promise<void> {
+  async markAllAsRead(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+  ): Promise<void> {
     for (const row of this.rows.values()) {
       if (
         row.notifiableType === notifiableType &&
         row.notifiableId === notifiableId &&
+        (tenantId === undefined || row.tenantId === tenantId) &&
         !row.readAt
       ) {
         row.readAt = new Date();
@@ -47,14 +53,24 @@ export class InMemoryStore implements NotificationStore {
   async getForNotifiable(
     notifiableType: string,
     notifiableId: string,
+    tenantId?: string,
   ): Promise<StoredNotification[]> {
     return this.all().filter(
-      (r) => r.notifiableType === notifiableType && r.notifiableId === notifiableId,
+      (r) =>
+        r.notifiableType === notifiableType &&
+        r.notifiableId === notifiableId &&
+        (tenantId === undefined || r.tenantId === tenantId),
     );
   }
 
-  async getUnread(notifiableType: string, notifiableId: string): Promise<StoredNotification[]> {
-    return (await this.getForNotifiable(notifiableType, notifiableId)).filter((r) => !r.readAt);
+  async getUnread(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+  ): Promise<StoredNotification[]> {
+    return (await this.getForNotifiable(notifiableType, notifiableId, tenantId)).filter(
+      (r) => !r.readAt,
+    );
   }
 
   async delete(id: string): Promise<void> {

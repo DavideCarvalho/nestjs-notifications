@@ -1,4 +1,8 @@
-import type { Notifiable, NotifiableRef } from '@dudousxd/nestjs-notifications-core';
+import {
+  type Notifiable,
+  type NotifiableRef,
+  notifiableRef,
+} from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import type { NotificationStore, StoredNotification } from './interfaces';
 import { NOTIFICATION_STORE } from './tokens';
@@ -22,44 +26,102 @@ export interface PaginatedNotifications {
   total: number;
 }
 
+/** Tenant-scoped read API — same methods as {@link NotificationsQueryService}. */
+export interface ScopedNotificationsQuery {
+  all(target: NotifiableTarget): Promise<StoredNotification[]>;
+  unread(target: NotifiableTarget): Promise<StoredNotification[]>;
+  paginate(target: NotifiableTarget, options?: PaginateOptions): Promise<PaginatedNotifications>;
+  unreadCount(target: NotifiableTarget): Promise<number>;
+  markAsRead(id: string): Promise<void>;
+  markAllAsRead(target: NotifiableTarget): Promise<void>;
+  delete(id: string): Promise<void>;
+}
+
 /**
  * Read side of the database channel: lists and mutates the notifications the channel
- * persisted, mirroring Laravel's `$user->notifications`, `unreadNotifications`,
- * `markAsRead()` and friends. Wraps the {@link NotificationStore} — it does not extend
- * the store interface.
+ * persisted, mirroring Laravel's `$user->notifications`, `unreadNotifications`, `markAsRead()`.
+ * Scope to a tenant with `forTenant(id)` — the same user has an isolated feed per tenant.
  *
  * ```ts
- * constructor(private readonly notifications: NotificationsQueryService) {}
  * const inbox = await this.notifications.all(user);
+ * const wsInbox = await this.notifications.forTenant(workspaceId).unread(user);
  * ```
  */
 @Injectable()
-export class NotificationsQueryService {
+export class NotificationsQueryService implements ScopedNotificationsQuery {
   constructor(
     @Inject(NOTIFICATION_STORE)
     private readonly store: NotificationStore,
   ) {}
 
-  /** All notifications for the target, newest first (store ordering). */
-  async all(target: NotifiableTarget): Promise<StoredNotification[]> {
-    const ref = this.refOf(target);
-    return this.store.getForNotifiable(ref.type, String(ref.id));
+  all(target: NotifiableTarget): Promise<StoredNotification[]> {
+    return this.allScoped(target, undefined);
   }
 
-  /** Unread notifications for the target. */
-  async unread(target: NotifiableTarget): Promise<StoredNotification[]> {
-    const ref = this.refOf(target);
-    return this.store.getUnread(ref.type, String(ref.id));
+  unread(target: NotifiableTarget): Promise<StoredNotification[]> {
+    return this.unreadScoped(target, undefined);
   }
 
-  /** A single page over {@link all}. */
-  async paginate(
+  paginate(
     target: NotifiableTarget,
-    { page = 1, perPage = 20 }: PaginateOptions = {},
+    options: PaginateOptions = {},
+  ): Promise<PaginatedNotifications> {
+    return this.paginateScoped(target, options, undefined);
+  }
+
+  unreadCount(target: NotifiableTarget): Promise<number> {
+    return this.unreadCountScoped(target, undefined);
+  }
+
+  async markAsRead(id: string): Promise<void> {
+    await this.store.markAsRead(id);
+  }
+
+  markAllAsRead(target: NotifiableTarget): Promise<void> {
+    return this.markAllAsReadScoped(target, undefined);
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.store.delete(id);
+  }
+
+  /** Scope every read/mutation to a tenant (workspace). */
+  forTenant(tenant: string): ScopedNotificationsQuery {
+    return {
+      all: (target) => this.allScoped(target, tenant),
+      unread: (target) => this.unreadScoped(target, tenant),
+      paginate: (target, options) => this.paginateScoped(target, options ?? {}, tenant),
+      unreadCount: (target) => this.unreadCountScoped(target, tenant),
+      markAsRead: (id) => this.markAsRead(id),
+      markAllAsRead: (target) => this.markAllAsReadScoped(target, tenant),
+      delete: (id) => this.delete(id),
+    };
+  }
+
+  private async allScoped(
+    target: NotifiableTarget,
+    tenant?: string,
+  ): Promise<StoredNotification[]> {
+    const ref = this.refOf(target);
+    return this.store.getForNotifiable(ref.type, String(ref.id), tenant);
+  }
+
+  private async unreadScoped(
+    target: NotifiableTarget,
+    tenant?: string,
+  ): Promise<StoredNotification[]> {
+    const ref = this.refOf(target);
+    return this.store.getUnread(ref.type, String(ref.id), tenant);
+  }
+
+  private async paginateScoped(
+    target: NotifiableTarget,
+    { page = 1, perPage = 20 }: PaginateOptions,
+    tenant?: string,
   ): Promise<PaginatedNotifications> {
     const safePage = Math.max(1, Math.floor(page));
     const safePerPage = Math.max(1, Math.floor(perPage));
-    const items = await this.all(target);
+    const items = await this.allScoped(target, tenant);
     const start = (safePage - 1) * safePerPage;
     return {
       items: items.slice(start, start + safePerPage),
@@ -69,41 +131,18 @@ export class NotificationsQueryService {
     };
   }
 
-  /** Number of unread notifications for the target. */
-  async unreadCount(target: NotifiableTarget): Promise<number> {
-    return (await this.unread(target)).length;
+  private async unreadCountScoped(target: NotifiableTarget, tenant?: string): Promise<number> {
+    return (await this.unreadScoped(target, tenant)).length;
   }
 
-  /** Mark one notification read by id. */
-  async markAsRead(id: string): Promise<void> {
-    await this.store.markAsRead(id);
-  }
-
-  /** Mark every notification for the target read. */
-  async markAllAsRead(target: NotifiableTarget): Promise<void> {
+  private async markAllAsReadScoped(target: NotifiableTarget, tenant?: string): Promise<void> {
     const ref = this.refOf(target);
-    await this.store.markAllAsRead(ref.type, String(ref.id));
+    await this.store.markAllAsRead(ref.type, String(ref.id), tenant);
   }
 
-  /** Delete one notification by id. */
-  async delete(id: string): Promise<void> {
-    await this.store.delete(id);
-  }
-
-  /**
-   * Derive a {@link NotifiableRef} from the target. Accepts a raw ref directly, otherwise
-   * prefers `toNotifiableRef()`. Throws if neither is available.
-   */
+  /** Accepts a raw ref, a `toNotifiableRef()`, or a `@NotifiableId()`-decorated notifiable. */
   private refOf(target: NotifiableTarget): NotifiableRef {
-    if (isRef(target)) return target;
-    const toRef = (target as Notifiable).toNotifiableRef;
-    if (typeof toRef === 'function') {
-      return toRef.call(target);
-    }
-    throw new Error(
-      'NotificationsQueryService needs a notifiable reference. Pass a { type, id } ref, or ' +
-        'implement toNotifiableRef() on the notifiable.',
-    );
+    return isRef(target) ? target : notifiableRef(target as Notifiable);
   }
 }
 

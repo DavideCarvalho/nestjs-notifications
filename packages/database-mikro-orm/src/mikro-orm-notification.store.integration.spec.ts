@@ -83,6 +83,45 @@ describe('MikroOrmNotificationStore (integration, sqlite)', () => {
     const afterDelete = await store.getForNotifiable('User', '42');
     expect(afterDelete.map((r) => r.type)).toEqual(['B', 'A']);
   });
+
+  it('scopes reads by tenant when a tenantId is provided', async () => {
+    const t1 = await store.save({
+      type: 'T1',
+      notifiableType: 'User',
+      notifiableId: 'tenant-user',
+      tenantId: 'tenant-1',
+      data: { n: 1 },
+    });
+    await store.save({
+      type: 'T2',
+      notifiableType: 'User',
+      notifiableId: 'tenant-user',
+      tenantId: 'tenant-2',
+      data: { n: 2 },
+    });
+
+    // tenantId persists round-trip
+    expect(t1.tenantId).toBe('tenant-1');
+
+    // filtering by tenant-1 returns only its row
+    const forTenant1 = await store.getForNotifiable('User', 'tenant-user', 'tenant-1');
+    expect(forTenant1.map((r) => r.type)).toEqual(['T1']);
+
+    // reading another tenant returns nothing
+    expect(await store.getForNotifiable('User', 'tenant-user', 'nope')).toHaveLength(0);
+
+    // unfiltered read returns both tenants' rows
+    const unscoped = await store.getForNotifiable('User', 'tenant-user');
+    expect(unscoped.map((r) => r.type).sort()).toEqual(['T1', 'T2']);
+
+    // getUnread + markAllAsRead respect the tenant filter
+    expect((await store.getUnread('User', 'tenant-user', 'tenant-1')).map((r) => r.type)).toEqual([
+      'T1',
+    ]);
+    await store.markAllAsRead('User', 'tenant-user', 'tenant-1');
+    expect(await store.getUnread('User', 'tenant-user', 'tenant-1')).toHaveLength(0);
+    expect(await store.getUnread('User', 'tenant-user', 'tenant-2')).toHaveLength(1);
+  });
 });
 
 function delay(ms = 5): Promise<void> {

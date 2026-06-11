@@ -20,6 +20,6 @@ export class BullmqNotificationProcessor extends WorkerHost {
   async process(job: Job<NotificationJob>): Promise<void> {
     const data = job.data;
     const { notifiable, notification } = await this.serializer.hydrateJob(data);
-    await this.channelRunner.run(notifiable, notification, data.channels);
+    await this.channelRunner.run(notifiable, notification, data.channels, { tenant: data.tenant });
   }
 }

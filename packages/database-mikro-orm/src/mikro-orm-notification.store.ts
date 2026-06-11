@@ -16,6 +16,7 @@ function toStored(row: NotificationEntity): StoredNotification {
     type: row.type,
     notifiableType: row.notifiableType,
     notifiableId: row.notifiableId,
+    tenantId: row.tenantId ?? null,
     data: row.data,
     readAt: row.readAt ?? null,
     createdAt: row.createdAt,
@@ -37,6 +38,7 @@ export class MikroOrmNotificationStore implements NotificationStore {
       type: notification.type,
       notifiableType: notification.notifiableType,
       notifiableId: notification.notifiableId,
+      tenantId: notification.tenantId ?? null,
       data: notification.data,
       readAt: null,
       createdAt: now,
@@ -50,10 +52,19 @@ export class MikroOrmNotificationStore implements NotificationStore {
     await this.em.nativeUpdate(NotificationEntity, { id }, { readAt: new Date() });
   }
 
-  async markAllAsRead(notifiableType: string, notifiableId: string): Promise<void> {
+  async markAllAsRead(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+  ): Promise<void> {
     await this.em.nativeUpdate(
       NotificationEntity,
-      { notifiableType, notifiableId, readAt: null },
+      {
+        notifiableType,
+        notifiableId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
+        readAt: null,
+      },
       { readAt: new Date() },
     );
   }
@@ -61,25 +72,33 @@ export class MikroOrmNotificationStore implements NotificationStore {
   async getForNotifiable(
     notifiableType: string,
     notifiableId: string,
+    tenantId?: string,
   ): Promise<StoredNotification[]> {
     const rows = await this.em
       .fork()
       .find(
         NotificationEntity,
-        { notifiableType, notifiableId },
+        { notifiableType, notifiableId, ...(tenantId !== undefined ? { tenantId } : {}) },
         { orderBy: { createdAt: 'DESC' } },
       );
     return rows.map(toStored);
   }
 
-  async getUnread(notifiableType: string, notifiableId: string): Promise<StoredNotification[]> {
-    const rows = await this.em
-      .fork()
-      .find(
-        NotificationEntity,
-        { notifiableType, notifiableId, readAt: null },
-        { orderBy: { createdAt: 'DESC' } },
-      );
+  async getUnread(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+  ): Promise<StoredNotification[]> {
+    const rows = await this.em.fork().find(
+      NotificationEntity,
+      {
+        notifiableType,
+        notifiableId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
+        readAt: null,
+      },
+      { orderBy: { createdAt: 'DESC' } },
+    );
     return rows.map(toStored);
   }
 

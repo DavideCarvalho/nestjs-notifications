@@ -14,6 +14,7 @@ function toStored(row: any): StoredNotification {
     type: row.type,
     notifiableType: row.notifiableType,
     notifiableId: row.notifiableId,
+    tenantId: row.tenantId ?? null,
     data: row.data,
     readAt: row.readAt ?? null,
     createdAt: row.createdAt,
@@ -36,6 +37,7 @@ export class PrismaNotificationStore implements NotificationStore {
         type: notification.type,
         notifiableType: notification.notifiableType,
         notifiableId: notification.notifiableId,
+        tenantId: notification.tenantId ?? null,
         data: notification.data,
         readAt: null,
       },
@@ -50,9 +52,18 @@ export class PrismaNotificationStore implements NotificationStore {
     });
   }
 
-  async markAllAsRead(notifiableType: string, notifiableId: string): Promise<void> {
+  async markAllAsRead(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+  ): Promise<void> {
     await this.client.notification.updateMany({
-      where: { notifiableType, notifiableId, readAt: null },
+      where: {
+        notifiableType,
+        notifiableId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
+        readAt: null,
+      },
       data: { readAt: new Date() },
     });
   }
@@ -60,17 +71,27 @@ export class PrismaNotificationStore implements NotificationStore {
   async getForNotifiable(
     notifiableType: string,
     notifiableId: string,
+    tenantId?: string,
   ): Promise<StoredNotification[]> {
     const rows = await this.client.notification.findMany({
-      where: { notifiableType, notifiableId },
+      where: { notifiableType, notifiableId, ...(tenantId !== undefined ? { tenantId } : {}) },
       orderBy: { createdAt: 'desc' },
     });
     return rows.map(toStored);
   }
 
-  async getUnread(notifiableType: string, notifiableId: string): Promise<StoredNotification[]> {
+  async getUnread(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+  ): Promise<StoredNotification[]> {
     const rows = await this.client.notification.findMany({
-      where: { notifiableType, notifiableId, readAt: null },
+      where: {
+        notifiableType,
+        notifiableId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
+        readAt: null,
+      },
       orderBy: { createdAt: 'desc' },
     });
     return rows.map(toStored);

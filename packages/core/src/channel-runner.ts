@@ -5,7 +5,7 @@ import { ChannelRegistry } from './channel-registry';
 import { injectServices } from './decorators';
 import { ChannelNotRegisteredError } from './errors';
 import { NotificationFailedEvent, NotificationSendingEvent, NotificationSentEvent } from './events';
-import type { ChannelResult, Notifiable, Notification } from './interfaces';
+import type { ChannelResult, DeliveryContext, Notifiable, Notification } from './interfaces';
 import type { NotificationsModuleOptions } from './options';
 import { NOTIFICATION_OPTIONS, NotificationEvents } from './tokens';
 
@@ -35,6 +35,7 @@ export class ChannelRunner {
     notifiable: Notifiable,
     notification: Notification,
     channels: string[],
+    context: DeliveryContext = {},
   ): Promise<ChannelResult[]> {
     // Populate @InjectService properties from the container (no-op if there are none).
     injectServices(notification, this.moduleRef);
@@ -44,13 +45,13 @@ export class ChannelRunner {
     if (failFast) {
       const results: ChannelResult[] = [];
       for (const channel of channels) {
-        results.push(await this.deliver(notifiable, notification, channel, true));
+        results.push(await this.deliver(notifiable, notification, channel, true, context));
       }
       return results;
     }
 
     const settled = await Promise.allSettled(
-      channels.map((channel) => this.deliver(notifiable, notification, channel, false)),
+      channels.map((channel) => this.deliver(notifiable, notification, channel, false, context)),
     );
     return settled.map((s, i) =>
       s.status === 'fulfilled'
@@ -64,6 +65,7 @@ export class ChannelRunner {
     notification: Notification,
     channel: string,
     rethrow: boolean,
+    context: DeliveryContext,
   ): Promise<ChannelResult> {
     // shouldSend gate (Laravel parity): skip this channel when it returns false.
     if (
@@ -88,7 +90,7 @@ export class ChannelRunner {
     );
 
     try {
-      const response = await driver.send(notifiable, notification);
+      const response = await driver.send(notifiable, notification, context);
       this.events.emit(
         NotificationEvents.sent,
         new NotificationSentEvent(notifiable, notification, channel),

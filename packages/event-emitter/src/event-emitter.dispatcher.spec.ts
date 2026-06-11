@@ -49,6 +49,8 @@ describe('EventEmitterDispatcher', () => {
     await dispatcher.handle(job);
 
     expect(serializer.hydrateJob).toHaveBeenCalledWith(job);
-    expect(runner.run).toHaveBeenCalledWith(notifiable, notification, ['mail']);
+    expect(runner.run).toHaveBeenCalledWith(notifiable, notification, ['mail'], {
+      tenant: undefined,
+    });
   });
 });

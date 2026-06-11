@@ -19,6 +19,9 @@ export class NotificationEntity {
   @Column({ type: 'varchar' })
   notifiableId!: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  tenantId!: string | null;
+
   @Column({ type: 'simple-json' })
   data!: Record<string, unknown>;
 

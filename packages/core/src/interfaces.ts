@@ -118,10 +118,12 @@ export interface ChannelResult {
   error?: unknown;
 }
 
-/** Result of sending a notification to one notifiable. */
+/** Result of sending a notification to one notifiable (within one tenant, if scoped). */
 export interface SendResult {
   notifiable: Notifiable;
   results: ChannelResult[];
+  /** The tenant this delivery was scoped to, when multi-tenant. */
+  tenant?: string;
 }
 
 /**
@@ -168,11 +170,26 @@ export interface NotificationClass {
   deserialize?(data: Record<string, unknown>): Notification;
 }
 
+/**
+ * Per-delivery context threaded to channels. `tenant` scopes config and storage in
+ * multi-tenant apps (set via `notifications.forTenant(id)`); undefined = single-tenant.
+ */
+export interface DeliveryContext {
+  tenant?: string;
+}
+
 /** Delivers a notification over a single transport (mail, database, slack, ...). */
 export interface ChannelDriver {
   readonly channel: string;
-  /** Deliver; may return the transport's response (passed to `afterSending` and SendResult). */
-  send(notifiable: Notifiable, notification: Notification): Promise<unknown>;
+  /**
+   * Deliver; may return the transport's response (passed to `afterSending` and SendResult).
+   * `context.tenant` lets a channel resolve per-tenant config/storage.
+   */
+  send(
+    notifiable: Notifiable,
+    notification: Notification,
+    context?: DeliveryContext,
+  ): Promise<unknown>;
 }
 
 /** A unit of work handed to a {@link DispatchDriver}. */
@@ -183,6 +200,8 @@ export interface NotificationJob {
   queue?: string;
   /** Delivery delay in milliseconds (honored by async dispatchers). */
   delay?: number;
+  /** Tenant scope for this job (multi-tenant apps). */
+  tenant?: string;
 }
 
 /** Decides where/when a job is processed: inline, in-process events, Redis, BullMQ. */

@@ -3,15 +3,19 @@ import type { ModuleRef } from '@nestjs/core';
 import type { ChannelRef, Notifiable, NotifiableRef, Notification } from './interfaces';
 
 const CHANNEL_HANDLERS = Symbol('nestjs-notifications:channel-handlers');
-const INJECTED_SERVICES = Symbol('nestjs-notifications:injected-services');
 const NOTIFIABLE_ROUTES = Symbol('nestjs-notifications:notifiable-routes');
 const NOTIFIABLE_ID = Symbol('nestjs-notifications:notifiable-id');
+const TENANT_FIELD = Symbol('nestjs-notifications:tenant-field');
+
+// Key under which NestJS's own `@Inject()` stores property-injection metadata
+// (PROPERTY_DEPS_METADATA from @nestjs/common): an array of { key, type }.
+const NEST_PROPERTY_DEPS = 'self:properties_metadata';
 
 /** Maps a channel name to the notification method that builds its payload. */
 type HandlerMap = Record<string, string | symbol>;
-interface InjectedService {
-  propertyKey: string | symbol;
-  token: unknown;
+interface NestPropertyDep {
+  key: string | symbol;
+  type: unknown;
 }
 
 /**
@@ -44,38 +48,10 @@ export function createChannel(channel: string): ChannelHandle {
   return handle;
 }
 
-/**
- * Inject a provider into a notification property. The library resolves it from the Nest
- * container at delivery time (and again after async rehydration), so notifications stay
- * `new`-able with data while still using services:
- *
- * ```ts
- * class InvoicePaid {
- *   @InjectService(UrlService) private urls!: UrlService;
- * }
- * ```
- */
-export function InjectService(token: unknown): PropertyDecorator {
-  return (target, propertyKey) => {
-    const list: InjectedService[] = [
-      ...((Reflect.getOwnMetadata(INJECTED_SERVICES, target.constructor) as InjectedService[]) ??
-        []),
-    ];
-    list.push({ propertyKey, token });
-    Reflect.defineMetadata(INJECTED_SERVICES, list, target.constructor);
-  };
-}
-
 function readHandlers(notification: Notification): HandlerMap {
   return (
     (Reflect.getMetadata(CHANNEL_HANDLERS, notification.constructor) as HandlerMap | undefined) ??
     {}
-  );
-}
-
-function readInjected(notification: Notification): InjectedService[] {
-  return (
-    (Reflect.getMetadata(INJECTED_SERVICES, notification.constructor) as InjectedService[]) ?? []
   );
 }
 
@@ -112,14 +88,30 @@ export function getHandler(
 }
 
 /**
- * Populate `@InjectService` properties from the container. Idempotent and only fills
+ * Populate properties marked with NestJS's own `@Inject(TOKEN)` from the container. Because a
+ * notification is `new`-ed (not created by Nest), Nest never wires these — so the library reads
+ * Nest's property-injection metadata and fills them at delivery time. Idempotent: only fills
  * properties that are still undefined, so it is safe to call before every delivery.
+ *
+ * ```ts
+ * class InvoicePaid {
+ *   @Inject(UrlService) private urls!: UrlService; // the real @nestjs/common decorator
+ * }
+ * ```
  */
 export function injectServices(notification: Notification, moduleRef: ModuleRef): void {
-  for (const { propertyKey, token } of readInjected(notification)) {
-    const target = notification as Record<string | symbol, unknown>;
-    if (target[propertyKey] === undefined) {
-      target[propertyKey] = moduleRef.get(token as never, { strict: false });
+  const deps =
+    (Reflect.getMetadata(NEST_PROPERTY_DEPS, notification.constructor) as
+      | NestPropertyDep[]
+      | undefined) ?? [];
+  const target = notification as Record<string | symbol, unknown>;
+  for (const { key, type } of deps) {
+    if (target[key] === undefined) {
+      try {
+        target[key] = moduleRef.get(type as never, { strict: false });
+      } catch {
+        // Provider not found in the container — leave it unset rather than throw.
+      }
     }
   }
 }
@@ -202,4 +194,42 @@ export function notifiableRef(notifiable: Notifiable): NotifiableRef {
     );
   }
   return { type: ctor.notifiableType ?? ctor.name, id: id as string | number };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Tenant decorator — scope a send to one or many tenants                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Mark the property that carries the tenant scope on a notification (or notifiable). The value
+ * may be a single tenant id or an array (the send fans out to each). Overridden by an explicit
+ * `notifications.forTenant(id)` / `forTenants([...])`.
+ *
+ * ```ts
+ * class InvoicePaid { @Tenant() workspaceId!: string; }
+ * class Announcement { @Tenant() workspaces!: string[]; } // delivered per workspace
+ * ```
+ */
+export function Tenant(): PropertyDecorator {
+  return (target, propertyKey) => {
+    Reflect.defineMetadata(TENANT_FIELD, propertyKey, target.constructor);
+  };
+}
+
+function readTenantField(target: object | undefined): string[] | undefined {
+  if (!target) return undefined;
+  const key = Reflect.getMetadata(TENANT_FIELD, target.constructor) as string | symbol | undefined;
+  if (key === undefined) return undefined;
+  const value = (target as Record<string | symbol, unknown>)[key];
+  if (value === undefined || value === null) return undefined;
+  const list = (Array.isArray(value) ? value : [value]).map(String).filter((t) => t.length > 0);
+  return list.length ? list : undefined;
+}
+
+/**
+ * Resolve the tenant(s) for a send from the `@Tenant()` decorator — first on the notification,
+ * then on the notifiable. Returns `undefined` when no tenant is declared (single-tenant).
+ */
+export function resolveTenants(notification: object, notifiable: object): string[] | undefined {
+  return readTenantField(notification) ?? readTenantField(notifiable);
 }

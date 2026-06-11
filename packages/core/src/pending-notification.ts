@@ -33,6 +33,7 @@ export class PendingNotification {
     private readonly service: NotificationService,
     channel: string,
     routeValue: unknown,
+    private readonly tenants?: string[],
   ) {
     this.notifiable.route(channel, routeValue);
   }
@@ -43,6 +44,6 @@ export class PendingNotification {
   }
 
   notify(notification: NotificationInput): Promise<SendResult[]> {
-    return this.service.send(this.notifiable, notification);
+    return this.service.sendScoped(this.notifiable, notification, this.tenants);
   }
 }
