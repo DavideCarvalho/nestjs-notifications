@@ -22,18 +22,28 @@
   "peerDependencies": {
     "@dudousxd/nestjs-notifications-core": ">=0.1.0 <1.0.0",
     "@nestjs/common": "^10.0.0 || ^11.0.0",
-    "twilio": "^5.0.0"
+    "twilio": "^5.0.0",
+    "@vonage/server-sdk": ">=3",
+    "@aws-sdk/client-sns": ">=3"
   },
   "peerDependenciesMeta": {
     "twilio": {
+      "optional": true
+    },
+    "@vonage/server-sdk": {
+      "optional": true
+    },
+    "@aws-sdk/client-sns": {
       "optional": true
     }
   },
   "devDependencies": {
     "@dudousxd/nestjs-notifications-core": "workspace:^",
-    "@nestjs/common": "^11.0.0",
-    "twilio": "^5.0.0",
-    "reflect-metadata": "^0.2.2",
-    "typescript": "^5.7.2"
+    "@nestjs/common": "11.1.26",
+    "twilio": "5.13.1",
+    "@vonage/server-sdk": "3.27.0",
+    "@aws-sdk/client-sns": "3.1066.0",
+    "reflect-metadata": "0.2.2",
+    "typescript": "5.9.3"
   }
 }

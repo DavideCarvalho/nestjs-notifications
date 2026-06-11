@@ -5,7 +5,12 @@ export * from './tokens';
 export * from './events';
 export * from './errors';
 export { NotificationsModule } from './notifications.module';
-export { NotificationService } from './notification.service';
+export {
+  NotificationService,
+  type ScopedNotifier,
+  type SendScope,
+  type TenantScopedNotifier,
+} from './notification.service';
 export { ChannelRegistry } from './channel-registry';
 export { ChannelRunner } from './channel-runner';
 export { NotificationSerializer } from './serializer';

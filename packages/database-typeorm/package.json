@@ -28,11 +28,11 @@
   "devDependencies": {
     "@dudousxd/nestjs-notifications-core": "workspace:^",
     "@dudousxd/nestjs-notifications-database": "workspace:^",
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/typeorm": "^11.0.0",
-    "reflect-metadata": "^0.2.2",
-    "typeorm": "^0.3.0",
-    "typescript": "^5.7.2",
-    "sqlite3": "^5.1.7"
+    "@nestjs/common": "11.1.26",
+    "@nestjs/typeorm": "11.0.1",
+    "reflect-metadata": "0.2.2",
+    "typeorm": "0.3.30",
+    "typescript": "5.9.3",
+    "sqlite3": "5.1.7"
   }
 }

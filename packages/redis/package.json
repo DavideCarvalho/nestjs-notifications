@@ -26,9 +26,9 @@
   },
   "devDependencies": {
     "@dudousxd/nestjs-notifications-core": "workspace:^",
-    "@nestjs/common": "^11.0.0",
-    "ioredis": "^5.0.0",
-    "reflect-metadata": "^0.2.2",
-    "typescript": "^5.7.2"
+    "@nestjs/common": "11.1.26",
+    "ioredis": "5.11.1",
+    "reflect-metadata": "0.2.2",
+    "typescript": "5.9.3"
   }
 }

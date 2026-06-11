@@ -6,6 +6,8 @@ export class NotificationSendingEvent {
     public readonly notifiable: Notifiable,
     public readonly notification: Notification,
     public readonly channel: string,
+    /** Tenant the delivery is scoped to, when multi-tenant. */
+    public readonly tenant?: string,
   ) {}
 }
 
@@ -15,6 +17,12 @@ export class NotificationSentEvent {
     public readonly notifiable: Notifiable,
     public readonly notification: Notification,
     public readonly channel: string,
+    /** Tenant the delivery was scoped to, when multi-tenant. */
+    public readonly tenant?: string,
+    /** Wall-clock time the channel's `send()` took, in milliseconds. */
+    public readonly durationMs?: number,
+    /** Whatever the channel driver returned (e.g. a provider message id). */
+    public readonly response?: unknown,
   ) {}
 }
 
@@ -25,5 +33,9 @@ export class NotificationFailedEvent {
     public readonly notification: Notification,
     public readonly channel: string,
     public readonly error: unknown,
+    /** Tenant the delivery was scoped to, when multi-tenant. */
+    public readonly tenant?: string,
+    /** Wall-clock time before the failure, in milliseconds. */
+    public readonly durationMs?: number,
   ) {}
 }

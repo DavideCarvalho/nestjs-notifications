@@ -8,7 +8,9 @@ import type {
   Notifiable,
   Notification,
   NotificationInput,
+  ScopedNotifier,
   SendResult,
+  SendScope,
 } from '@dudousxd/nestjs-notifications-core';
 import { Injectable } from '@nestjs/common';
 
@@ -90,39 +92,64 @@ export class NotificationFake {
     return new PendingNotification(this as unknown as NotificationService, channel, routeValue);
   }
 
-  /** @internal Used by {@link PendingNotification} and tenant scoping. */
+  /** @internal Used by {@link PendingNotification} and tenant/channel scoping. */
   sendScoped(
     notifiables: Notifiable | Notifiable[],
     notification: NotificationInput,
-    tenants?: string[],
+    scope: SendScope = {},
   ): Promise<SendResult[]> {
     const n = notification as Notification;
     const mode = n.shouldQueue || n.delay !== undefined ? 'async' : 'sync';
-    return this.record(notifiables, n, mode, tenants);
+    return this.record(notifiables, n, mode, scope);
   }
 
-  /** Scope recorded sends to one or more tenants — mirrors {@link NotificationService.forTenant}. */
-  forTenant(tenant: string) {
-    return this.forTenants([tenant]);
+  /** Scope recorded sends to a single tenant — mirrors {@link NotificationService.forTenant}. */
+  forTenant(tenant: string): ScopedNotifier {
+    return this.scoped({ tenants: [tenant] });
   }
 
-  forTenants(tenants: string[]) {
+  /** Scope recorded sends to several tenants. */
+  forTenants(tenants: string[]): ScopedNotifier {
+    return this.scoped({ tenants });
+  }
+
+  /** Record only these channels — mirrors {@link NotificationService.only}. */
+  only(channels: string[]): ScopedNotifier {
+    return this.scoped({ only: channels });
+  }
+
+  /** Drop these channels — mirrors {@link NotificationService.except}. */
+  except(channels: string[]): ScopedNotifier {
+    return this.scoped({ except: channels });
+  }
+
+  private scoped(scope: SendScope): ScopedNotifier {
+    const merge = (extra: SendScope): ScopedNotifier => {
+      const except =
+        scope.except || extra.except
+          ? [...(scope.except ?? []), ...(extra.except ?? [])]
+          : undefined;
+      return this.scoped({
+        tenants: extra.tenants ?? scope.tenants,
+        only: extra.only ?? scope.only,
+        except,
+      });
+    };
     return {
-      send: (n: Notifiable | Notifiable[], notif: NotificationInput) =>
-        this.record(n, notif as Notification, 'sync', tenants),
-      notify: (n: Notifiable | Notifiable[], notif: NotificationInput) =>
-        this.record(n, notif as Notification, 'sync', tenants),
-      sendNow: (n: Notifiable | Notifiable[], notif: NotificationInput) =>
-        this.record(n, notif as Notification, 'sync', tenants),
-      sendAsync: (n: Notifiable | Notifiable[], notif: NotificationInput) =>
-        this.record(n, notif as Notification, 'async', tenants),
-      route: (channel: string, routeValue: unknown) =>
-        new PendingNotification(
-          this as unknown as NotificationService,
-          channel,
-          routeValue,
-          tenants,
-        ),
+      forTenant: (tenant) => merge({ tenants: [tenant] }),
+      forTenants: (tenants) => merge({ tenants }),
+      only: (channels) => merge({ only: channels }),
+      except: (channels) => merge({ except: channels }),
+      send: (n, notif) =>
+        this.record(n as Notifiable | Notifiable[], notif as Notification, 'sync', scope),
+      notify: (n, notif) =>
+        this.record(n as Notifiable | Notifiable[], notif as Notification, 'sync', scope),
+      sendNow: (n, notif) =>
+        this.record(n as Notifiable | Notifiable[], notif as Notification, 'sync', scope),
+      sendAsync: (n, notif) =>
+        this.record(n as Notifiable | Notifiable[], notif as Notification, 'async', scope),
+      route: (channel, routeValue) =>
+        new PendingNotification(this as unknown as NotificationService, channel, routeValue, scope),
     };
   }
 
@@ -130,20 +157,33 @@ export class NotificationFake {
     notifiables: Notifiable | Notifiable[],
     notification: Notification,
     mode: 'sync' | 'async',
-    tenants?: string[],
+    scope: SendScope = {},
   ): Promise<SendResult[]> {
     const targets = Array.isArray(notifiables) ? notifiables : [notifiables];
     const status = mode === 'async' ? ('queued' as const) : ('sent' as const);
-    const scopes = tenants ?? [undefined];
+    const scopes = scope.tenants ?? [undefined];
     const out: SendResult[] = [];
     for (const notifiable of targets) {
-      const channels = this.channelsFor(notification, notifiable);
+      const channels = this.filterChannels(this.channelsFor(notification, notifiable), scope);
       for (const tenant of scopes) {
         this.records.push({ notifiable, notification, channels, mode, tenant });
         out.push({ notifiable, results: channels.map((channel) => ({ channel, status })), tenant });
       }
     }
     return out;
+  }
+
+  private filterChannels(channels: string[], scope: SendScope): string[] {
+    let result = channels;
+    if (scope.only) {
+      const allow = new Set(scope.only);
+      result = result.filter((c) => allow.has(c));
+    }
+    if (scope.except && scope.except.length > 0) {
+      const deny = new Set(scope.except);
+      result = result.filter((c) => !deny.has(c));
+    }
+    return result;
   }
 
   private channelsFor(notification: Notification, notifiable: Notifiable): string[] {

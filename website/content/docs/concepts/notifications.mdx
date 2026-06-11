@@ -187,6 +187,30 @@ export class InvoicePaid {
 This differs from `via()`: `via()` decides the channel list up front, while `shouldSend` runs at
 delivery time per notifiable and is the cleanest way to honour a per-recipient opt-out.
 
+### Ad-hoc channel filtering with only / except
+
+`shouldSend` and `via()` live on the notification. When the **caller** wants to override the channels
+for one specific send, chain `only` (allow-list) or `except` (deny-list) off the service:
+
+```ts
+// Only email, even if the notification's via() also lists database + push.
+await notifications.only(['mail']).send(user, new InvoicePaid(invoiceId));
+
+// Everything the notification declares, minus SMS — for this send only.
+await notifications.except(['sms']).send(user, new Welcome());
+```
+
+They compose with [`forTenant`](/docs/concepts/multi-tenancy) and apply to `send`, `notify`,
+`sendNow`, and `sendAsync`:
+
+```ts
+await notifications.forTenant('acme').only(['mail', 'database']).send(user, new InvoicePaid(id));
+```
+
+A channel filtered out here never runs and isn't recorded in the `SendResult` — handy for "resend just
+the email" actions or muting a noisy channel during an incident, without touching the notification
+class.
+
 ### afterSending hook
 
 `afterSending(notifiable, channel, response)` is a lifecycle hook called **after each channel

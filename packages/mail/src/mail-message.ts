@@ -19,6 +19,8 @@ export class MailMessage {
   private _actionUrl?: string;
   private _salutation?: string;
   private _markdown?: string;
+  private _react?: unknown;
+  private _mjml?: string;
 
   /** Override the sender address for this message. */
   from(addr: string): this {
@@ -66,6 +68,28 @@ export class MailMessage {
     return this;
   }
 
+  /**
+   * Set a React element as the body. Rendered to HTML by {@link ReactEmailRenderer}
+   * (requires the optional `react` + `@react-email/render` peers).
+   *
+   * ```ts
+   * new MailMessage().subject('Hi').react(<WelcomeEmail name="Ada" />);
+   * ```
+   */
+  react(element: unknown): this {
+    this._react = element;
+    return this;
+  }
+
+  /**
+   * Set an MJML body. Compiled to responsive HTML by {@link MjmlMailRenderer}
+   * (requires the optional `mjml` peer).
+   */
+  mjml(markup: string): this {
+    this._mjml = markup;
+    return this;
+  }
+
   get fromAddress(): string | undefined {
     return this._from;
   }
@@ -96,5 +120,13 @@ export class MailMessage {
 
   get markdownBody(): string | undefined {
     return this._markdown;
+  }
+
+  get reactBody(): unknown {
+    return this._react;
+  }
+
+  get mjmlBody(): string | undefined {
+    return this._mjml;
   }
 }

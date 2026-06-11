@@ -5,6 +5,8 @@ export {
   type TwilioOptions,
   TwilioTransport,
 } from './transport';
+export { VonageTransport, type VonageOptions } from './vonage.transport';
+export { SnsTransport, type SnsOptions } from './sns.transport';
 export {
   Sms,
   SmsChannel,
@@ -21,4 +23,6 @@ export {
   SMS_TRANSPORT,
   SMS_TRANSPORT_RESOLVER,
   SMS_TWILIO_OPTIONS,
+  SMS_VONAGE_OPTIONS,
+  SMS_SNS_OPTIONS,
 } from './tokens';

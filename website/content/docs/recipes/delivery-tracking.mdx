@@ -1,0 +1,123 @@
+---
+title: Delivery tracking
+description: Persist the real per-channel delivery status — sent, failed, delivered, bounced — not just the in-memory SendResult. The delivery-tracking package records every send and updates it from Twilio / SES status webhooks.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+`send()` returns a `SendResult` that tells you what happened *right now* — accepted by the transport,
+or threw. But "the SMS provider accepted it" isn't "the phone received it." Carriers and mailbox
+providers confirm the real outcome **later**, over a status webhook. `@dudousxd/nestjs-notifications-delivery-tracking`
+persists a row per channel delivery and moves it through its lifecycle as those callbacks arrive.
+
+```bash
+pnpm add @dudousxd/nestjs-notifications-delivery-tracking
+```
+
+## The lifecycle
+
+Each delivery is one record with a status:
+
+| Status | Meaning |
+| --- | --- |
+| `queued` | Accepted for delivery, not yet handed to the transport. |
+| `sent` | The channel transport accepted it (no terminal confirmation yet). |
+| `failed` | The transport threw while sending. |
+| `delivered` | The provider confirmed delivery, via an inbound status webhook. |
+| `bounced` | The provider reported a bounce / complaint / undeliverable. |
+
+## Record every send
+
+The package listens to the `notification.sent` / `notification.failed` events the core already emits —
+no monkey-patching. Register the module (it needs `@nestjs/event-emitter`):
+
+```ts title="app.module.ts"
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { DeliveryTrackingModule } from '@dudousxd/nestjs-notifications-delivery-tracking';
+
+@Module({
+  imports: [
+    EventEmitterModule.forRoot(),
+    NotificationsModule.forRoot({ /* ... */ }),
+    DeliveryTrackingModule.forRoot(), // in-memory store by default
+  ],
+})
+export class AppModule {}
+```
+
+Now every channel delivery writes a `sent` or `failed` record, tagged with the channel, notification
+class, notifiable ref, and tenant. Query it through `DeliveryTrackingService`:
+
+```ts
+const failures = await tracking.list({ status: 'failed', tenantId: 'acme' });
+```
+
+<Callout type="info">
+  The default store keeps records in memory — great for development and tests. For production, supply
+  a persistent `store` implementing `DeliveryTrackingStore` (the same pattern as the database
+  channel's store), backed by your own table.
+</Callout>
+
+## Close the loop with inbound webhooks
+
+To move a record from `sent` to `delivered`/`bounced`, mount the provider's status callback. The
+package ships controllers that verify the callback and update the matching record.
+
+### Twilio (SMS)
+
+Twilio POSTs status callbacks signed with your auth token. The controller verifies the
+`X-Twilio-Signature` and maps Twilio's status to the lifecycle:
+
+```ts title="webhooks.module.ts"
+import { createTwilioStatusController } from '@dudousxd/nestjs-notifications-delivery-tracking';
+
+const TwilioStatusController = createTwilioStatusController({
+  authToken: process.env.TWILIO_AUTH_TOKEN!,
+  path: 'webhooks/twilio/status',
+});
+
+@Module({ controllers: [TwilioStatusController] })
+export class WebhooksModule {}
+```
+
+Point your Twilio messaging service's status callback URL at that path. Invalid signatures are
+rejected with `403`.
+
+### AWS SES (email)
+
+SES delivers bounce / complaint / delivery events via SNS. The controller handles the SNS
+subscription handshake and the notifications:
+
+```ts
+import { createSesNotificationController } from '@dudousxd/nestjs-notifications-delivery-tracking';
+
+const SesController = createSesNotificationController({
+  path: 'webhooks/ses',
+  autoConfirmSubscription: true, // GET the SubscribeURL on first connect
+});
+```
+
+<Callout type="warn">
+  SNS message-signature verification is off by default (it pulls no heavy dependency). For
+  internet-facing endpoints, terminate the webhook behind a verified API gateway, or implement SNS
+  signature verification before trusting the payload.
+</Callout>
+
+## Correlating sends to callbacks
+
+A webhook says "message `SM123` was delivered" — the tracker needs to know which record that is. When
+a channel transport returns the provider's id (Twilio's `MessageSid`, SES's `messageId`), the listener
+captures it automatically, so delivered/bounced updates just work.
+
+If a transport doesn't surface its id, attach it yourself after sending and the next callback will
+correlate:
+
+```ts
+await store.setProviderMessageId(record.id, providerMessageId);
+```
+
+## See it in Telescope
+
+Pair this with the [Telescope watcher](/docs/recipes/telescope) — sent/failed entries now carry the
+tenant and delivery duration, so the dashboard shows per-channel, per-tenant delivery timing
+alongside the persisted final status.

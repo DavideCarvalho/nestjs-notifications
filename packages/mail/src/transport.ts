@@ -50,3 +50,39 @@ export class NodemailerTransport implements MailTransport {
     });
   }
 }
+
+/**
+ * Wraps an ordered list of transports and tries each in turn until one succeeds — a simple
+ * provider failover (e.g. SES went down → fall back to Resend). The last error is rethrown
+ * if every transport fails.
+ *
+ * ```ts
+ * MailChannelModule.forRoot({
+ *   transport: new FailoverMailTransport([sesTransport, resendTransport]),
+ * });
+ * ```
+ */
+export class FailoverMailTransport implements MailTransport {
+  constructor(
+    private readonly transports: MailTransport[],
+    private readonly onFailover?: (failed: MailTransport, error: unknown) => void,
+  ) {
+    if (transports.length === 0) {
+      throw new Error('FailoverMailTransport needs at least one transport.');
+    }
+  }
+
+  async send(payload: MailTransportPayload): Promise<void> {
+    let lastError: unknown;
+    for (const transport of this.transports) {
+      try {
+        await transport.send(payload);
+        return;
+      } catch (error) {
+        lastError = error;
+        this.onFailover?.(transport, error);
+      }
+    }
+    throw lastError;
+  }
+}

@@ -47,8 +47,41 @@ export class AppModule {}
 | --- | --- | --- | --- |
 | `url` | `string` | — | Default target URL, used when neither the message nor the route supplies one. |
 | `headers` | `Record<string, string>` | — | Default headers merged into every request. |
+| `secret` | `string` | — | HMAC-SHA256 secret. When set, every request is signed (see below). |
+| `signatureHeader` | `string` | `X-Signature-256` | Header the signature is sent in. |
 | `resolveOptions` | `(tenant: string) => WebhookChannelOptions` | — | Per-tenant options resolver. See [Per-tenant config](#per-tenant-config). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+## Signing requests (HMAC)
+
+A receiver can't tell a real webhook from a forged one unless it's signed. Set a `secret` and every
+request gets an `X-Signature-256: sha256=<hex>` header — an HMAC-SHA256 of the exact JSON body:
+
+```ts
+WebhookChannelModule.forRoot({
+  url: 'https://example.com/hooks/notifications',
+  secret: process.env.WEBHOOK_SIGNING_SECRET, // turns on signing
+});
+```
+
+The receiver recomputes the digest over the raw request body and compares (use a constant-time
+compare), matching the GitHub/Stripe webhook convention:
+
+```ts title="receiver — verify the signature"
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+function verify(rawBody: string, header: string, secret: string): boolean {
+  const expected = `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`;
+  return header.length === expected.length &&
+    timingSafeEqual(Buffer.from(header), Buffer.from(expected));
+}
+```
+
+<Callout type="info">
+  The signature is computed over the serialized body, so verify against the **raw** request body, not
+  a re-stringified parsed object. Per-tenant secrets work through `resolveOptions` — return a
+  different `secret` per tenant.
+</Callout>
 
 ## The notification side
 

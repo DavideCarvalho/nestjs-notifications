@@ -1,10 +1,18 @@
 export { MailMessage } from './mail-message';
-export { type MailRenderer, DefaultMailRenderer, MarkdownMailRenderer } from './renderer';
+export {
+  type MailRenderer,
+  type RenderedMail,
+  DefaultMailRenderer,
+  MarkdownMailRenderer,
+  ReactEmailRenderer,
+  MjmlMailRenderer,
+} from './renderer';
 export {
   type MailTransport,
   type MailTransportPayload,
   type SMTPOptions,
   NodemailerTransport,
+  FailoverMailTransport,
 } from './transport';
 export { Mail, MailChannel, type MailChannelOptions, type MailNotification } from './mail.channel';
 export {

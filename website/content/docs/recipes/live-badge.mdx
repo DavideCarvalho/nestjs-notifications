@@ -1,0 +1,154 @@
+---
+title: Live unread badge
+description: A notification bell whose unread count updates the instant a notification arrives — SSE pushes the change, no polling. Combine the SSE channel with the unread count from the database channel.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+A static unread badge goes stale the moment a new notification lands — the user has to refresh to
+see it. The fix is two pieces working together: the [database channel](/docs/channels/database)
+owns the **count**, and the [SSE channel](/docs/channels/sse) **pushes** a live event the browser
+listens to. The badge re-reads the count when the push arrives. No polling, no websockets server to
+run — just `EventSource`.
+
+The recipe: send every in-app notification on **both** the `database` and `sse` channels. The
+database row makes it countable and persistent; the SSE event makes the badge update live.
+
+## 1. Send on both channels
+
+```ts title="invoice-paid.notification.ts"
+import { Notification } from '@dudousxd/nestjs-notifications-core';
+import { Database } from '@dudousxd/nestjs-notifications-database';
+import { Sse } from '@dudousxd/nestjs-notifications-sse';
+
+@Notification()
+export class InvoicePaid {
+  constructor(private readonly invoice: Invoice) {}
+
+  via() {
+    return [Database, Sse];
+  }
+
+  toDatabase() {
+    return { invoiceId: this.invoice.id, amount: this.invoice.total };
+  }
+
+  toSse() {
+    // Whatever the browser needs to react. Keep it small — it rides the live stream.
+    return { type: 'invoice.paid', invoiceId: this.invoice.id };
+  }
+}
+```
+
+Now `await notifications.send(user, new InvoicePaid(invoice))` writes a row **and** pushes an SSE
+event to that user's open tabs.
+
+## 2. Expose the SSE stream and the count
+
+The SSE channel gives you an `SseHub` to build the endpoint, and the database channel gives you
+`NotificationsQueryService` for the count. Mount both:
+
+```ts title="notifications.controller.ts"
+import { Controller, Get, Req, Sse as SseEndpoint, type MessageEvent } from '@nestjs/common';
+import { SseHub, sseKey } from '@dudousxd/nestjs-notifications-sse';
+import { NotificationsQueryService } from '@dudousxd/nestjs-notifications-database';
+import type { Observable } from 'rxjs';
+
+@Controller('notifications')
+export class NotificationsController {
+  constructor(
+    private readonly hub: SseHub,
+    private readonly notifications: NotificationsQueryService,
+  ) {}
+
+  // GET /notifications/unread/count  ->  { count: number }
+  @Get('unread/count')
+  async unreadCount(@Req() req) {
+    return { count: await this.notifications.unreadCount({ type: 'User', id: req.user.id }) };
+  }
+
+  // GET /notifications/stream  ->  text/event-stream
+  @SseEndpoint('stream')
+  stream(@Req() req): Observable<MessageEvent> {
+    // Subscribe to the SAME key the sse channel publishes to (tenant-aware).
+    return this.hub.stream(sseKey(req.tenantId, String(req.user.id)));
+  }
+}
+```
+
+<Callout type="info">
+  `hub.stream(key)` returns an RxJS `Observable` of the events pushed to that key — exactly the shape
+  Nest's `@Sse()` decorator wants. Build the key with `sseKey(tenant, routeValue)` so it matches what
+  the channel published to (the channel uses the notifiable's `routeNotificationFor('sse')` value).
+  Each connected tab gets its own subscription, cleaned up automatically when the tab closes.
+</Callout>
+
+## 3. The badge, live — with the React widget
+
+If you use React, the [`@dudousxd/nestjs-notifications-react`](/docs/recipes/react-inbox) package does
+the wiring for you. `useUnreadCount` connects to the stream and re-reads the count on every push:
+
+```tsx title="Badge.tsx"
+import { useUnreadCount } from '@dudousxd/nestjs-notifications-react';
+
+export function Badge() {
+  const { count } = useUnreadCount({
+    clientOptions: { baseUrl: '/notifications' },
+    sseUrl: '/notifications/stream',
+  });
+
+  return (
+    <span className="bell">
+      🔔{count > 0 && <span className="badge">{count}</span>}
+    </span>
+  );
+}
+```
+
+That's the whole thing — when `InvoicePaid` is sent, the SSE event arrives, the hook refetches
+`/notifications/unread/count`, and the number ticks up without a refresh. Or drop in the full
+[`<Inbox/>`](/docs/recipes/react-inbox) widget, which renders the bell, badge, and dropdown for you.
+
+## 3b. The badge, live — vanilla JS
+
+No React? `EventSource` is built into every browser. Listen for the push and refetch the count:
+
+```ts title="badge.ts"
+const badge = document.querySelector('#bell-badge')!;
+
+async function refreshCount() {
+  const res = await fetch('/notifications/unread/count', { credentials: 'include' });
+  const { count } = await res.json();
+  badge.textContent = count > 0 ? String(count) : '';
+}
+
+const stream = new EventSource('/notifications/stream', { withCredentials: true });
+// The sse channel emits a named `notification` event (configurable via the channel's `event`
+// option), so listen for that — `onmessage` only fires for unnamed events.
+stream.addEventListener('notification', () => refreshCount());
+
+await refreshCount(); // initial paint
+```
+
+<Callout type="warn">
+  Send the count as a separate fetch rather than trusting a number embedded in the SSE payload. The
+  stream tells you *something changed*; the count endpoint is the source of truth (it also reflects
+  reads from other tabs). For high-traffic apps you can debounce `refreshCount` so a burst of events
+  triggers one fetch.
+</Callout>
+
+## How it fits together
+
+```
+notifications.send(user, new InvoicePaid())
+        │
+        ├─ database channel ──> row persisted ──> unreadCount() reads it
+        │
+        └─ sse channel ──────> SseHub.push ────> EventSource (browser)
+                                                      │
+                                            badge refetches the count
+```
+
+The two channels are independent — if the user has no tab open, the SSE event is simply dropped and
+the database row is still there waiting, so the count is correct the next time they load the page.
+That's the durability of the database channel plus the immediacy of SSE, with no extra moving parts.

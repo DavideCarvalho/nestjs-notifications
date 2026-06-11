@@ -64,7 +64,7 @@ export class MailChannel implements ChannelDriver {
     }
 
     const message = handler(notifiable) as MailMessage;
-    const rendered = this.renderer.render(message);
+    const rendered = await this.renderer.render(message);
 
     const transport =
       context?.tenant && this.resolveTransport

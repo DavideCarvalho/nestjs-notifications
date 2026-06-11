@@ -34,12 +34,12 @@
     "@nestjs/event-emitter": "^2.0.0 || ^3.0.0"
   },
   "devDependencies": {
-    "@dudousxd/nestjs-telescope": "^1.7.0",
+    "@dudousxd/nestjs-telescope": "1.7.0",
     "@dudousxd/nestjs-notifications-core": "workspace:^",
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
-    "@nestjs/event-emitter": "^3.0.0",
-    "reflect-metadata": "^0.2.2",
-    "typescript": "^5.7.2"
+    "@nestjs/common": "11.1.26",
+    "@nestjs/core": "11.1.26",
+    "@nestjs/event-emitter": "3.1.0",
+    "reflect-metadata": "0.2.2",
+    "typescript": "5.9.3"
   }
 }

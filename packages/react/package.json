@@ -1,0 +1,33 @@
+{
+  "name": "@dudousxd/nestjs-notifications-react",
+  "version": "0.1.0",
+  "description": "Drop-in React inbox widget and hooks for nestjs-notifications — consumes the read API and SSE stream",
+  "license": "MIT",
+  "author": "Davide Carvalho",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
+    "directory": "packages/react"
+  },
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "typescript": "5.9.3"
+  }
+}

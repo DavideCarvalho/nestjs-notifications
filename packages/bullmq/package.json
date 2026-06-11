@@ -27,10 +27,10 @@
   },
   "devDependencies": {
     "@dudousxd/nestjs-notifications-core": "workspace:^",
-    "@nestjs/bullmq": "^10.0.0 || ^11.0.0",
-    "@nestjs/common": "^11.0.0",
-    "bullmq": "^5.0.0",
-    "reflect-metadata": "^0.2.2",
-    "typescript": "^5.7.2"
+    "@nestjs/bullmq": "11.0.4",
+    "@nestjs/common": "11.1.26",
+    "bullmq": "5.78.0",
+    "reflect-metadata": "0.2.2",
+    "typescript": "5.9.3"
   }
 }

@@ -125,3 +125,69 @@ export class PrismaPrefStore implements PreferenceStore {
 
 Each `PreferenceKey` carries the optional `tenant`, the notifiable's `type`/`id`, and the `channel` —
 everything you need to store and query a row.
+
+## Beyond opt-out: the preference center
+
+Muting is a single on/off per channel. Real apps need a **matrix**: a user wants billing emails but
+not billing push, product updates only weekly, and security alerts they can't turn off at all. That's
+the preference center — a grid of **categories × channels**, plus a per-category **digest frequency**.
+
+A notification declares its category; everything else falls out of the user's matrix.
+
+```ts title="invoice-paid.notification.ts"
+@Notification()
+export class InvoicePaid {
+  readonly category = 'billing'; // ← the row in the matrix
+
+  via() {
+    return [Mail, Database];
+  }
+  // ...
+}
+```
+
+Register the center with your category definitions instead of `forRoot`:
+
+```ts title="app.module.ts"
+import { PreferencesModule } from '@dudousxd/nestjs-notifications-preferences';
+
+PreferencesModule.forCenter({
+  categories: [
+    { key: 'billing', label: 'Billing', allowDigest: true },
+    { key: 'product', label: 'Product updates', allowDigest: true, defaultChannels: ['mail'] },
+    { key: 'security', label: 'Security alerts', mandatory: true }, // can't be turned off
+  ],
+});
+```
+
+`forCenter` binds a category-aware gate to the same `NOTIFICATION_PREFERENCE_GATE` token, so the
+ChannelRunner enforces the matrix automatically:
+
+- a disabled `(category × channel)` toggle → that channel is skipped;
+- a category set to `daily`/`weekly` digest → **instant** delivery is suppressed (a scheduled digest
+  job, which you own, would batch and send those later);
+- a `mandatory` category (e.g. `security`) is **always** delivered, ignoring the matrix.
+
+### A UI in one controller
+
+`createPreferenceCenterController` exposes the matrix as REST, ready for a settings screen:
+
+```ts
+import { createPreferenceCenterController } from '@dudousxd/nestjs-notifications-preferences';
+
+const PreferenceCenterController = createPreferenceCenterController({
+  resolveRef: (req) => ({ type: 'User', id: req.user.id }),
+});
+```
+
+| Route | Purpose |
+| --- | --- |
+| `GET /preferences/categories` | The configured category definitions |
+| `GET /preferences` | The current user's matrix |
+| `PUT /preferences/:category/channels/:channel` | `{ enabled }` — toggle one cell |
+| `PUT /preferences/:category/digest` | `{ digest }` — set a category's frequency |
+
+<Callout type="info">
+  The center is additive — the simple `forRoot` opt-out API above still works unchanged. Pick `forRoot`
+  for a single mute switch, `forCenter` when users need the full grid.
+</Callout>

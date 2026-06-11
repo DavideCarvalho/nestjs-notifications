@@ -95,7 +95,7 @@ export class ChannelRunner {
     const driver = this.registry.get(channel);
     if (!driver) {
       const err = new ChannelNotRegisteredError(channel, this.registry.names());
-      this.emitFailed(notifiable, notification, channel, err);
+      this.emitFailed(notifiable, notification, channel, err, context.tenant);
       if (rethrow) throw err;
       this.logger.error(err.message);
       return { channel, status: 'failed', error: err };
@@ -103,21 +103,36 @@ export class ChannelRunner {
 
     this.events.emit(
       NotificationEvents.sending,
-      new NotificationSendingEvent(notifiable, notification, channel),
+      new NotificationSendingEvent(notifiable, notification, channel, context.tenant),
     );
 
+    const startedAt = Date.now();
     try {
       const response = await driver.send(notifiable, notification, context);
       this.events.emit(
         NotificationEvents.sent,
-        new NotificationSentEvent(notifiable, notification, channel),
+        new NotificationSentEvent(
+          notifiable,
+          notification,
+          channel,
+          context.tenant,
+          Date.now() - startedAt,
+          response,
+        ),
       );
       if (typeof notification.afterSending === 'function') {
         await notification.afterSending(notifiable, channel, response);
       }
       return { channel, status: 'sent', response };
     } catch (error) {
-      this.emitFailed(notifiable, notification, channel, error);
+      this.emitFailed(
+        notifiable,
+        notification,
+        channel,
+        error,
+        context.tenant,
+        Date.now() - startedAt,
+      );
       this.logger.error(`Channel "${channel}" failed: ${describe(error)}`);
       if (rethrow) throw error;
       return { channel, status: 'failed', error };
@@ -129,10 +144,12 @@ export class ChannelRunner {
     notification: Notification,
     channel: string,
     error: unknown,
+    tenant?: string,
+    durationMs?: number,
   ): void {
     this.events.emit(
       NotificationEvents.failed,
-      new NotificationFailedEvent(notifiable, notification, channel, error),
+      new NotificationFailedEvent(notifiable, notification, channel, error, tenant, durationMs),
     );
   }
 }

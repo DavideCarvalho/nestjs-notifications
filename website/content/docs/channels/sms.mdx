@@ -54,8 +54,33 @@ export class AppModule {}
 | `from` | `string` | — | Default sender number for messages that don't set their own. |
 | `transport` | `Type<SmsTransport>` | `TwilioTransport` | Transport class used to deliver. |
 | `twilio` | `{ accountSid, authToken, from? }` | — | Credentials for the built-in `TwilioTransport`. |
+| `vonage` | `{ apiKey, apiSecret, from? }` | — | Credentials for the built-in `VonageTransport`. |
+| `sns` | `{ region, credentials?, senderId? }` | — | Config for the built-in AWS `SnsTransport`. |
 | `resolveTransport` | `(tenant: string) => SmsTransport` | — | Per-tenant transport resolver. See [Per-tenant config](#per-tenant-config). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+Three transports ship in the box — pick one with `transport` and supply its matching options:
+
+```ts title="Vonage"
+import { VonageTransport, SmsChannelModule } from '@dudousxd/nestjs-notifications-sms';
+
+SmsChannelModule.forRoot({
+  transport: VonageTransport,
+  vonage: { apiKey: process.env.VONAGE_KEY!, apiSecret: process.env.VONAGE_SECRET!, from: 'Acme' },
+});
+```
+
+```ts title="AWS SNS"
+import { SnsTransport, SmsChannelModule } from '@dudousxd/nestjs-notifications-sms';
+
+SmsChannelModule.forRoot({
+  transport: SnsTransport,
+  sns: { region: 'us-east-1', senderId: 'Acme' }, // credentials from the AWS default chain
+});
+```
+
+Each transport pulls its own SDK as an optional peer (`twilio`, `@vonage/server-sdk`,
+`@aws-sdk/client-sns`) — install only the one you use.
 
 ## The notification side
 

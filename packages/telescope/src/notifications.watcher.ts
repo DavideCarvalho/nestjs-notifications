@@ -25,6 +25,10 @@ export interface NotificationEntryContent {
   notifiable: string | null;
   notificationClass: string;
   status: 'sent' | 'failed';
+  /** Tenant scope (workspace) the delivery ran under, or null for single-tenant. */
+  tenant: string | null;
+  /** Wall-clock time the channel delivery took, in milliseconds (null if unknown). */
+  durationMs: number | null;
   payload: Record<string, unknown> | null;
   failureReason: string | null;
 }
@@ -85,11 +89,14 @@ export class NotificationsWatcher implements Watcher {
   ): void {
     try {
       const notificationClass = nameOf(event.notification);
+      const tenant = event.tenant ?? null;
       const content: NotificationEntryContent = {
         channel: event.channel,
         notifiable: labelNotifiable(event.notifiable),
         notificationClass,
         status,
+        tenant,
+        durationMs: event.durationMs ?? null,
         payload: this.recordPayload ? snapshot(event.notification) : null,
         failureReason:
           status === 'failed' ? describe((event as NotificationFailedEvent).error) : null,
@@ -101,6 +108,7 @@ export class NotificationsWatcher implements Watcher {
         tags: [
           `channel:${event.channel}`,
           `notification:${notificationClass}`,
+          ...(tenant ? [`tenant:${tenant}`] : []),
           ...(status === 'failed' ? ['failed'] : []),
         ],
         content,

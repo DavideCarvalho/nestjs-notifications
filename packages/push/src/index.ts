@@ -9,6 +9,7 @@ export {
 export { WebPushTransport, type WebPushOptions } from './web-push.transport';
 export { FcmTransport, type FcmOptions } from './fcm.transport';
 export { ExpoTransport, type ExpoOptions } from './expo.transport';
+export { ApnsTransport, type ApnsOptions } from './apns.transport';
 export {
   PushChannelModule,
   type PushChannelModuleOptions,
@@ -19,4 +20,5 @@ export {
   WEB_PUSH_OPTIONS,
   FCM_OPTIONS,
   EXPO_OPTIONS,
+  APNS_OPTIONS,
 } from './tokens';

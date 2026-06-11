@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import {
   type ChannelDriver,
   type DeliveryContext,
@@ -13,6 +14,8 @@ import { WEBHOOK_OPTIONS, WEBHOOK_OPTIONS_RESOLVER } from './tokens';
 import { WebhookMessage } from './webhook-message';
 import type { WebhookMethod } from './webhook-message';
 
+const DEFAULT_SIGNATURE_HEADER = 'X-Signature-256';
+
 /** Channel handle: use as `@Webhook()` on a payload method, or as a token in `via()`. */
 export const Webhook = createChannel('webhook');
 
@@ -22,6 +25,14 @@ export interface WebhookChannelOptions {
   url?: string;
   /** Default headers merged into every request. */
   headers?: Record<string, string>;
+  /**
+   * HMAC-SHA256 secret. When set, the request is signed: the header (default
+   * `X-Signature-256`) is set to `sha256=<hex digest of the raw JSON body>`, so the receiver
+   * can verify authenticity. Per-tenant secrets work via `resolveOptions`.
+   */
+  secret?: string;
+  /** Header name for the signature. Default `X-Signature-256`. */
+  signatureHeader?: string;
 }
 
 /**
@@ -94,16 +105,22 @@ export class WebhookChannel implements ChannelDriver {
     body: Record<string, unknown>,
     messageHeaders: Record<string, string>,
   ): Promise<void> {
+    const payload = JSON.stringify(body);
     const headers: Record<string, string> = {
       ...options.headers,
       ...messageHeaders,
       'Content-Type': 'application/json',
     };
 
+    if (options.secret) {
+      const signature = createHmac('sha256', options.secret).update(payload).digest('hex');
+      headers[options.signatureHeader ?? DEFAULT_SIGNATURE_HEADER] = `sha256=${signature}`;
+    }
+
     const response = await fetch(url, {
       method,
       headers,
-      body: JSON.stringify(body),
+      body: payload,
     });
 
     if (!response.ok) {

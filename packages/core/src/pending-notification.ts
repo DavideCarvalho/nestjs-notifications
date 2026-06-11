@@ -1,5 +1,5 @@
 import type { Notifiable, NotificationInput, SendResult } from './interfaces';
-import type { NotificationService } from './notification.service';
+import type { NotificationService, SendScope } from './notification.service';
 
 /**
  * A notifiable with no backing entity — it simply routes one or more channels to literal
@@ -33,7 +33,7 @@ export class PendingNotification {
     private readonly service: NotificationService,
     channel: string,
     routeValue: unknown,
-    private readonly tenants?: string[],
+    private readonly scope: SendScope = {},
   ) {
     this.notifiable.route(channel, routeValue);
   }
@@ -44,6 +44,6 @@ export class PendingNotification {
   }
 
   notify(notification: NotificationInput): Promise<SendResult[]> {
-    return this.service.sendScoped(this.notifiable, notification, this.tenants);
+    return this.service.sendScoped(this.notifiable, notification, this.scope);
   }
 }

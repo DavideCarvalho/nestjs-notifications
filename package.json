@@ -27,14 +27,14 @@
     "release": "turbo run build --filter=!website && changeset publish"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
-    "@changesets/cli": "^2.27.10",
-    "@swc/core": "^1.10.1",
-    "@types/node": "^22.10.2",
-    "reflect-metadata": "^0.2.2",
-    "turbo": "^2.3.3",
-    "typescript": "^5.7.2",
-    "unplugin-swc": "^1.5.1",
-    "vitest": "^2.1.8"
+    "@biomejs/biome": "1.9.4",
+    "@changesets/cli": "2.31.0",
+    "@swc/core": "1.15.41",
+    "@types/node": "22.19.20",
+    "reflect-metadata": "0.2.2",
+    "turbo": "2.9.17",
+    "typescript": "5.9.3",
+    "unplugin-swc": "1.5.9",
+    "vitest": "2.1.9"
   }
 }

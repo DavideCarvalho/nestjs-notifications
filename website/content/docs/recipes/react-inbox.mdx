@@ -1,0 +1,138 @@
+---
+title: React inbox widget
+description: Drop a notification inbox into a React app with one component. The @dudousxd/nestjs-notifications-react package ships <Inbox/>, a NotificationsProvider, and the useNotifications / useUnreadCount hooks — all consuming the read API and SSE stream you already expose.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+You already have the backend inbox: the [database channel](/docs/channels/database) persists
+notifications, the [REST controller](/docs/recipes/in-app-notifications) exposes them, and the
+[SSE channel](/docs/channels/sse) pushes live updates. `@dudousxd/nestjs-notifications-react` is the
+frontend half — a bell, a badge, a dropdown, and hooks — so you don't hand-write `fetch` calls and
+`EventSource` wiring.
+
+```bash
+pnpm add @dudousxd/nestjs-notifications-react
+```
+
+## The one-liner: `<Inbox/>`
+
+Point it at your API and you have a working inbox — bell, unread badge, dropdown list, mark-as-read,
+mark-all-read, and infinite scroll:
+
+```tsx title="AppHeader.tsx"
+import { Inbox } from '@dudousxd/nestjs-notifications-react';
+
+export function AppHeader() {
+  return (
+    <header>
+      <Inbox
+        clientOptions={{ baseUrl: '/notifications' }}
+        sseUrl="/notifications/stream"
+      />
+    </header>
+  );
+}
+```
+
+That's the whole integration. `clientOptions.baseUrl` is where the
+[REST controller](/docs/recipes/in-app-notifications) is mounted; `sseUrl` is the
+[live stream endpoint](/docs/recipes/live-badge). Drop `sseUrl` and the widget falls back to polling.
+
+## Configure once with `NotificationsProvider`
+
+If several components need the inbox (a header bell, a settings page, a count somewhere else), wrap
+your app once so the client and stream URL are shared:
+
+```tsx title="main.tsx"
+import { NotificationsProvider } from '@dudousxd/nestjs-notifications-react';
+
+root.render(
+  <NotificationsProvider
+    clientOptions={{ baseUrl: '/notifications', credentials: 'include' }}
+    sseUrl="/notifications/stream"
+  >
+    <App />
+  </NotificationsProvider>,
+);
+```
+
+Now `<Inbox/>` and the hooks read their config from context — no props needed.
+
+## The hooks
+
+When you want your own UI, the hooks give you the data and the mutations:
+
+```tsx title="useUnreadCount"
+import { useUnreadCount } from '@dudousxd/nestjs-notifications-react';
+
+const { count, refresh } = useUnreadCount();
+```
+
+`count` updates live off the SSE stream (or polls when there's no `sseUrl`). This is the
+[live badge](/docs/recipes/live-badge) in one line.
+
+```tsx title="useNotifications"
+import { useNotifications } from '@dudousxd/nestjs-notifications-react';
+
+const {
+  notifications,   // the loaded page(s), newest first
+  loading,
+  error,
+  hasMore,
+  loadMore,        // fetch the next page
+  markAsRead,      // (id) => optimistic, rolls back on error
+  markAllAsRead,
+  remove,          // (id) => delete
+  refresh,
+} = useNotifications();
+```
+
+Mutations are optimistic — the UI updates immediately and rolls back if the request fails.
+
+## Customizing the row
+
+`<Inbox/>` renders a sensible default row from `item.data`, but you control it with `renderItem`:
+
+```tsx
+<Inbox
+  renderItem={(item, { markAsRead }) => (
+    <MyRow
+      title={item.data.title as string}
+      unread={!item.readAt}
+      onClick={() => markAsRead(item.id)}
+    />
+  )}
+/>
+```
+
+Other props: `title`, `emptyState`, `onItemClick`, `className`, and `panelClassName`. The widget ships
+with minimal inline styles and no CSS framework dependency, so it inherits your app's look and you
+restyle via the class hooks.
+
+<Callout type="info">
+  **SSR-safe.** The hooks only touch `EventSource`/`window` inside effects and guard for their
+  presence, so the package renders fine under Next.js / Remix server rendering — the live connection
+  opens on the client after hydration.
+</Callout>
+
+## Auth
+
+The client passes through whatever your API needs. Use cookies with `credentials: 'include'`, or send
+a bearer token via `headers`:
+
+```tsx
+<NotificationsProvider
+  clientOptions={{
+    baseUrl: '/notifications',
+    headers: { Authorization: `Bearer ${token}` },
+  }}
+  sseUrl="/notifications/stream"
+>
+```
+
+<Callout type="info">
+  The hand-written `NotificationsClient` mirrors the [REST controller](/docs/recipes/in-app-notifications)
+  exactly. If you generate typed clients with `nestjs-codegen`, the controller is a clean target — a
+  future generator could emit this client straight from your routes.
+</Callout>

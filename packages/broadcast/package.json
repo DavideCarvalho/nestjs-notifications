@@ -28,11 +28,11 @@
   },
   "devDependencies": {
     "@dudousxd/nestjs-notifications-core": "workspace:^",
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/websockets": "^11.0.0",
-    "@nestjs/platform-socket.io": "^11.0.0",
-    "socket.io": "^4.0.0",
-    "reflect-metadata": "^0.2.2",
-    "typescript": "^5.7.2"
+    "@nestjs/common": "11.1.26",
+    "@nestjs/websockets": "11.1.26",
+    "@nestjs/platform-socket.io": "11.1.26",
+    "socket.io": "4.8.3",
+    "reflect-metadata": "0.2.2",
+    "typescript": "5.9.3"
   }
 }

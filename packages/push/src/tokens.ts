@@ -10,5 +10,8 @@ export const FCM_OPTIONS = Symbol('FCM_OPTIONS');
 /** DI token for the options handed to the {@link ExpoTransport}. */
 export const EXPO_OPTIONS = Symbol('EXPO_OPTIONS');
 
+/** DI token for the options handed to the {@link ApnsTransport}. */
+export const APNS_OPTIONS = Symbol('APNS_OPTIONS');
+
 /** DI token for the optional per-tenant {@link PushTransport} resolver. */
 export const PUSH_TRANSPORT_RESOLVER = Symbol('PUSH_TRANSPORT_RESOLVER');

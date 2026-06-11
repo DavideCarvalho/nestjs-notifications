@@ -24,7 +24,8 @@
     "@nestjs/common": "^10.0.0 || ^11.0.0",
     "web-push": "^3.6.0",
     "firebase-admin": "^12.0.0 || ^13.0.0",
-    "expo-server-sdk": "^3.10.0"
+    "expo-server-sdk": "^3.10.0",
+    "@parse/node-apn": ">=6"
   },
   "peerDependenciesMeta": {
     "web-push": {
@@ -35,16 +36,20 @@
     },
     "expo-server-sdk": {
       "optional": true
+    },
+    "@parse/node-apn": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@dudousxd/nestjs-notifications-core": "workspace:^",
-    "@nestjs/common": "^11.0.0",
-    "web-push": "^3.6.0",
-    "firebase-admin": "^13.0.0",
-    "expo-server-sdk": "^3.10.0",
-    "reflect-metadata": "^0.2.2",
-    "typescript": "^5.7.2",
-    "@types/web-push": "^3.6.0"
+    "@nestjs/common": "11.1.26",
+    "web-push": "3.6.7",
+    "firebase-admin": "13.10.0",
+    "expo-server-sdk": "3.15.0",
+    "@parse/node-apn": "8.1.0",
+    "reflect-metadata": "0.2.2",
+    "typescript": "5.9.3",
+    "@types/web-push": "3.6.4"
   }
 }

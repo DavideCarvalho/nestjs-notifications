@@ -149,24 +149,79 @@ MailChannelModule.forRoot({ from: 'no-reply@example.com', transport: ResendTrans
 The transport class is registered in DI, so it can inject its own dependencies (config, an HTTP
 client, your provider SDK).
 
+### Multi-provider failover
+
+`FailoverMailTransport` wraps an ordered list of transports and tries each until one succeeds — so
+when SES is down, the next provider (say Resend) takes over. Pass it as a pre-built instance via
+`transportInstance`:
+
+```ts
+import { FailoverMailTransport, NodemailerTransport } from '@dudousxd/nestjs-notifications-mail';
+
+MailChannelModule.forRoot({
+  from: 'no-reply@example.com',
+  transportInstance: new FailoverMailTransport(
+    [sesTransport, resendTransport],
+    (failed, error) => logger.warn(`mail transport failed over: ${error}`),
+  ),
+});
+```
+
+The last error is rethrown only if **every** transport fails. The optional second argument is called
+on each failover so you can log/alert.
+
 ## Renderers
 
 `DefaultMailRenderer` turns a `MailMessage` into semantic HTML — the greeting becomes an `<h1>`,
-each line a `<p>`, the action a styled `<a>` button — plus a plain-text fallback. To render with
-your own templates (MJML, React Email, Handlebars), implement `MailRenderer`:
+each line a `<p>`, the action a styled `<a>` button — plus a plain-text fallback. Three more renderers
+ship in the box; pick one with the `renderer` option:
 
-```ts title="mjml.renderer.ts"
+| Renderer | Drive it with | Needs |
+| --- | --- | --- |
+| `DefaultMailRenderer` | the `MailMessage` builder | — |
+| `MarkdownMailRenderer` | `message.markdown('# Hi')` | `marked` |
+| `ReactEmailRenderer` | `message.react(<Email/>)` | `react` + `@react-email/render` |
+| `MjmlMailRenderer` | `message.mjml('<mjml>…')` | `mjml` |
+
+```ts title="React Email"
+import { ReactEmailRenderer } from '@dudousxd/nestjs-notifications-mail';
+
+MailChannelModule.forRoot({ from: 'no-reply@example.com', renderer: ReactEmailRenderer });
+
+// in the notification:
+toMail() {
+  return new MailMessage().subject('Welcome').react(<WelcomeEmail name="Ada" />);
+}
+```
+
+```ts title="MJML"
+import { MjmlMailRenderer } from '@dudousxd/nestjs-notifications-mail';
+
+MailChannelModule.forRoot({ from: 'no-reply@example.com', renderer: MjmlMailRenderer });
+
+toMail() {
+  return new MailMessage().subject('Welcome').mjml('<mjml><mj-body>…</mj-body></mjml>');
+}
+```
+
+Each built-in renderer falls back to `DefaultMailRenderer` when the message has no body of its kind,
+so you can mix React-Email and plain builder notifications under one renderer.
+
+To render with something else (Handlebars, your own templating), implement `MailRenderer` — `render`
+may be sync or async:
+
+```ts title="custom.renderer.ts"
 import { Injectable } from '@nestjs/common';
 import type { MailMessage, MailRenderer } from '@dudousxd/nestjs-notifications-mail';
 
 @Injectable()
-export class MjmlRenderer implements MailRenderer {
-  render(message: MailMessage): { html: string; text: string } {
-    return { html: renderMjml(message), text: message.lines.join('\n\n') };
+export class HandlebarsRenderer implements MailRenderer {
+  async render(message: MailMessage): Promise<{ html: string; text: string }> {
+    return { html: await renderTemplate(message), text: message.lines.join('\n\n') };
   }
 }
 
-MailChannelModule.forRoot({ from: 'no-reply@example.com', renderer: MjmlRenderer });
+MailChannelModule.forRoot({ from: 'no-reply@example.com', renderer: HandlebarsRenderer });
 ```
 
 <Callout type="info">

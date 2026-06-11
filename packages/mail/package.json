@@ -22,21 +22,43 @@
   "peerDependencies": {
     "@dudousxd/nestjs-notifications-core": ">=0.1.0 <1.0.0",
     "@nestjs/common": "^10.0.0 || ^11.0.0",
+    "@react-email/render": ">=1",
     "marked": ">=12",
-    "nodemailer": "^6.9.0"
+    "mjml": ">=4",
+    "nodemailer": "^6.9.0",
+    "react": ">=18",
+    "react-dom": ">=18"
   },
   "peerDependenciesMeta": {
     "marked": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "@react-email/render": {
+      "optional": true
+    },
+    "mjml": {
       "optional": true
     }
   },
   "devDependencies": {
     "@dudousxd/nestjs-notifications-core": "workspace:^",
-    "@nestjs/common": "^11.0.0",
-    "@types/nodemailer": "^6.4.0",
-    "marked": "^12.0.0",
-    "nodemailer": "^6.9.0",
-    "reflect-metadata": "^0.2.2",
-    "typescript": "^5.7.2"
+    "@nestjs/common": "11.1.26",
+    "@react-email/render": "1.4.0",
+    "@types/nodemailer": "6.4.23",
+    "@types/react": "18.3.31",
+    "marked": "12.0.2",
+    "mjml": "4.18.0",
+    "nodemailer": "6.10.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "@types/react-dom": "18.3.7",
+    "reflect-metadata": "0.2.2",
+    "typescript": "5.9.3"
   }
 }

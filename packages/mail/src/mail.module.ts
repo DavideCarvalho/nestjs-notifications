@@ -15,8 +15,15 @@ export interface MailChannelModuleOptions {
   from?: string;
   /** Custom transport class. Defaults to {@link NodemailerTransport}. */
   transport?: Type<MailTransport>;
+  /**
+   * A pre-built transport instance. Use this for transports that need constructor args, such
+   * as `new FailoverMailTransport([ses, resend])`. Takes precedence over `transport`.
+   */
+  transportInstance?: MailTransport;
   /** Custom renderer class. Defaults to {@link DefaultMailRenderer}. */
   renderer?: Type<MailRenderer>;
+  /** A pre-built renderer instance. Takes precedence over `renderer`. */
+  rendererInstance?: MailRenderer;
   /** SMTP options for the default nodemailer transport. */
   smtp?: SMTPOptions;
   /**
@@ -49,13 +56,21 @@ export class MailChannelModule {
     const providers: Provider[] = [
       { provide: MAIL_OPTIONS, useValue: mailOptions },
       { provide: MAIL_SMTP_OPTIONS, useValue: options.smtp ?? {} },
-      transportClass,
-      { provide: MAIL_TRANSPORT, useExisting: transportClass },
-      rendererClass,
-      { provide: MAIL_RENDERER, useExisting: rendererClass },
       { provide: MAIL_TRANSPORT_RESOLVER, useValue: options.resolveTransport },
       MailChannel,
     ];
+
+    if (options.transportInstance) {
+      providers.push({ provide: MAIL_TRANSPORT, useValue: options.transportInstance });
+    } else {
+      providers.push(transportClass, { provide: MAIL_TRANSPORT, useExisting: transportClass });
+    }
+
+    if (options.rendererInstance) {
+      providers.push({ provide: MAIL_RENDERER, useValue: options.rendererInstance });
+    } else {
+      providers.push(rendererClass, { provide: MAIL_RENDERER, useExisting: rendererClass });
+    }
 
     return {
       module: MailChannelModule,

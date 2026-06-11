@@ -1,8 +1,10 @@
 import { type DynamicModule, Module, type Provider, type Type } from '@nestjs/common';
+import type { ApnsOptions } from './apns.transport';
 import type { ExpoOptions } from './expo.transport';
 import type { FcmOptions } from './fcm.transport';
 import { PushChannel, type PushTransportResolver } from './push.channel';
 import {
+  APNS_OPTIONS,
   EXPO_OPTIONS,
   FCM_OPTIONS,
   PUSH_TRANSPORT,
@@ -25,6 +27,8 @@ export interface PushChannelModuleOptions {
   fcm?: FcmOptions;
   /** Expo client options. Supply when using {@link ExpoTransport}. */
   expo?: ExpoOptions;
+  /** APNs provider options. Supply when using {@link ApnsTransport}. */
+  apns?: ApnsOptions;
   /**
    * Optional per-tenant transport resolver. When a notification is delivered with a
    * `context.tenant`, the returned transport is used instead of the default one.
@@ -57,6 +61,16 @@ export interface PushChannelModuleOptions {
  *   transport: ExpoTransport,
  *   expo: { accessToken: process.env.EXPO_ACCESS_TOKEN },
  * });
+ *
+ * // Apple Push Notification service (token-based auth via .p8 key)
+ * PushChannelModule.forRoot({
+ *   transport: ApnsTransport,
+ *   apns: {
+ *     token: { key: './AuthKey_ABC123.p8', keyId: 'ABC123', teamId: 'TEAM456' },
+ *     topic: 'com.example.app',
+ *     production: true,
+ *   },
+ * });
  * ```
  */
 @Module({})
@@ -68,6 +82,7 @@ export class PushChannelModule {
       { provide: WEB_PUSH_OPTIONS, useValue: options.webPush ?? {} },
       { provide: FCM_OPTIONS, useValue: options.fcm ?? {} },
       { provide: EXPO_OPTIONS, useValue: options.expo ?? {} },
+      { provide: APNS_OPTIONS, useValue: options.apns ?? {} },
       transportClass,
       { provide: PUSH_TRANSPORT, useExisting: transportClass },
       { provide: PUSH_TRANSPORT_RESOLVER, useValue: options.resolveTransport ?? null },

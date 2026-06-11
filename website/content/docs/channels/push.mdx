@@ -108,8 +108,29 @@ Pick exactly one transport and supply its matching options:
 | `webPush` | `WebPushOptions` | — | VAPID options. Supply with `WebPushTransport`. |
 | `fcm` | `FcmOptions` | — | Firebase Admin app options. Supply with `FcmTransport`. |
 | `expo` | `ExpoOptions` | — | Expo client options. Supply with `ExpoTransport`. |
+| `apns` | `ApnsOptions` | — | Apple credentials. Supply with `ApnsTransport`. |
 | `resolveTransport` | `(tenant: string) => PushTransport` | — | Per-tenant transport resolver. See [Per-tenant config](#per-tenant-config). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+### APNs (native iOS)
+
+`ApnsTransport` delivers straight to Apple Push Notification service using token-based (`.p8`) auth.
+The target is the device token string (or `{ deviceToken, topic }`):
+
+```ts title="app.module.ts"
+import { ApnsTransport, PushChannelModule } from '@dudousxd/nestjs-notifications-push';
+
+PushChannelModule.forRoot({
+  transport: ApnsTransport,
+  apns: {
+    token: { key: process.env.APNS_KEY!, keyId: process.env.APNS_KEY_ID!, teamId: process.env.APPLE_TEAM_ID! },
+    topic: 'com.acme.app', // your bundle id
+    production: true,
+  },
+});
+```
+
+It pulls `@parse/node-apn` as an optional peer — install it only when you use APNs.
 
 ## The notification side
 
