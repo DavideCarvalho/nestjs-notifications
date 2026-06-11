@@ -27,6 +27,11 @@ export interface NewStoredNotification {
   tenantId?: string | null;
 }
 
+/** Data for an upsert — same as {@link NewStoredNotification} plus the caller-controlled id. */
+export interface UpsertStoredNotification extends NewStoredNotification {
+  id: string;
+}
+
 /**
  * Persistence abstraction. Implemented by the in-memory store and ORM adapter packages. The
  * `tenantId` filter on the read methods scopes results to a tenant; `undefined` matches all
@@ -60,6 +65,16 @@ export interface NotificationStore {
    * were deleted. Stores that don't implement it are skipped (the pruner logs a warning).
    */
   prune?(options: { before: Date; onlyRead?: boolean }): Promise<number>;
+  /**
+   * Optionally insert-or-update a notification by its caller-controlled `id`, for "live" /
+   * progress notifications that evolve in place (e.g. an export going 0% → 100%). When the row
+   * exists it updates `type`/`data`/`notifiable*`/`tenantId`/`updatedAt` and **resets `readAt` to
+   * null** (an update is treated as a fresh, unread event); `createdAt` is preserved. When it
+   * doesn't exist it inserts with the given id. Used by the database channel when a notification
+   * exposes a {@link DatabaseNotification.databaseKey}. Stores that don't implement it fall back to
+   * `save()` (the channel logs a warning).
+   */
+  upsert?(notification: UpsertStoredNotification): Promise<StoredNotification>;
 }
 
 /**
@@ -69,4 +84,13 @@ export interface NotificationStore {
 export interface DatabaseNotification extends Notification {
   toDatabase?(notifiable: Notifiable): Record<string, unknown>;
   toArray?(notifiable: Notifiable): Record<string, unknown>;
+  /**
+   * A stable, caller-controlled id for "live"/progress notifications that should update a single row
+   * in place across multiple sends (e.g. an export progressing 0% → 100%) instead of inserting a new
+   * row each time. Return the same string on each `send()` for the same logical notification — the
+   * database channel then {@link NotificationStore.upsert | upserts} that row. The value is used
+   * directly as the row id, so namespace it for uniqueness (e.g. `file-export:${exportId}`). Return
+   * `undefined` (the default — omit the method) for normal insert-per-send behavior.
+   */
+  databaseKey?(notifiable: Notifiable): string | undefined;
 }

@@ -9,7 +9,7 @@ import {
   notifiableRef,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { DatabaseNotification, NotificationStore } from './interfaces';
 import { NOTIFICATION_STORE } from './tokens';
 
@@ -23,6 +23,7 @@ export const Database = createChannel('database');
 @Injectable()
 export class DatabaseChannel implements ChannelDriver {
   readonly channel = 'database';
+  private readonly logger = new Logger('Notifications');
 
   constructor(
     @Inject(NOTIFICATION_STORE)
@@ -40,14 +41,36 @@ export class DatabaseChannel implements ChannelDriver {
       (notification.constructor as { notificationName?: string }).notificationName ??
       notification.constructor.name;
 
-    // Return the stored row so it flows into afterSending() and the SendResult.
-    return this.store.save({
+    const input = {
       type,
       notifiableType: ref.type,
       notifiableId: String(ref.id),
       tenantId: context?.tenant ?? null,
       data,
-    });
+    };
+
+    // A stable databaseKey means "update this row in place" (live/progress notifications).
+    const key = this.upsertKeyFor(notifiable, notification);
+    if (key != null) {
+      if (typeof this.store.upsert === 'function') {
+        return this.store.upsert({ id: key, ...input });
+      }
+      this.logger.warn(
+        `Notification "${type}" returned a databaseKey but the store does not implement upsert(); inserting a new row instead. Implement NotificationStore.upsert to update in place.`,
+      );
+    }
+
+    // Return the stored row so it flows into afterSending() and the SendResult.
+    return this.store.save(input);
+  }
+
+  private upsertKeyFor(
+    notifiable: Notifiable,
+    notification: DatabaseNotification,
+  ): string | undefined {
+    return typeof notification.databaseKey === 'function'
+      ? notification.databaseKey(notifiable)
+      : undefined;
   }
 
   private referenceFor(notifiable: Notifiable, notification: Notification): NotifiableRef {

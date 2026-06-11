@@ -3,6 +3,7 @@ import type {
   NewStoredNotification,
   NotificationStore,
   StoredNotification,
+  UpsertStoredNotification,
 } from '@dudousxd/nestjs-notifications-database';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -103,6 +104,26 @@ export class TypeOrmNotificationStore implements NotificationStore {
 
   async delete(id: string): Promise<void> {
     await this.repo.delete(id);
+  }
+
+  async upsert(input: UpsertStoredNotification): Promise<StoredNotification> {
+    const now = new Date();
+    const existing = await this.repo.findOne({ where: { id: input.id } });
+    // save() upserts by primary key — updates when the row exists, inserts otherwise.
+    const saved = await this.repo.save(
+      this.repo.create({
+        id: input.id,
+        type: input.type,
+        notifiableType: input.notifiableType,
+        notifiableId: input.notifiableId,
+        tenantId: input.tenantId ?? null,
+        data: input.data,
+        readAt: null,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      }),
+    );
+    return toStored(saved);
   }
 
   async prune(options: { before: Date; onlyRead?: boolean }): Promise<number> {

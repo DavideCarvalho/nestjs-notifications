@@ -3,6 +3,7 @@ import type {
   NewStoredNotification,
   NotificationStore,
   StoredNotification,
+  UpsertStoredNotification,
 } from '@dudousxd/nestjs-notifications-database';
 import { EntityManager } from '@mikro-orm/core';
 import { Injectable } from '@nestjs/common';
@@ -104,6 +105,36 @@ export class MikroOrmNotificationStore implements NotificationStore {
 
   async delete(id: string): Promise<void> {
     await this.em.nativeDelete(NotificationEntity, { id });
+  }
+
+  async upsert(input: UpsertStoredNotification): Promise<StoredNotification> {
+    const em = this.em.fork();
+    const now = new Date();
+    const existing = await em.findOne(NotificationEntity, { id: input.id });
+    if (existing) {
+      existing.type = input.type;
+      existing.notifiableType = input.notifiableType;
+      existing.notifiableId = input.notifiableId;
+      existing.tenantId = input.tenantId ?? null;
+      existing.data = input.data;
+      existing.readAt = null;
+      existing.updatedAt = now;
+      await em.persistAndFlush(existing);
+      return toStored(existing);
+    }
+    const entity = em.create(NotificationEntity, {
+      id: input.id,
+      type: input.type,
+      notifiableType: input.notifiableType,
+      notifiableId: input.notifiableId,
+      tenantId: input.tenantId ?? null,
+      data: input.data,
+      readAt: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await em.persistAndFlush(entity);
+    return toStored(entity);
   }
 
   async prune(options: { before: Date; onlyRead?: boolean }): Promise<number> {

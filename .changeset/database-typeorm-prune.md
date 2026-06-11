@@ -2,4 +2,4 @@
 '@dudousxd/nestjs-notifications-database-typeorm': minor
 ---
 
-Implement the optional `NotificationStore.prune()` so the database channel's scheduled pruner can delete old notifications from the typeorm store.
+Implement the optional `NotificationStore.prune()` (scheduled pruning) and `upsert()` (updatable/progress notifications) for the typeorm store.

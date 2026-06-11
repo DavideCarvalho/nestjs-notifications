@@ -3,6 +3,7 @@ import type {
   NewStoredNotification,
   NotificationStore,
   StoredNotification,
+  UpsertStoredNotification,
 } from '@dudousxd/nestjs-notifications-database';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PRISMA_CLIENT, type PrismaNotificationClientLike } from './prisma-client';
@@ -99,6 +100,23 @@ export class PrismaNotificationStore implements NotificationStore {
 
   async delete(id: string): Promise<void> {
     await this.client.notification.delete({ where: { id } });
+  }
+
+  async upsert(input: UpsertStoredNotification): Promise<StoredNotification> {
+    const fields = {
+      type: input.type,
+      notifiableType: input.notifiableType,
+      notifiableId: input.notifiableId,
+      tenantId: input.tenantId ?? null,
+      data: input.data,
+      readAt: null,
+    };
+    const row = await this.client.notification.upsert({
+      where: { id: input.id },
+      create: { id: input.id, ...fields },
+      update: fields,
+    });
+    return toStored(row);
   }
 
   async prune(options: { before: Date; onlyRead?: boolean }): Promise<number> {

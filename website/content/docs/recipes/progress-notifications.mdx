@@ -1,0 +1,76 @@
+---
+title: Live / progress notifications
+description: Some notifications evolve — an export going 0% → 100%, a job that flips from "running" to "done". Update a single notification row in place across sends with a stable databaseKey, instead of spamming a new row each time.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Most notifications are fire-and-forget: one `send()` → one row. But some are **live** — an export that
+progresses, a long job that flips from *running* to *done*. You want **one** notification that updates,
+not a new row for every tick.
+
+Give the notification a stable `databaseKey(notifiable)` and the [database channel](/docs/channels/database)
+**upserts** that row across sends: the first `send()` inserts it, each later `send()` updates the same
+row in place (refreshing `data` and re-surfacing it as unread).
+
+## Define an updatable notification
+
+```ts title="export-progress.notification.ts"
+import { type Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import { Database } from '@dudousxd/nestjs-notifications-database';
+import { Sse } from '@dudousxd/nestjs-notifications-sse';
+
+@Notification()
+export class ExportProgress {
+  constructor(
+    private readonly exportId: string,
+    private readonly status: 'running' | 'done' | 'failed',
+    private readonly progress: number,
+  ) {}
+
+  via() {
+    return [Database, Sse];
+  }
+
+  // Same key on every send for this export → one row, updated in place.
+  databaseKey() {
+    return `export:${this.exportId}`;
+  }
+
+  toDatabase() {
+    return { exportId: this.exportId, status: this.status, progress: this.progress };
+  }
+
+  toSse() {
+    return { type: 'export.progress', exportId: this.exportId, status: this.status, progress: this.progress };
+  }
+}
+```
+
+Drive it from your job:
+
+```ts
+await notifications.send(user, new ExportProgress(id, 'running', 0));
+// ...later
+await notifications.send(user, new ExportProgress(id, 'running', 60));
+// ...finally
+await notifications.send(user, new ExportProgress(id, 'done', 100));
+```
+
+Three sends, **one** notification row — its `data` ends at `{ status: 'done', progress: 100 }`. Pair it
+with the `sse` channel ([live badge](/docs/recipes/live-badge)) and the UI updates the same item as the
+bar fills.
+
+## Semantics
+
+- **`databaseKey` is the row id** — namespace it so it's unique (`export:${id}`, not just `${id}`).
+- On update, `data`/`type`/`updatedAt` are refreshed, `createdAt` is preserved, and **`readAt` is reset
+  to `null`** — an update is treated as a fresh, unread event (so the bell lights up again on each
+  meaningful change). Throttle your sends if you don't want every 1% to re-notify.
+- Omit `databaseKey` (the default) for normal insert-per-send behavior.
+
+<Callout type="info">
+  Upsert is backed by the optional `NotificationStore.upsert()`, implemented for the in-memory store
+  and the TypeORM / MikroORM / Prisma adapters. A custom store without it falls back to inserting a new
+  row (and the channel logs a warning) — implement `upsert(notification)` to get in-place updates.
+</Callout>

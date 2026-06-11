@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { NewStoredNotification, NotificationStore, StoredNotification } from './interfaces';
+import type {
+  NewStoredNotification,
+  NotificationStore,
+  StoredNotification,
+  UpsertStoredNotification,
+} from './interfaces';
 
 /** In-memory {@link NotificationStore} for tests and prototyping. Not for production. */
 @Injectable()
@@ -75,6 +80,25 @@ export class InMemoryStore implements NotificationStore {
 
   async delete(id: string): Promise<void> {
     this.rows.delete(id);
+  }
+
+  async upsert(input: UpsertStoredNotification): Promise<StoredNotification> {
+    const now = new Date();
+    const existing = this.rows.get(input.id);
+    const row: StoredNotification = {
+      id: input.id,
+      type: input.type,
+      notifiableType: input.notifiableType,
+      notifiableId: input.notifiableId,
+      tenantId: input.tenantId ?? null,
+      data: input.data,
+      // An update is a fresh, unread event; createdAt is preserved across updates.
+      readAt: null,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    this.rows.set(row.id, row);
+    return row;
   }
 
   async prune(options: { before: Date; onlyRead?: boolean }): Promise<number> {
