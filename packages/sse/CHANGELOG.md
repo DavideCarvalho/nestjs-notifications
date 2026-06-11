@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-sse
 
+## 0.5.0
+
+### Minor Changes
+
+- 1d9d52b: The controller factories (`createNotificationsController`, `createNotificationsStreamController`, `createPreferenceCenterController`) accept `guards` (applied via `@UseGuards`) and a custom `path`. The inbox/preferences/stream are per-user, so apps can now protect the auto-mounted endpoints with their auth guard.
+
 ## 0.4.0
 
 ### Minor Changes
