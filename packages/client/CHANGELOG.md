@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-client
 
+## 0.5.0
+
+### Minor Changes
+
+- 461bcaf: `subscribeNotificationsStream` / `useNotificationsStream` now accept an optional `credentials` (`RequestCredentials`), forwarded to `fetch`. Defaults to `'include'` (unchanged behavior); pass `'same-origin'`/`'omit'` to opt out of sending cookies.
+
 ## 0.4.0
 
 ### Minor Changes

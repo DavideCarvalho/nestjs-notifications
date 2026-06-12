@@ -1,5 +1,16 @@
 # @dudousxd/nestjs-notifications-react
 
+## 0.6.0
+
+### Minor Changes
+
+- 461bcaf: `subscribeNotificationsStream` / `useNotificationsStream` now accept an optional `credentials` (`RequestCredentials`), forwarded to `fetch`. Defaults to `'include'` (unchanged behavior); pass `'same-origin'`/`'omit'` to opt out of sending cookies.
+
+### Patch Changes
+
+- Updated dependencies [461bcaf]
+  - @dudousxd/nestjs-notifications-client@0.5.0
+
 ## 0.5.0
 
 ### Minor Changes
