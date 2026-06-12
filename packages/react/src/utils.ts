@@ -68,6 +68,46 @@ export function notificationBody(item: NotificationItem): string {
   return pickString(item.data, ['body', 'message', 'text', 'description', 'content']) ?? '';
 }
 
+/**
+ * Progress percentage (0–100) for a long-running notification, read from the
+ * conventional `progress` key in `data`. Notification payloads often store
+ * everything as strings, so a numeric string (e.g. `"42"`) is accepted too.
+ * Returns `null` when there is no progress to show (absent or not a finite
+ * number) so callers can render a plain row instead of a 0% bar.
+ */
+export function notificationProgress(item: NotificationItem): number | null {
+  const raw = item.data.progress;
+  const value = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : Number.NaN;
+  if (!Number.isFinite(value)) return null;
+  return Math.min(100, Math.max(0, value));
+}
+
+/** A clickable action (e.g. a download link) attached to a notification. */
+export interface NotificationAction {
+  label: string;
+  url: string;
+}
+
+/**
+ * A clickable action/download attached to a notification, read from the
+ * conventional nested `action: { label, url }` shape, or from flat
+ * `actionUrl`/`downloadUrl` (+ `actionLabel`/`actionText`) keys. The label
+ * falls back to `"Open"`. Returns `null` when there is no usable url.
+ */
+export function notificationAction(item: NotificationItem): NotificationAction | null {
+  const { data } = item;
+  const nested = data.action;
+  if (nested && typeof nested === 'object') {
+    const fields = nested as Record<string, unknown>;
+    const url = pickString(fields, ['url', 'href', 'link']);
+    if (url) return { label: pickString(fields, ['label', 'text', 'title']) ?? 'Open', url };
+  }
+  const url = pickString(data, ['actionUrl', 'downloadUrl', 'href', 'link']);
+  if (url)
+    return { label: pickString(data, ['actionLabel', 'actionText', 'linkText']) ?? 'Open', url };
+  return null;
+}
+
 function pickString(data: Record<string, unknown>, keys: string[]): string | undefined {
   for (const key of keys) {
     const value = data[key];

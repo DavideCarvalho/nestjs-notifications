@@ -1,21 +1,28 @@
-import { Entity, PrimaryKey, Property } from '@mikro-orm/core';
+import { Entity, PrimaryKey, Property } from '@mikro-orm/decorators/legacy';
 
-/** MikroORM entity mirroring Laravel's `notifications` table. */
+/**
+ * MikroORM entity mirroring Laravel's `notifications` table.
+ *
+ * Every column declares an explicit `type` instead of relying on
+ * `emitDecoratorMetadata` reflection, so the entity discovers correctly even
+ * when the consuming app compiles with SWC/esbuild/Vite (which don't emit
+ * decorator metadata).
+ */
 @Entity({ tableName: 'notifications' })
 export class NotificationEntity {
-  @PrimaryKey()
+  @PrimaryKey({ type: 'string' })
   id!: string;
 
-  @Property()
+  @Property({ type: 'string' })
   type!: string;
 
-  @Property()
+  @Property({ type: 'string' })
   notifiableType!: string;
 
-  @Property()
+  @Property({ type: 'string' })
   notifiableId!: string;
 
-  @Property({ nullable: true })
+  @Property({ type: 'string', nullable: true })
   tenantId?: string | null;
 
   @Property({ type: 'json' })

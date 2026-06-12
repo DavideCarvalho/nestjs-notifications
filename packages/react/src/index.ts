@@ -23,7 +23,10 @@ export {
   formatRelativeTime,
   notificationTitle,
   notificationBody,
+  notificationProgress,
+  notificationAction,
 } from './utils';
+export type { NotificationAction } from './utils';
 
 // Provider / context
 export {
