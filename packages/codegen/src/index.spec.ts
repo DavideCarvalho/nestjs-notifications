@@ -55,6 +55,14 @@ describe('nestjsNotificationsCodegen', () => {
     expect(list?.path).toBe('/api/notifications');
   });
 
+  it('honors a custom path while keeping the name namespace', () => {
+    const routes = run(nestjsNotificationsCodegen({ path: 'notifications-inbox' }));
+    const list = routes.find((r) => r.name === 'notifications.list');
+    const unread = routes.find((r) => r.name === 'notifications.unread');
+    expect(list?.path).toBe('/notifications-inbox');
+    expect(unread?.path).toBe('/notifications-inbox/unread');
+  });
+
   it('emits preference routes only when enabled', () => {
     expect(run(nestjsNotificationsCodegen()).some((r) => r.name.includes('preferences'))).toBe(
       false,

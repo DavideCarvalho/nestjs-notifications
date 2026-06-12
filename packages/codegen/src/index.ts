@@ -8,6 +8,12 @@ export interface NotificationsCodegenOptions {
    * Default `''` (mounted at the root).
    */
   basePath?: string;
+  /**
+   * URL segment the inbox controller is mounted at (after `basePath`). Default `'notifications'`.
+   * Set this when you mount `createNotificationsController({ path })` at a non-default path (e.g. to
+   * avoid colliding with a `/notifications` page route). Independent of `name` (the client namespace).
+   */
+  path?: string;
   /** Route-name namespace for the generated client (`api.<name>.list`, …). Default `'notifications'`. */
   name?: string;
   /** Emit the in-app inbox routes (list/unread/count/read/read-all/delete). Default `true`. */
@@ -33,42 +39,39 @@ function route(
   return { method, path, name, params, contract: { contractSource: contract } };
 }
 
-function inboxRoutes(base: string, ns: string): RouteDescriptor[] {
+function inboxRoutes(base: string, path: string, ns: string): RouteDescriptor[] {
+  const root = `${base}/${path}`;
   return [
-    route('GET', `${base}/notifications`, `${ns}.list`, {
+    route('GET', root, `${ns}.list`, {
       query: '{ page?: number; perPage?: number }',
       body: null,
       response: PAGINATED,
     }),
-    route('GET', `${base}/notifications/unread`, `${ns}.unread`, {
+    route('GET', `${root}/unread`, `${ns}.unread`, {
       query: null,
       body: null,
       response: `${NOTIFICATION}[]`,
     }),
-    route('GET', `${base}/notifications/unread/count`, `${ns}.unreadCount`, {
+    route('GET', `${root}/unread/count`, `${ns}.unreadCount`, {
       query: null,
       body: null,
       response: '{ count: number }',
     }),
     route(
       'POST',
-      `${base}/notifications/:id/read`,
+      `${root}/:id/read`,
       `${ns}.markAsRead`,
       { query: null, body: null, response: 'void' },
       [{ name: 'id', source: 'path' }],
     ),
-    route('POST', `${base}/notifications/read-all`, `${ns}.markAllAsRead`, {
+    route('POST', `${root}/read-all`, `${ns}.markAllAsRead`, {
       query: null,
       body: null,
       response: 'void',
     }),
-    route(
-      'DELETE',
-      `${base}/notifications/:id`,
-      `${ns}.remove`,
-      { query: null, body: null, response: 'void' },
-      [{ name: 'id', source: 'path' }],
-    ),
+    route('DELETE', `${root}/:id`, `${ns}.remove`, { query: null, body: null, response: 'void' }, [
+      { name: 'id', source: 'path' },
+    ]),
   ];
 }
 
@@ -131,9 +134,10 @@ export function nestjsNotificationsCodegen(
   options: NotificationsCodegenOptions = {},
 ): CodegenExtension {
   const base = options.basePath ?? '';
+  const path = (options.path ?? 'notifications').replace(/^\/+|\/+$/g, '');
   const ns = options.name ?? 'notifications';
   const injected: RouteDescriptor[] = [];
-  if (options.inbox ?? true) injected.push(...inboxRoutes(base, ns));
+  if (options.inbox ?? true) injected.push(...inboxRoutes(base, path, ns));
   if (options.preferences) injected.push(...preferenceRoutes(base, ns));
 
   return {

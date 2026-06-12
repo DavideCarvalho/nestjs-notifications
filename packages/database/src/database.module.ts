@@ -16,6 +16,11 @@ type ResolveRef = (req: any) => NotifiableRef | Promise<NotifiableRef>;
 export interface InboxControllerOptions {
   /** How to resolve the current notifiable from the request. Default `{ type: 'User', id: req.user?.id }`. */
   resolveRef?: ResolveRef;
+  /**
+   * Base path to mount the inbox at. Default `'notifications'`. Set this to avoid colliding with a
+   * `/notifications` page route under a shared global prefix (keep the client/codegen `path` in sync).
+   */
+  path?: string;
 }
 
 /** Default ref resolver — reads `req.user.id` and assumes a `User` notifiable type. */
@@ -62,9 +67,9 @@ export interface DatabaseChannelFeatureOptions {
 /** Build the controllers array for the inbox endpoints based on the `controller` option. */
 function inboxControllers(option: boolean | InboxControllerOptions | undefined): Type<unknown>[] {
   if (option === false) return [];
-  const resolveRef =
-    (option && option !== true ? option.resolveRef : undefined) ?? defaultResolveRef;
-  return [createNotificationsController({ resolveRef })];
+  const opts = option && option !== true ? option : undefined;
+  const resolveRef = opts?.resolveRef ?? defaultResolveRef;
+  return [createNotificationsController({ resolveRef, path: opts?.path })];
 }
 
 /**
