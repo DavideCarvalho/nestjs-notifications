@@ -8,6 +8,7 @@ export {
   MjmlMailRenderer,
 } from './renderer';
 export {
+  type MailAttachment,
   type MailTransport,
   type MailTransportPayload,
   type SMTPOptions,

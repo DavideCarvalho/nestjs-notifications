@@ -77,6 +77,7 @@ export class MailChannel implements ChannelDriver {
       subject: message.subjectLine,
       html: rendered.html,
       text: rendered.text,
+      ...(message.attachments.length ? { attachments: message.attachments } : {}),
     });
   }
 }

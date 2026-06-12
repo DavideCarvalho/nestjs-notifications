@@ -61,6 +61,31 @@ describe('MailChannel', () => {
     expect(payload.subject).toBe('Welcome aboard');
     expect(payload.from).toBe('no-reply@example.com');
     expect(payload.html).toContain('Get started');
+    expect(payload.attachments).toBeUndefined();
+  });
+
+  it('carries attachments through to the transport', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const channel = new MailChannel({ send }, new DefaultMailRenderer(), {});
+
+    class ReportNotification implements MailNotification {
+      via(): string[] {
+        return ['mail'];
+      }
+      toMail(): MailMessage {
+        return new MailMessage()
+          .subject('Report')
+          .line('See attached.')
+          .attach({ filename: 'report.pdf', content: 'PDF', contentType: 'application/pdf' });
+      }
+    }
+
+    await channel.send(new TestUser('user@example.com'), new ReportNotification());
+
+    const payload = send.mock.calls[0]?.[0];
+    expect(payload.attachments).toEqual([
+      { filename: 'report.pdf', content: 'PDF', contentType: 'application/pdf' },
+    ]);
   });
 
   it('throws MissingChannelMethodError when toMail is absent', async () => {

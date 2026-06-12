@@ -1,3 +1,5 @@
+import type { MailAttachment } from './transport';
+
 /**
  * A fluent builder for an email notification, mirroring Laravel's `MailMessage`.
  *
@@ -21,6 +23,7 @@ export class MailMessage {
   private _markdown?: string;
   private _react?: unknown;
   private _mjml?: string;
+  private _attachments: MailAttachment[] = [];
 
   /** Override the sender address for this message. */
   from(addr: string): this {
@@ -90,6 +93,19 @@ export class MailMessage {
     return this;
   }
 
+  /**
+   * Attach a file. Call repeatedly to add several. The body renderer ignores attachments —
+   * they're carried through to the transport.
+   *
+   * ```ts
+   * new MailMessage().subject('Report').attach({ filename: 'report.pdf', content: pdfBuffer });
+   * ```
+   */
+  attach(attachment: MailAttachment): this {
+    this._attachments.push(attachment);
+    return this;
+  }
+
   get fromAddress(): string | undefined {
     return this._from;
   }
@@ -128,5 +144,9 @@ export class MailMessage {
 
   get mjmlBody(): string | undefined {
     return this._mjml;
+  }
+
+  get attachments(): MailAttachment[] {
+    return this._attachments;
   }
 }

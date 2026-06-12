@@ -2,6 +2,20 @@ import { Inject, Injectable } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { MAIL_SMTP_OPTIONS } from './tokens';
 
+/** A file attached to an outgoing email. Transport-neutral subset of nodemailer's shape. */
+export interface MailAttachment {
+  /** Filename shown to the recipient. */
+  filename: string;
+  /** Inline content. Provide this or {@link MailAttachment.path}. */
+  content?: string | Buffer;
+  /** A path or URL to read the content from (when `content` is absent). */
+  path?: string;
+  /** MIME type, e.g. `"application/pdf"`. */
+  contentType?: string;
+  /** Content-ID for an inline (embedded) attachment referenced from the HTML body. */
+  cid?: string;
+}
+
 /** The fully-rendered message handed to a transport for delivery. */
 export interface MailTransportPayload {
   to: string;
@@ -9,6 +23,8 @@ export interface MailTransportPayload {
   subject: string;
   html: string;
   text: string;
+  /** Files to attach. Transports that don't support attachments should ignore them. */
+  attachments?: MailAttachment[];
 }
 
 /** Delivers a rendered email. Swap implementations for different providers. */
@@ -47,6 +63,7 @@ export class NodemailerTransport implements MailTransport {
       subject: payload.subject,
       html: payload.html,
       text: payload.text,
+      ...(payload.attachments?.length ? { attachments: payload.attachments } : {}),
     });
   }
 }
