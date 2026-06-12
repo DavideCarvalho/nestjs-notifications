@@ -1,5 +1,11 @@
 import type { NotifiableRef } from '@dudousxd/nestjs-notifications-core';
-import { type DynamicModule, Module, type Provider, type Type } from '@nestjs/common';
+import {
+  type CanActivate,
+  type DynamicModule,
+  Module,
+  type Provider,
+  type Type,
+} from '@nestjs/common';
 import { DatabaseChannel } from './database.channel';
 import { InMemoryStore } from './in-memory.store';
 import type { NotificationStore } from './interfaces';
@@ -21,6 +27,11 @@ export interface InboxControllerOptions {
    * `/notifications` page route under a shared global prefix (keep the client/codegen `path` in sync).
    */
   path?: string;
+  /**
+   * Guards applied to the inbox controller (e.g. your app's auth guard). With this you can let the
+   * channel auto-mount the inbox instead of wiring {@link createNotificationsController} by hand.
+   */
+  guards?: Array<Type<CanActivate> | CanActivate>;
 }
 
 /** Default ref resolver — reads `req.user.id` and assumes a `User` notifiable type. */
@@ -69,7 +80,7 @@ function inboxControllers(option: boolean | InboxControllerOptions | undefined):
   if (option === false) return [];
   const opts = option && option !== true ? option : undefined;
   const resolveRef = opts?.resolveRef ?? defaultResolveRef;
-  return [createNotificationsController({ resolveRef, path: opts?.path })];
+  return [createNotificationsController({ resolveRef, path: opts?.path, guards: opts?.guards })];
 }
 
 /**

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Pins every `dependencies` / `devDependencies` specifier to the EXACT installed version.
 // Leaves `peerDependencies` (which must stay as ranges) and `workspace:` protocol untouched.
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -42,7 +42,8 @@ function pinBlock(block, dir, changes) {
   for (const [dep, spec] of Object.entries(block)) {
     if (typeof spec !== 'string') continue;
     if (spec.startsWith('workspace:')) continue; // keep workspace protocol
-    if (spec.startsWith('catalog:') || spec.startsWith('link:') || spec.startsWith('file:')) continue;
+    if (spec.startsWith('catalog:') || spec.startsWith('link:') || spec.startsWith('file:'))
+      continue;
     // Only pin range-y specifiers (caret/tilde/x/>=). Already-exact stays.
     if (/^[0-9]+\.[0-9]+\.[0-9]+([-+].*)?$/.test(spec)) continue;
     const version = installedVersion(dir, dep);
