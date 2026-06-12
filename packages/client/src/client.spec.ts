@@ -33,6 +33,29 @@ describe('NotificationsClient', () => {
     });
   });
 
+  it('targets a custom resource path', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          jsonResponse({ items: [], meta: { page: 1, perPage: 20, total: 0, lastPage: 1 } }),
+        ),
+      );
+    const client = createNotificationsClient({
+      baseUrl: 'https://api.test',
+      path: 'notifications-inbox',
+      fetch: fetchMock,
+    });
+
+    await client.list();
+    await client.unread();
+    await client.markAllAsRead();
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.test/notifications-inbox');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api.test/notifications-inbox/unread');
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('https://api.test/notifications-inbox/read-all');
+  });
+
   it('reads the unread count', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ count: 7 }));
     const client = createNotificationsClient({ fetch: fetchMock });

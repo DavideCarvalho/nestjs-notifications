@@ -49,6 +49,12 @@ export interface NotificationsClientOptions {
    */
   baseUrl?: string;
   /**
+   * Resource segment the inbox controller is mounted at, appended to `baseUrl`. Defaults to
+   * `'notifications'`. Set this when the host mounts `createNotificationsController({ path })` at a
+   * non-default path (e.g. to avoid colliding with a `/notifications` page route).
+   */
+  path?: string;
+  /**
    * Static headers sent with every request (e.g. an `Authorization` bearer).
    * May also be a function for per-request resolution (e.g. a fresh token).
    */

@@ -26,6 +26,7 @@ import type {
  */
 export class NotificationsClient {
   private readonly baseUrl: string;
+  private readonly path: string;
   private readonly headers: NotificationsClientOptions['headers'];
   private readonly credentials?: RequestCredentials;
   private readonly fetchImpl: typeof fetch;
@@ -33,6 +34,9 @@ export class NotificationsClient {
 
   constructor(options: NotificationsClientOptions = {}) {
     this.baseUrl = normalizeBaseUrl(options.baseUrl ?? '/');
+    // The resource segment the inbox controller is mounted at — defaults to `notifications`, but a
+    // host that mounts `createNotificationsController({ path })` elsewhere can point the client at it.
+    this.path = (options.path ?? 'notifications').replace(/^\/+|\/+$/g, '');
     this.headers = options.headers;
     this.credentials = options.credentials;
     this.sseUrl = options.sseUrl;
@@ -52,34 +56,34 @@ export class NotificationsClient {
     if (params.page != null) query.set('page', String(params.page));
     if (params.perPage != null) query.set('perPage', String(params.perPage));
     const qs = query.toString();
-    const raw = await this.request<RawPaginated>('GET', `notifications${qs ? `?${qs}` : ''}`);
+    const raw = await this.request<RawPaginated>('GET', `${this.path}${qs ? `?${qs}` : ''}`);
     return normalizePaginated(raw, params);
   }
 
   /** Unread notifications for the current notifiable. */
   unread(): Promise<NotificationItem[]> {
-    return this.request<NotificationItem[]>('GET', 'notifications/unread');
+    return this.request<NotificationItem[]>('GET', `${this.path}/unread`);
   }
 
   /** Number of unread notifications for the current notifiable. */
   async unreadCount(): Promise<number> {
-    const res = await this.request<{ count: number }>('GET', 'notifications/unread/count');
+    const res = await this.request<{ count: number }>('GET', `${this.path}/unread/count`);
     return res.count;
   }
 
   /** Mark a single notification as read. */
   async markAsRead(id: string): Promise<void> {
-    await this.request<void>('POST', `notifications/${encodeURIComponent(id)}/read`);
+    await this.request<void>('POST', `${this.path}/${encodeURIComponent(id)}/read`);
   }
 
   /** Mark every notification for the current notifiable as read. */
   async markAllAsRead(): Promise<void> {
-    await this.request<void>('POST', 'notifications/read-all');
+    await this.request<void>('POST', `${this.path}/read-all`);
   }
 
   /** Delete a single notification. */
   async remove(id: string): Promise<void> {
-    await this.request<void>('DELETE', `notifications/${encodeURIComponent(id)}`);
+    await this.request<void>('DELETE', `${this.path}/${encodeURIComponent(id)}`);
   }
 
   /**
