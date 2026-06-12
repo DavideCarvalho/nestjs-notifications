@@ -15,16 +15,22 @@ afterEach(() => {
 
 describe('NotificationsClient', () => {
   it('lists notifications with pagination params', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ items: [{ id: '1' }], page: 2, perPage: 10, total: 11 }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        items: [{ id: '1' }],
+        meta: { page: 2, perPage: 10, total: 11, lastPage: 2 },
+      }),
+    );
     const client = createNotificationsClient({ baseUrl: 'https://api.test', fetch: fetchMock });
 
     const page = await client.list({ page: 2, perPage: 10 });
 
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.test/notifications?page=2&perPage=10');
-    expect(page).toEqual({ items: [{ id: '1' }], page: 2, perPage: 10, total: 11 });
+    expect(page).toEqual({
+      items: [{ id: '1' }],
+      meta: { page: 2, perPage: 10, total: 11, lastPage: 2 },
+    });
   });
 
   it('reads the unread count', async () => {

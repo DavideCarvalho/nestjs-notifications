@@ -21,7 +21,7 @@ const NOTIFICATION =
   '{ id: string; type: string; notifiableType: string; notifiableId: string; ' +
   'tenantId: string | null; data: Record<string, unknown>; readAt: string | null; ' +
   'createdAt: string; updatedAt: string }';
-const PAGINATED = `{ items: ${NOTIFICATION}[]; page: number; perPage: number; total: number }`;
+const PAGINATED = `{ items: ${NOTIFICATION}[]; meta: { page: number; perPage: number; total: number; lastPage: number } }`;
 
 function route(
   method: string,

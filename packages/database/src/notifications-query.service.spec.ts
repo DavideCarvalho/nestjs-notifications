@@ -67,22 +67,21 @@ describe('NotificationsQueryService', () => {
     const page1 = await service.paginate(ref, { page: 1, perPage: 2 });
     expect(page1).toEqual({
       items: page1.items,
-      page: 1,
-      perPage: 2,
-      total: 3,
+      meta: { page: 1, perPage: 2, total: 3, lastPage: 2 },
     });
     expect(page1.items.map((r) => r.type)).toEqual(['C', 'B']);
 
     const page2 = await service.paginate(ref, { page: 2, perPage: 2 });
     expect(page2.items.map((r) => r.type)).toEqual(['A']);
-    expect(page2.total).toBe(3);
+    expect(page2.meta.total).toBe(3);
+    expect(page2.meta.lastPage).toBe(2);
   });
 
   it('paginate() defaults to page 1, perPage 20', async () => {
     await seed(store);
     const page = await service.paginate(ref);
-    expect(page.page).toBe(1);
-    expect(page.perPage).toBe(20);
+    expect(page.meta.page).toBe(1);
+    expect(page.meta.perPage).toBe(20);
     expect(page.items).toHaveLength(3);
   });
 

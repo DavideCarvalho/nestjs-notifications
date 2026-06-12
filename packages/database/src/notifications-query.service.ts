@@ -18,12 +18,21 @@ export interface PaginateOptions {
   perPage?: number;
 }
 
-/** A page of stored notifications. */
-export interface PaginatedNotifications {
-  items: StoredNotification[];
+/** Pagination metadata for a {@link PaginatedNotifications} page. */
+export interface PaginationMeta {
+  /** 1-based current page. */
   page: number;
   perPage: number;
+  /** Total matching notifications across all pages. */
   total: number;
+  /** Number of the last page (`max(1, ceil(total / perPage))`). */
+  lastPage: number;
+}
+
+/** A page of stored notifications. `meta` follows the conventional `{ page, lastPage, … }` shape. */
+export interface PaginatedNotifications {
+  items: StoredNotification[];
+  meta: PaginationMeta;
 }
 
 /** Tenant-scoped read API — same methods as {@link NotificationsQueryService}. */
@@ -122,12 +131,16 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
     const safePage = Math.max(1, Math.floor(page));
     const safePerPage = Math.max(1, Math.floor(perPage));
     const items = await this.allScoped(target, tenant);
+    const total = items.length;
     const start = (safePage - 1) * safePerPage;
     return {
       items: items.slice(start, start + safePerPage),
-      page: safePage,
-      perPage: safePerPage,
-      total: items.length,
+      meta: {
+        page: safePage,
+        perPage: safePerPage,
+        total,
+        lastPage: Math.max(1, Math.ceil(total / safePerPage)),
+      },
     };
   }
 

@@ -20,15 +20,24 @@ export interface NotificationItem {
   updatedAt: string | Date;
 }
 
+/** Pagination metadata for a {@link PaginatedNotifications} page. */
+export interface PaginationMeta {
+  /** 1-based current page. */
+  page: number;
+  perPage: number;
+  /** Total matching notifications across all pages. */
+  total: number;
+  /** Number of the last page (`max(1, ceil(total / perPage))`). */
+  lastPage: number;
+}
+
 /**
- * A page of notifications. Mirrors the backend `PaginatedNotifications` (which
- * uses `items`); a `data` alias is accepted for forward compatibility.
+ * A page of notifications. Mirrors the backend `PaginatedNotifications`: `items` plus a
+ * conventional `meta` (a `data` alias for items is tolerated for forward compatibility).
  */
 export interface PaginatedNotifications {
   items: NotificationItem[];
-  page: number;
-  perPage: number;
-  total: number;
+  meta: PaginationMeta;
 }
 
 /** Options accepted by {@link NotificationsClient}. */

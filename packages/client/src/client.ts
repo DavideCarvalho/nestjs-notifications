@@ -157,23 +157,20 @@ export class NotificationsApiError extends Error {
   }
 }
 
-/** Backend page shape — `items` is canonical; `data` is tolerated as an alias. */
+/** Backend page shape — `items` is canonical (`data` tolerated); pagination lives under `meta`. */
 interface RawPaginated {
   items?: NotificationItem[];
   data?: NotificationItem[];
-  page?: number;
-  perPage?: number;
-  total?: number;
+  meta?: { page?: number; perPage?: number; total?: number; lastPage?: number };
 }
 
 function normalizePaginated(raw: RawPaginated, params: ListParams): PaginatedNotifications {
   const items = raw.items ?? raw.data ?? [];
-  return {
-    items,
-    page: raw.page ?? params.page ?? 1,
-    perPage: raw.perPage ?? params.perPage ?? items.length,
-    total: raw.total ?? items.length,
-  };
+  const page = raw.meta?.page ?? params.page ?? 1;
+  const perPage = raw.meta?.perPage ?? params.perPage ?? items.length;
+  const total = raw.meta?.total ?? items.length;
+  const lastPage = raw.meta?.lastPage ?? Math.max(1, Math.ceil(total / Math.max(1, perPage)));
+  return { items, meta: { page, perPage, total, lastPage } };
 }
 
 function normalizeBaseUrl(baseUrl: string): string {

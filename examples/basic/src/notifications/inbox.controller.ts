@@ -29,9 +29,9 @@ export class NotificationsInboxController {
     });
     return {
       items: page.items.map(toDto),
-      page: page.page,
-      perPage: page.perPage,
-      total: page.total,
+      page: page.meta.page,
+      perPage: page.meta.perPage,
+      total: page.meta.total,
     };
   }
 

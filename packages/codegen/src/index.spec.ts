@@ -37,6 +37,8 @@ describe('nestjsNotificationsCodegen', () => {
     expect(list?.path).toBe('/notifications');
     expect(list?.contract?.contractSource.query).toContain('page?: number');
     expect(list?.contract?.contractSource.response).toContain('items:');
+    // `meta` + `lastPage` so the generated infiniteQueryOptions can paginate.
+    expect(list?.contract?.contractSource.response).toContain('lastPage');
   });
 
   it('markAsRead is POST /notifications/:id/read with a path param', () => {

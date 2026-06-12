@@ -2,6 +2,7 @@ export { NotificationsClient, NotificationsApiError, createNotificationsClient }
 export type {
   NotificationItem,
   PaginatedNotifications,
+  PaginationMeta,
   NotificationsClientOptions,
   ListParams,
 } from './types';

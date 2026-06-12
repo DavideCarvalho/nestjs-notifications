@@ -74,13 +74,12 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
       try {
         const result = await client.list({ page, perPage });
         if (!mountedRef.current) return;
-        pageRef.current = result.page;
-        totalRef.current = result.total;
+        pageRef.current = result.meta.page;
+        totalRef.current = result.meta.total;
         setNotifications((prev) =>
           replace ? mergeNotifications([], result.items) : mergeNotifications(prev, result.items),
         );
-        const loaded = result.page * result.perPage;
-        setHasMore(loaded < result.total && result.items.length > 0);
+        setHasMore(result.meta.page < result.meta.lastPage && result.items.length > 0);
       } catch (err) {
         if (mountedRef.current) setError(toError(err));
       } finally {

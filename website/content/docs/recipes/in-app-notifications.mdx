@@ -39,7 +39,7 @@ Every method that reads "whose notifications" accepts a **target**: either a not
 | `all(target)` | `StoredNotification[]` | Every notification for the target, newest first. |
 | `unread(target)` | `StoredNotification[]` | Unread notifications for the target. |
 | `unreadCount(target)` | `number` | How many are unread. |
-| `paginate(target, { page?, perPage? })` | `{ items, page, perPage, total }` | One page over `all` (defaults: page 1, 20 per page). |
+| `paginate(target, { page?, perPage? })` | `{ items, meta: { page, perPage, total, lastPage } }` | One page over `all` (defaults: page 1, 20 per page). |
 | `markAsRead(id)` | `void` | Mark one notification read, by its id. |
 | `markAllAsRead(target)` | `void` | Mark every notification for the target read. |
 | `delete(id)` | `void` | Remove one notification, by its id. |

@@ -15,6 +15,7 @@ export {
   type NotifiableTarget,
   type PaginateOptions,
   type PaginatedNotifications,
+  type PaginationMeta,
 } from './notifications-query.service';
 export {
   createNotificationsController,
