@@ -8,7 +8,11 @@ import type { SseBackplane, SseBackplaneMessage } from './backplane';
  */
 export interface RedisPubSubClient {
   publish(channel: string, message: string): unknown;
-  subscribe(channel: string, callback?: (err: Error | null, count: number) => void): unknown;
+  // No callback param: `ioredis`'s `subscribe` is a variadic overload whose last argument is a
+  // required callback, which a `callback?` here fails to match — forcing every caller to cast. The
+  // backplane only ever calls `subscribe(channel)`, so the single-channel signature is enough and
+  // lets a raw `ioredis` instance satisfy this interface with no cast.
+  subscribe(channel: string): unknown;
   on(event: 'message', listener: (channel: string, message: string) => void): unknown;
   quit?(): unknown;
 }

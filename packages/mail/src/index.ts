@@ -15,6 +15,12 @@ export {
   NodemailerTransport,
   FailoverMailTransport,
 } from './transport';
+export {
+  SesTransport,
+  composeRawEmail,
+  type SesV2Client,
+  type SesTransportOptions,
+} from './ses.transport';
 export { Mail, MailChannel, type MailChannelOptions, type MailNotification } from './mail.channel';
 export {
   MailChannelModule,

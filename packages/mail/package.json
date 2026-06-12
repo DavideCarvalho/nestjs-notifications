@@ -27,7 +27,8 @@
     "mjml": ">=4",
     "nodemailer": "^6.9.0",
     "react": ">=18",
-    "react-dom": ">=18"
+    "react-dom": ">=18",
+    "@aws-sdk/client-sesv2": ">=3"
   },
   "peerDependenciesMeta": {
     "marked": {
@@ -43,6 +44,9 @@
       "optional": true
     },
     "mjml": {
+      "optional": true
+    },
+    "@aws-sdk/client-sesv2": {
       "optional": true
     }
   },

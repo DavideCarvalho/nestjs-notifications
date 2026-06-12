@@ -4,6 +4,7 @@ import { MailMessage } from './mail-message';
 import { MailChannel } from './mail.channel';
 import type { MailNotification } from './mail.channel';
 import { DefaultMailRenderer, MarkdownMailRenderer } from './renderer';
+import { composeRawEmail } from './ses.transport';
 import type { MailTransport } from './transport';
 
 class TestUser implements Notifiable {
@@ -139,6 +140,22 @@ describe('MailChannel', () => {
     expect(resolveTransport).not.toHaveBeenCalled();
     expect(defaultSend).toHaveBeenCalledOnce();
     expect(tenantSend).not.toHaveBeenCalled();
+  });
+});
+
+describe('SesTransport', () => {
+  it('composeRawEmail builds a MIME message carrying attachments', async () => {
+    const raw = await composeRawEmail({
+      to: 'a@example.com',
+      from: 'x@example.com',
+      subject: 'Report',
+      html: '<p>see attached</p>',
+      text: 'see attached',
+      attachments: [{ filename: 'report.pdf', content: 'PDFDATA', contentType: 'application/pdf' }],
+    });
+    const mime = raw.toString('utf8');
+    expect(mime).toContain('Subject: Report');
+    expect(mime).toContain('report.pdf');
   });
 });
 
