@@ -8,7 +8,11 @@ function makeEm() {
     create: vi.fn((_entity: unknown, data: Partial<NotificationEntity>) => ({
       ...data,
     })),
-    persistAndFlush: vi.fn(async () => undefined),
+    // v7 dropped `persistAndFlush`; the store now does `em.persist(x).flush()`.
+    flush: vi.fn(async () => undefined),
+    persist: vi.fn(function (this: unknown) {
+      return inner;
+    }),
     find: vi.fn(async () => [] as NotificationEntity[]),
     nativeUpdate: vi.fn(async () => 0),
     nativeDelete: vi.fn(async () => 0),
@@ -36,7 +40,7 @@ describe('MikroOrmNotificationStore', () => {
       NotificationEntity,
       expect.objectContaining({ type: 'InvoicePaid', readAt: null }),
     );
-    expect(inner.persistAndFlush).toHaveBeenCalled();
+    expect(inner.persist).toHaveBeenCalled();
     expect(result.id).toEqual(expect.any(String));
     expect(result.type).toBe('InvoicePaid');
     expect(result.notifiableType).toBe('User');

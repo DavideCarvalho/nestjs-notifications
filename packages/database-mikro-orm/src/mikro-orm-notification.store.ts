@@ -45,7 +45,7 @@ export class MikroOrmNotificationStore implements NotificationStore {
       createdAt: now,
       updatedAt: now,
     });
-    await em.persistAndFlush(entity);
+    await em.persist(entity).flush();
     return toStored(entity);
   }
 
@@ -119,7 +119,7 @@ export class MikroOrmNotificationStore implements NotificationStore {
       existing.data = input.data;
       existing.readAt = null;
       existing.updatedAt = now;
-      await em.persistAndFlush(existing);
+      await em.persist(existing).flush();
       return toStored(existing);
     }
     const entity = em.create(NotificationEntity, {
@@ -133,7 +133,7 @@ export class MikroOrmNotificationStore implements NotificationStore {
       createdAt: now,
       updatedAt: now,
     });
-    await em.persistAndFlush(entity);
+    await em.persist(entity).flush();
     return toStored(entity);
   }
 

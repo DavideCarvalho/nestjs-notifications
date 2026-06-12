@@ -15,7 +15,7 @@ describe('MikroOrmNotificationStore (integration, sqlite)', () => {
       dbName: ':memory:',
       entities: [NotificationEntity],
     });
-    await orm.getSchemaGenerator().refreshDatabase();
+    await orm.schema.refresh();
     store = new MikroOrmNotificationStore(orm.em);
   });
 
