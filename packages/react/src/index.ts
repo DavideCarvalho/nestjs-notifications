@@ -3,6 +3,7 @@ export {
   NotificationsClient,
   NotificationsApiError,
   createNotificationsClient,
+  subscribeNotificationsStream,
 } from '@dudousxd/nestjs-notifications-client';
 
 // Types
@@ -11,6 +12,7 @@ export type {
   PaginatedNotifications,
   NotificationsClientOptions,
   ListParams,
+  NotificationsStreamOptions,
 } from '@dudousxd/nestjs-notifications-client';
 
 // Pure helpers (also useful for custom renderers)
@@ -45,6 +47,8 @@ export type {
   UseUnreadCountOptions,
   UseUnreadCountResult,
 } from './hooks/use-unread-count';
+export { useNotificationsStream } from './hooks/use-notifications-stream';
+export type { UseNotificationsStreamOptions } from './hooks/use-notifications-stream';
 
 // Components
 export { Inbox } from './components/Inbox';
