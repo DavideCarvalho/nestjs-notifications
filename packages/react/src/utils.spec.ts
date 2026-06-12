@@ -4,7 +4,9 @@ import {
   formatRelativeTime,
   isUnread,
   mergeNotifications,
+  notificationAction,
   notificationBody,
+  notificationProgress,
   notificationTitle,
   toTime,
 } from './utils';
@@ -82,5 +84,39 @@ describe('title/body extraction', () => {
     expect(notificationTitle(make({ id: 'a', type: 'InvoicePaid', data: {} }))).toBe('InvoicePaid');
     expect(notificationBody(make({ id: 'a', data: { message: 'Body' } }))).toBe('Body');
     expect(notificationBody(make({ id: 'a', data: {} }))).toBe('');
+  });
+});
+
+describe('notificationProgress', () => {
+  it('reads numbers and numeric strings, clamped to 0–100', () => {
+    expect(notificationProgress(make({ id: 'a', data: { progress: 42 } }))).toBe(42);
+    expect(notificationProgress(make({ id: 'a', data: { progress: '7' } }))).toBe(7);
+    expect(notificationProgress(make({ id: 'a', data: { progress: 150 } }))).toBe(100);
+    expect(notificationProgress(make({ id: 'a', data: { progress: -5 } }))).toBe(0);
+  });
+  it('returns null when absent or not a number', () => {
+    expect(notificationProgress(make({ id: 'a', data: {} }))).toBeNull();
+    expect(notificationProgress(make({ id: 'a', data: { progress: 'soon' } }))).toBeNull();
+  });
+});
+
+describe('notificationAction', () => {
+  it('reads the nested action shape with a label fallback', () => {
+    expect(
+      notificationAction(make({ id: 'a', data: { action: { label: 'Download', url: '/f.csv' } } })),
+    ).toEqual({ label: 'Download', url: '/f.csv' });
+    expect(notificationAction(make({ id: 'a', data: { action: { url: '/f.csv' } } }))).toEqual({
+      label: 'Open',
+      url: '/f.csv',
+    });
+  });
+  it('reads flat keys (actionUrl/downloadUrl + actionLabel)', () => {
+    expect(
+      notificationAction(make({ id: 'a', data: { downloadUrl: '/f.csv', actionLabel: 'Get it' } })),
+    ).toEqual({ label: 'Get it', url: '/f.csv' });
+  });
+  it('returns null when there is no url', () => {
+    expect(notificationAction(make({ id: 'a', data: { action: { label: 'x' } } }))).toBeNull();
+    expect(notificationAction(make({ id: 'a', data: {} }))).toBeNull();
   });
 });

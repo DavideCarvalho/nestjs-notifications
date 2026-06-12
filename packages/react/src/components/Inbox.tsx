@@ -13,7 +13,14 @@ import {
 } from 'react';
 import { useNotifications } from '../hooks/use-notifications';
 import { useUnreadCount } from '../hooks/use-unread-count';
-import { formatRelativeTime, isUnread, notificationBody, notificationTitle } from '../utils';
+import {
+  formatRelativeTime,
+  isUnread,
+  notificationAction,
+  notificationBody,
+  notificationProgress,
+  notificationTitle,
+} from '../utils';
 import { NotificationBell } from './NotificationBell';
 
 /** Render-prop context handed to a custom `renderItem`. */
@@ -87,18 +94,21 @@ const styles: Record<string, CSSProperties> = {
   },
   list: { listStyle: 'none', margin: 0, padding: 0, overflowY: 'auto', flex: 1 },
   row: {
-    display: 'flex',
-    gap: 8,
     padding: '12px 16px',
     borderBottom: '1px solid #f8fafc',
-    cursor: 'pointer',
-    textAlign: 'left',
-    width: '100%',
-    border: 'none',
-    background: 'transparent',
     boxSizing: 'border-box',
   },
   rowUnread: { background: '#eff6ff' },
+  rowMain: {
+    display: 'flex',
+    gap: 8,
+    cursor: 'pointer',
+    textAlign: 'left',
+    width: '100%',
+    padding: 0,
+    border: 'none',
+    background: 'transparent',
+  },
   dot: {
     width: 8,
     height: 8,
@@ -121,6 +131,29 @@ const styles: Record<string, CSSProperties> = {
     WebkitBoxOrient: 'vertical',
   },
   rowTime: { fontSize: 11, color: '#9ca3af', flexShrink: 0, marginLeft: 8 },
+  progressTrack: {
+    height: 4,
+    marginTop: 8,
+    marginLeft: 16,
+    borderRadius: 2,
+    background: '#e5e7eb',
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    background: '#2563eb',
+    borderRadius: 2,
+    transition: 'width 200ms ease',
+  },
+  action: {
+    display: 'inline-block',
+    marginTop: 8,
+    marginLeft: 16,
+    fontSize: 12,
+    fontWeight: 600,
+    color: '#2563eb',
+    textDecoration: 'none',
+  },
   footer: { padding: 8, textAlign: 'center', borderTop: '1px solid #f1f5f9' },
   loadMore: {
     border: 'none',
@@ -298,20 +331,46 @@ interface DefaultRowProps {
 function DefaultRow({ item, onClick }: DefaultRowProps) {
   const unread = isUnread(item);
   const body = notificationBody(item);
+  const progress = notificationProgress(item);
+  const action = notificationAction(item);
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{ ...styles.row, ...(unread ? styles.rowUnread : null) }}
-    >
-      {unread ? <span style={styles.dot} aria-hidden="true" /> : <span style={styles.dotSpacer} />}
-      <span style={styles.rowBody}>
-        <span style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={styles.rowTitle}>{notificationTitle(item)}</span>
-          <span style={styles.rowTime}>{formatRelativeTime(item.createdAt)}</span>
+    <div style={{ ...styles.row, ...(unread ? styles.rowUnread : null) }}>
+      <button type="button" onClick={onClick} style={styles.rowMain}>
+        {unread ? (
+          <span style={styles.dot} aria-hidden="true" />
+        ) : (
+          <span style={styles.dotSpacer} />
+        )}
+        <span style={styles.rowBody}>
+          <span style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={styles.rowTitle}>{notificationTitle(item)}</span>
+            <span style={styles.rowTime}>{formatRelativeTime(item.createdAt)}</span>
+          </span>
+          {body ? <span style={styles.rowText}>{body}</span> : null}
         </span>
-        {body ? <span style={styles.rowText}>{body}</span> : null}
-      </span>
-    </button>
+      </button>
+      {progress != null ? (
+        // biome-ignore lint/a11y/useFocusableInteractive: a progressbar is a status indicator, not a focusable control
+        <div
+          style={styles.progressTrack}
+          role="progressbar"
+          aria-valuenow={progress}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div style={{ ...styles.progressBar, width: `${progress}%` }} />
+        </div>
+      ) : null}
+      {action ? (
+        <a
+          href={action.url}
+          style={styles.action}
+          onClick={(e) => e.stopPropagation()}
+          rel="noopener noreferrer"
+        >
+          {action.label}
+        </a>
+      ) : null}
+    </div>
   );
 }
