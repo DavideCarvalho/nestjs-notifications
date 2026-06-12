@@ -92,19 +92,35 @@ Mutations are optimistic — the UI updates immediately and rolls back if the re
 
 ## Customizing the row
 
-`<Inbox/>` renders a sensible default row from `item.data`, but you control it with `renderItem`:
+`<Inbox/>` renders a sensible default row from `item.data`: title, body, relative time, and — when
+present — a **progress bar** (`data.progress`, `0`–`100`) for long-running notifications and a
+**download/action link** (`data.action` of `{ label, url }`, or a flat `actionUrl`/`downloadUrl`).
+The same conventions are exposed as pure helpers — `notificationProgress(item)` and
+`notificationAction(item)` (alongside `notificationTitle`/`notificationBody`) — so a custom
+`renderItem` can reuse them instead of reaching into `item.data` by hand:
 
 ```tsx
+import { notificationProgress, notificationAction } from '@dudousxd/nestjs-notifications-react';
+
 <Inbox
-  renderItem={(item, { markAsRead }) => (
-    <MyRow
-      title={item.data.title as string}
-      unread={!item.readAt}
-      onClick={() => markAsRead(item.id)}
-    />
-  )}
+  renderItem={(item, { markAsRead }) => {
+    const progress = notificationProgress(item); // number | null
+    const action = notificationAction(item);     // { label, url } | null
+    return (
+      <MyRow
+        title={item.data.title as string}
+        progress={progress}
+        action={action}
+        unread={!item.readAt}
+        onClick={() => markAsRead(item.id)}
+      />
+    );
+  }}
 />
 ```
+
+See [Live / progress notifications](/docs/recipes/progress-notifications) for the producer side that
+drives the bar.
 
 Other props: `title`, `emptyState`, `onItemClick`, `className`, and `panelClassName`. The widget ships
 with minimal inline styles and no CSS framework dependency, so it inherits your app's look and you
