@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-sse",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Server-Sent Events channel for nestjs-notifications — push real-time notifications over native NestJS SSE",
   "license": "MIT",
   "author": "Davide Carvalho",
