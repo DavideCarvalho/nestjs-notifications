@@ -71,6 +71,16 @@ DatabaseChannelModule.forRoot({
   controller: { resolveRef: (req) => ({ type: 'User', id: req.auth.sub }) },
 });
 
+// Auth guard + a custom base path (avoids colliding with a `/notifications` page
+// route under a shared global prefix):
+DatabaseChannelModule.forRoot({
+  controller: {
+    resolveRef: (req) => ({ type: 'User', id: req.user.id }),
+    guards: [AuthGuard],
+    path: 'notifications-inbox',
+  },
+});
+
 // Off — mount it yourself, or expose your own endpoints:
 DatabaseChannelModule.forRoot({ controller: false });
 ```
@@ -114,5 +124,7 @@ whatever your auth layer puts on `req.user`. The controller exposes:
 <Callout type="info">
   The controller relies on `resolveRef` to scope reads and "mark all" / "unread" to the current user.
   The per-id routes (`:id/read`, `DELETE :id`) act on a notification id directly, so guard them so a
-  user can only touch their own rows.
+  user can only touch their own rows — pass your auth guard via the `guards` option (on either
+  `controller: { guards }` or `createNotificationsController({ guards })`) so the current user comes
+  from the same `req.user` your guard populates.
 </Callout>

@@ -61,6 +61,10 @@ Three sends, **one** notification row — its `data` ends at `{ status: 'done', 
 with the `sse` channel ([live badge](/docs/recipes/live-badge)) and the UI updates the same item as the
 bar fills.
 
+Put the percentage in a top-level `data.progress` (`0`–`100`) and the React [`<Inbox/>`](/docs/recipes/react-inbox)
+renders the progress bar for you — or read it yourself with the `notificationProgress(item)` helper. Add a
+`data.action` of `{ label, url }` to surface a download link the moment the job finishes.
+
 ## Semantics
 
 - **`databaseKey` is the row id** — namespace it so it's unique (`export:${id}`, not just `${id}`).

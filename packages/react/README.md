@@ -67,8 +67,15 @@ const client = new NotificationsClient({
 
 ### Components
 
-- `<Inbox/>` — bell + badge + dropdown panel with relative time, read/unread styling, "mark all read", click-to-read, and "load more" infinite scroll. Props: `renderItem`, `emptyState`, `title`, `markReadOnClick`, `onItemClick`, `className`/`style`/`panelClassName`.
+- `<Inbox/>` — bell + badge + dropdown panel with relative time, read/unread styling, "mark all read", click-to-read, and "load more" infinite scroll. The default row also renders a **progress bar** for long-running notifications (a `data.progress` of `0`–`100`) and a **download/action link** (a `data.action` of `{ label, url }`, or a flat `actionUrl`/`downloadUrl`). Props: `renderItem`, `emptyState`, `title`, `markReadOnClick`, `onItemClick`, `className`/`style`/`panelClassName`.
 - `<NotificationBell count onClick/>` — the composable bell + badge.
+
+### Helpers (also useful inside a custom `renderItem`)
+
+- `notificationTitle(item)` / `notificationBody(item)` — pull a title/body from conventional `data` keys (`title`/`subject`/`name`, `body`/`message`/`description`, …).
+- `notificationProgress(item)` — a clamped `0`–`100` from `data.progress` (numeric strings accepted), or `null` when there's nothing to show.
+- `notificationAction(item)` — `{ label, url }` from `data.action` or flat `actionUrl`/`downloadUrl` (+ `actionLabel`), or `null`.
+- `isUnread(item)`, `formatRelativeTime(value)`, `mergeNotifications(a, b)`.
 
 ## SSR / `EventSource` safety
 

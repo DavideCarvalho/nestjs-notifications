@@ -208,15 +208,21 @@ the channel that consumes it.
     <Tabs items={['pnpm', 'npm']}>
       <Tab value="pnpm">
         ```bash
-        pnpm add @dudousxd/nestjs-notifications-database-mikro-orm @mikro-orm/core @mikro-orm/nestjs
+        pnpm add @dudousxd/nestjs-notifications-database-mikro-orm @mikro-orm/core @mikro-orm/decorators @mikro-orm/nestjs
         ```
       </Tab>
       <Tab value="npm">
         ```bash
-        npm install @dudousxd/nestjs-notifications-database-mikro-orm @mikro-orm/core @mikro-orm/nestjs
+        npm install @dudousxd/nestjs-notifications-database-mikro-orm @mikro-orm/core @mikro-orm/decorators @mikro-orm/nestjs
         ```
       </Tab>
     </Tabs>
+
+    <Callout type="info">
+      Targets **MikroORM v7** (peers `^7`). It needs `@mikro-orm/decorators` because v7 moved the
+      decorators out of `@mikro-orm/core`; the adapter's entity uses the `legacy` (TypeScript
+      experimental) decorators, matching the rest of a NestJS app.
+    </Callout>
 
     Register the adapter's `NotificationEntity` with MikroORM, then wire the store and channel:
 
