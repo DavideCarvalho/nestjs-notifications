@@ -122,6 +122,26 @@ describe('subscribeNotificationsStream', () => {
     const headers = init.headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer tok');
     expect(headers.Accept).toBe('text/event-stream');
+    expect(init.credentials).toBe('include'); // default
+
+    stop();
+  });
+
+  it('forwards a custom credentials mode', async () => {
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
+      Promise.resolve(openSseResponse(init?.signal as AbortSignal)),
+    );
+
+    const stop = subscribeNotificationsStream({
+      url: 'https://api.test/notifications/stream',
+      fetch: fetchMock as unknown as typeof fetch,
+      onUpdate: vi.fn(),
+      credentials: 'omit',
+    });
+    await flush();
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.credentials).toBe('omit');
 
     stop();
   });

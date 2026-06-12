@@ -12,6 +12,8 @@ export interface UseNotificationsStreamOptions {
   onUpdate: () => void;
   /** fetch implementation; defaults to `globalThis.fetch`. */
   fetch?: typeof fetch;
+  /** Forwarded to `fetch`; set `'same-origin'`/`'omit'` to change cookie behavior. Default `'include'`. */
+  credentials?: RequestCredentials;
   /** Dynamic request headers (e.g. a bearer token), evaluated on every (re)connect. */
   headers?: () => Record<string, string>;
   /** Invoked when a connection attempt fails or drops. */
@@ -38,7 +40,7 @@ export interface UseNotificationsStreamOptions {
  * ```
  */
 export function useNotificationsStream(options: UseNotificationsStreamOptions): void {
-  const { url, fetch: fetchImpl, enabled = true } = options;
+  const { url, fetch: fetchImpl, credentials, enabled = true } = options;
 
   const onUpdateRef = useRef(options.onUpdate);
   onUpdateRef.current = options.onUpdate;
@@ -52,9 +54,10 @@ export function useNotificationsStream(options: UseNotificationsStreamOptions): 
     return subscribeNotificationsStream({
       url,
       fetch: fetchImpl,
+      credentials,
       onUpdate: () => onUpdateRef.current(),
       headers: () => headersRef.current?.() ?? {},
       onError: (err) => onErrorRef.current?.(err),
     });
-  }, [url, fetchImpl, enabled]);
+  }, [url, fetchImpl, credentials, enabled]);
 }

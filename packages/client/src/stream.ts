@@ -15,6 +15,8 @@ export interface NotificationsStreamOptions {
   onUpdate: () => void;
   /** fetch implementation; defaults to `globalThis.fetch`. */
   fetch?: typeof fetch;
+  /** Forwarded to `fetch`; set `'same-origin'`/`'omit'` to change cookie behavior. Default `'include'`. */
+  credentials?: RequestCredentials;
   /** Dynamic request headers (e.g. a bearer token), evaluated on every (re)connect. */
   headers?: () => Record<string, string>;
   /** Invoked when a connection attempt fails or drops, before the reconnect backoff. */
@@ -50,6 +52,7 @@ export function subscribeNotificationsStream(options: NotificationsStreamOptions
     onUpdate,
     headers,
     onError,
+    credentials = 'include',
     initialRetryDelayMs = 1_000,
     maxRetryDelayMs = 30_000,
   } = options;
@@ -69,7 +72,7 @@ export function subscribeNotificationsStream(options: NotificationsStreamOptions
         }
         const response = await fetchImpl(url, {
           headers: { Accept: 'text/event-stream', ...headers?.() },
-          credentials: 'include',
+          credentials,
           signal: abort.signal,
         });
         if (!response.ok || !response.body) {
