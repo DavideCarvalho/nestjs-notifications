@@ -1,5 +1,12 @@
 # @dudousxd/nestjs-notifications-react
 
+## 0.6.1
+
+### Patch Changes
+
+- Updated dependencies [f710348]
+  - @dudousxd/nestjs-notifications-client@0.6.0
+
 ## 0.6.0
 
 ### Minor Changes
