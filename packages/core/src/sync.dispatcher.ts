@@ -17,6 +17,9 @@ export class SyncDispatcher implements DispatchDriver {
 
   async dispatch(job: NotificationJob): Promise<void> {
     const { notifiable, notification } = await this.serializer.hydrateJob(job);
-    await this.runner.run(notifiable, notification, job.channels, { tenant: job.tenant });
+    await this.runner.run(notifiable, notification, job.channels, {
+      tenant: job.tenant,
+      captured: job.captured,
+    });
   }
 }

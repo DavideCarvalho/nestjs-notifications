@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { CapturedContext } from './context-accessor';
 import { notifiableRef } from './decorators';
 import { NotificationSerializationError } from './errors';
 import type {
@@ -19,6 +20,12 @@ export interface SerializedJob {
   channels: string[];
   queue?: string;
   tenant?: string;
+  /**
+   * The request context captured at send() time. JSON-safe ({@link CapturedContext} is all
+   * primitives), so it rides through Redis/BullMQ and is re-established on the worker — an
+   * async-delivered notification still records WHO triggered it.
+   */
+  captured?: CapturedContext;
 }
 
 /**
@@ -118,6 +125,7 @@ export class NotificationSerializer {
       channels: job.channels,
       queue: job.queue,
       tenant: job.tenant,
+      captured: job.captured,
     };
   }
 

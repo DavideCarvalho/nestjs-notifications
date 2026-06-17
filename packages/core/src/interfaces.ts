@@ -1,3 +1,7 @@
+import type { CapturedContext } from './context-accessor';
+
+export type { CapturedContext } from './context-accessor';
+
 /**
  * A stable reference to a notifiable, used when a notification crosses a process
  * boundary (async dispatch). The worker reloads the real object via
@@ -176,6 +180,14 @@ export interface NotificationClass {
  */
 export interface DeliveryContext {
   tenant?: string;
+  /**
+   * The request context captured at `send()` time — who triggered the notification
+   * (`causer`), the tenant it happened in, and the correlation `traceId`. Populated only
+   * when `@dudousxd/nestjs-context` is installed and an accessor is bound; otherwise
+   * `undefined` and channels behave exactly as before. Survives async dispatch so a
+   * worker-delivered notification still records WHO triggered it.
+   */
+  captured?: CapturedContext;
 }
 
 /** Delivers a notification over a single transport (mail, database, slack, ...). */
@@ -202,6 +214,12 @@ export interface NotificationJob {
   delay?: number;
   /** Tenant scope for this job (multi-tenant apps). */
   tenant?: string;
+  /**
+   * The request context captured when the notification was sent. Cross-process dispatchers
+   * include this in the job payload and re-establish it on the worker, so an async-delivered
+   * notification still records its `causer`/`tenantId`/`traceId`. JSON-safe by construction.
+   */
+  captured?: CapturedContext;
 }
 
 /** Decides where/when a job is processed: inline, in-process events, Redis, BullMQ. */

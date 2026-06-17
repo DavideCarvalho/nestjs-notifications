@@ -66,6 +66,48 @@ describe('DatabaseChannel upsert routing', () => {
   });
 });
 
+describe('DatabaseChannel captured context', () => {
+  it('persists causer/tenant/trace from the captured delivery context', async () => {
+    const store = new InMemoryStore();
+    const channel = new DatabaseChannel(store);
+
+    await channel.send(user, new PlainNotification(), {
+      captured: { causer: { type: 'User', id: 7 }, tenantId: 'acme', traceId: 'tx-9' },
+    });
+
+    const [row] = await store.getForNotifiable('User', '1');
+    expect(row?.causerType).toBe('User');
+    expect(row?.causerId).toBe('7');
+    expect(row?.tenantId).toBe('acme'); // captured tenant fills an unscoped delivery
+    expect(row?.traceId).toBe('tx-9');
+  });
+
+  it('prefers the explicit delivery tenant over the captured tenant', async () => {
+    const store = new InMemoryStore();
+    const channel = new DatabaseChannel(store);
+
+    await channel.send(user, new PlainNotification(), {
+      tenant: 'scoped',
+      captured: { tenantId: 'acme' },
+    });
+
+    const [row] = await store.getForNotifiable('User', '1', 'scoped');
+    expect(row?.tenantId).toBe('scoped');
+  });
+
+  it('leaves causer/trace null when there is no captured context (back-compat)', async () => {
+    const store = new InMemoryStore();
+    const channel = new DatabaseChannel(store);
+
+    await channel.send(user, new PlainNotification());
+
+    const [row] = await store.getForNotifiable('User', '1');
+    expect(row?.causerType).toBeNull();
+    expect(row?.causerId).toBeNull();
+    expect(row?.traceId).toBeNull();
+  });
+});
+
 describe('InMemoryStore.upsert', () => {
   it('inserts then updates the same row, preserving createdAt and resetting readAt', async () => {
     const store = new InMemoryStore();

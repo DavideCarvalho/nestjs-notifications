@@ -123,6 +123,37 @@ describe('TypeOrmNotificationStore (integration, sqlite)', () => {
     expect(await store.getUnread('User', 'tenant-user', 'tenant-1')).toHaveLength(0);
     expect(await store.getUnread('User', 'tenant-user', 'tenant-2')).toHaveLength(1);
   });
+
+  it('persists captured causer/trace columns round-trip; null when omitted', async () => {
+    const withContext = await store.save({
+      type: 'WithContext',
+      notifiableType: 'User',
+      notifiableId: 'causer-user',
+      data: { n: 1 },
+      causerType: 'Admin',
+      causerId: '7',
+      traceId: 'tx-9',
+    });
+    expect(withContext.causerType).toBe('Admin');
+    expect(withContext.causerId).toBe('7');
+    expect(withContext.traceId).toBe('tx-9');
+
+    const [row] = await store.getForNotifiable('User', 'causer-user');
+    expect(row?.causerType).toBe('Admin');
+    expect(row?.causerId).toBe('7');
+    expect(row?.traceId).toBe('tx-9');
+
+    // omitted → null (old rows / no-context sends stay back-compat)
+    const without = await store.save({
+      type: 'NoContext',
+      notifiableType: 'User',
+      notifiableId: 'plain-user',
+      data: { n: 2 },
+    });
+    expect(without.causerType).toBeNull();
+    expect(without.causerId).toBeNull();
+    expect(without.traceId).toBeNull();
+  });
 });
 
 function delay(ms = 5): Promise<void> {

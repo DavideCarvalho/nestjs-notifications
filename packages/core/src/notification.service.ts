@@ -1,7 +1,10 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { ChannelRunner } from './channel-runner';
+import { type ContextAccessor, captureContext } from './context-accessor';
 import { resolveChannels, resolveTenants } from './decorators';
 import type {
+  CapturedContext,
   DispatchDriver,
   Notifiable,
   NotifiableInput,
@@ -10,7 +13,7 @@ import type {
   SendResult,
 } from './interfaces';
 import { PendingNotification } from './pending-notification';
-import { NOTIFICATION_DISPATCHER } from './tokens';
+import { CONTEXT_ACCESSOR, NOTIFICATION_DISPATCHER } from './tokens';
 
 type Mode = 'auto' | 'sync' | 'async';
 
@@ -81,7 +84,30 @@ export class NotificationService {
     private readonly runner: ChannelRunner,
     @Inject(NOTIFICATION_DISPATCHER)
     private readonly dispatcher: DispatchDriver,
+    // Soft-detected `@dudousxd/nestjs-context` accessor (optional peer; no hard import).
+    // When bound, `send()` captures who/which-tenant/which-trace triggered the notification.
+    @Optional()
+    @Inject(CONTEXT_ACCESSOR)
+    private readonly contextAccessor?: ContextAccessor,
+    @Optional()
+    private readonly moduleRef?: ModuleRef,
   ) {}
+
+  /**
+   * Locate the context accessor. Prefers the value injected into this module; falls back to a
+   * non-strict {@link ModuleRef} lookup so an accessor provided by ANY module (e.g. a global
+   * ContextModule, or the app root) is found even though NotificationsModule is its own module.
+   * Mirrors the authz Gate's resolution seam. Returns undefined when nestjs-context is absent.
+   */
+  private resolveContextAccessor(): ContextAccessor | undefined {
+    if (this.contextAccessor) return this.contextAccessor;
+    if (!this.moduleRef) return undefined;
+    try {
+      return this.moduleRef.get<ContextAccessor>(CONTEXT_ACCESSOR, { strict: false });
+    } catch {
+      return undefined;
+    }
+  }
 
   /** Send a notification, returning a per-(notifiable, tenant), per-channel {@link SendResult}. */
   send(
@@ -185,6 +211,10 @@ export class NotificationService {
     const targets = Array.isArray(notifiables) ? notifiables : [notifiables];
     const async = mode === 'async' || (mode === 'auto' && (n.shouldQueue || n.delay !== undefined));
 
+    // Snapshot the request context (who/tenant/trace) once at send() time, before any async
+    // boundary. Undefined when nestjs-context is absent → fully unchanged behavior.
+    const captured = captureContext(this.resolveContextAccessor());
+
     const jobs: Promise<SendResult>[] = [];
     for (const target of targets) {
       const notifiable = target as Notifiable;
@@ -193,8 +223,8 @@ export class NotificationService {
       for (const tenant of tenants) {
         jobs.push(
           async
-            ? this.sendAsyncTo(notifiable, n, tenant, scope)
-            : this.sendNowTo(notifiable, n, tenant, scope),
+            ? this.sendAsyncTo(notifiable, n, tenant, scope, captured)
+            : this.sendNowTo(notifiable, n, tenant, scope, captured),
         );
       }
     }
@@ -220,10 +250,11 @@ export class NotificationService {
     notification: Notification,
     tenant: string | undefined,
     scope: SendScope,
+    captured: CapturedContext | undefined,
   ): Promise<SendResult> {
     const channels = this.filterChannels(resolveChannels(notification, notifiable), scope);
     if (channels.length === 0) return { notifiable, results: [], tenant };
-    const results = await this.runner.run(notifiable, notification, channels, { tenant });
+    const results = await this.runner.run(notifiable, notification, channels, { tenant, captured });
     return { notifiable, results, tenant };
   }
 
@@ -232,6 +263,7 @@ export class NotificationService {
     notification: Notification,
     tenant: string | undefined,
     scope: SendScope,
+    captured: CapturedContext | undefined,
   ): Promise<SendResult> {
     const channels = this.filterChannels(resolveChannels(notification, notifiable), scope);
     if (channels.length === 0) return { notifiable, results: [], tenant };
@@ -243,6 +275,7 @@ export class NotificationService {
       queue: notification.queue,
       delay: toDelayMs(notification.delay),
       tenant,
+      captured,
     });
     return {
       notifiable,

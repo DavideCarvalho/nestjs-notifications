@@ -1,4 +1,10 @@
 export * from './interfaces';
+export {
+  type ContextAccessor,
+  type ContextStore,
+  type UserRef,
+  captureContext,
+} from './context-accessor';
 export * from './decorators';
 export * from './options';
 export * from './tokens';

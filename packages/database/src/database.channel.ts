@@ -10,7 +10,7 @@ import {
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { DatabaseNotification, NotificationStore } from './interfaces';
+import type { DatabaseNotification, NewStoredNotification, NotificationStore } from './interfaces';
 import { NOTIFICATION_STORE } from './tokens';
 
 /** Channel handle: use as `@Database()` on a payload method, or as a token in `via()`. */
@@ -41,12 +41,25 @@ export class DatabaseChannel implements ChannelDriver {
       (notification.constructor as { notificationName?: string }).notificationName ??
       notification.constructor.name;
 
-    const input = {
+    // WHO triggered this + the trace, captured from nestjs-context at send() time (present
+    // here even for async deliveries — the carrier rides through the dispatcher). The delivery
+    // tenant wins for `tenantId`; when unscoped we fall back to the captured tenant so the row
+    // is still attributable. The causer/trace keys are added ONLY when a context was captured —
+    // omitted otherwise so a schema-first store (Prisma) without these columns is unaffected.
+    const captured = context?.captured;
+    const input: NewStoredNotification = {
       type,
       notifiableType: ref.type,
       notifiableId: String(ref.id),
-      tenantId: context?.tenant ?? null,
+      tenantId: context?.tenant ?? captured?.tenantId ?? null,
       data,
+      ...(captured
+        ? {
+            causerType: captured.causer?.type ?? null,
+            causerId: captured.causer?.id != null ? String(captured.causer.id) : null,
+            traceId: captured.traceId ?? null,
+          }
+        : {}),
     };
 
     // A stable databaseKey means "update this row in place" (live/progress notifications).

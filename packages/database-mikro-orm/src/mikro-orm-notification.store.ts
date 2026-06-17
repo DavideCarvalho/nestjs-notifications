@@ -18,6 +18,9 @@ function toStored(row: NotificationEntity): StoredNotification {
     notifiableType: row.notifiableType,
     notifiableId: row.notifiableId,
     tenantId: row.tenantId ?? null,
+    causerType: row.causerType ?? null,
+    causerId: row.causerId ?? null,
+    traceId: row.traceId ?? null,
     data: row.data,
     readAt: row.readAt ?? null,
     createdAt: row.createdAt,
@@ -40,6 +43,9 @@ export class MikroOrmNotificationStore implements NotificationStore {
       notifiableType: notification.notifiableType,
       notifiableId: notification.notifiableId,
       tenantId: notification.tenantId ?? null,
+      causerType: notification.causerType ?? null,
+      causerId: notification.causerId ?? null,
+      traceId: notification.traceId ?? null,
       data: notification.data,
       readAt: null,
       createdAt: now,
@@ -116,6 +122,9 @@ export class MikroOrmNotificationStore implements NotificationStore {
       existing.notifiableType = input.notifiableType;
       existing.notifiableId = input.notifiableId;
       existing.tenantId = input.tenantId ?? null;
+      existing.causerType = input.causerType ?? null;
+      existing.causerId = input.causerId ?? null;
+      existing.traceId = input.traceId ?? null;
       existing.data = input.data;
       existing.readAt = null;
       existing.updatedAt = now;
@@ -128,6 +137,9 @@ export class MikroOrmNotificationStore implements NotificationStore {
       notifiableType: input.notifiableType,
       notifiableId: input.notifiableId,
       tenantId: input.tenantId ?? null,
+      causerType: input.causerType ?? null,
+      causerId: input.causerId ?? null,
+      traceId: input.traceId ?? null,
       data: input.data,
       readAt: null,
       createdAt: now,
