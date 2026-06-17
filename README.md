@@ -1,3 +1,16 @@
+<p align="center">
+  <a href="https://davidecarvalho.github.io/aviary/docs/notifications">
+    <img src="./.github/banner.svg" alt="@dudousxd/nestjs-notifications — an Aviary library. Call sign: Nightingale.">
+  </a>
+</p>
+
+<p align="center">
+  <b><a href="https://davidecarvalho.github.io/aviary/docs/notifications">📖 Read the documentation</a></b>
+  &nbsp;·&nbsp; part of the <a href="https://davidecarvalho.github.io/aviary/"><b>Aviary</b></a> ecosystem for NestJS
+</p>
+
+---
+
 # nestjs-notifications
 
 Laravel-style notifications for NestJS. Define a notification once and send it across many
