@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-redis
 
+## 0.3.0
+
+### Minor Changes
+
+- 851170c: Carry the captured trigger context across the worker boundary. The job payload now includes the `captured` context (JSON-safe), and the BullMQ processor / Redis worker re-establish it on the channel runner — so an async-delivered notification still records WHO triggered it (causer/tenant/trace). The serialization carrier is provided by core; this just rehydrates it.
+
 ## 0.2.2
 
 ### Patch Changes
