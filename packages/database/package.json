@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-database",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Database channel for nestjs-notifications — persist notifications for in-app display",
   "license": "MIT",
   "author": "Davide Carvalho",

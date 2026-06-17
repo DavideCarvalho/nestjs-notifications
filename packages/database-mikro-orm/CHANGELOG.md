@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-database-mikro-orm
 
+## 0.7.0
+
+### Minor Changes
+
+- 851170c: Persist the captured trigger context. Adds nullable `causerType`/`causerId`/`traceId` properties to `NotificationEntity` and maps them in the store (save/upsert). They self-heal on existing tables via the schema updater's safe (non-destructive) update, and old rows read back as null.
+
 ## 0.6.0
 
 ### Minor Changes
