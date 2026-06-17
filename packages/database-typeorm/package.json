@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-database-typeorm",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "TypeORM adapter for the nestjs-notifications database channel",
   "license": "MIT",
   "author": "Davide Carvalho",
