@@ -1,46 +1,153 @@
 ---
-title: Documentation
-description: Laravel-style notifications for NestJS — one notification, many channels (mail, database, broadcast, Slack), delivered synchronously or queued through your own dispatcher.
+title: Introduction
+description: Laravel-style notifications for NestJS — define a notification once and deliver it across many channels (mail, database, broadcast, Slack), synchronously or queued.
 ---
 
-Welcome to the **nestjs-notifications** documentation.
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
 
-`@dudousxd/nestjs-notifications-core` brings Laravel's notification ergonomics to NestJS. You write a
-notification once — a plain class that lists its channels and shapes a payload for each — and
-send it with a single call. It fans out to mail, the database, a websocket, Slack, or anything
-you plug in, synchronously or queued, with one call site that never changes.
+**`@dudousxd/nestjs-notifications`** brings Laravel's notification ergonomics to NestJS. You write a notification *once* — a plain class that shapes a payload for each channel it cares about — and send it with a single call. That one call fans out to mail, the database, a websocket, Slack, or anything you plug in, synchronously or queued, from a call site that never changes as you add channels.
 
-Head to the [Getting Started](/docs/getting-started) guide to send your first notification in
-under five minutes, or use the sidebar to explore the concepts, channels, and dispatchers.
+The core is deliberately thin: it knows only interfaces. Every channel and every async dispatcher is an opt-in package, discovered from the Nest container or selected with a single option — nothing is hard-wired.
 
-## What you get
+## The problem it solves
 
-- **One notification, many channels.** Define `via()` and a `to<Channel>()` method per channel.
-  Mail, database, broadcast and Slack ship today; each is an opt-in package.
-- **Sync or queued, without changing the call site.** Deliver inline by default, or set
-  `shouldQueue` and route through an async dispatcher — in-process events, Redis, or the BullMQ
-  you already run.
-- **A decoupled core.** The core knows only interfaces. Channels are discovered from the Nest
-  container; dispatchers are swapped with one option. Nothing is hard-wired.
-- **Type-safe payloads.** Each channel exports an interface your notification implements, so
-  `toMail`, `toDatabase` and `toSlack` are checked at compile time.
-- **On-demand routing.** No entity to notify? Send straight to an address with
-  `notifications.route('mail', 'ops@x.com').notify(...)`.
-- **Observable.** Lifecycle events for every send, plus a first-class
-  [nestjs-telescope](/docs/recipes/telescope) watcher that records each delivery.
-- **Built to test.** A `NotificationFake` swaps the real service in tests, with Laravel-style
-  assertions and no real SMTP, sockets, or queues.
+Sending a notification is rarely "send an email." It's an email *and* a database row for the in-app feed *and* a realtime push *and*, when something is on fire, a Slack message — and half of those should run on a queue, not on the request. Wire that by hand and the logic for a single event ends up smeared across a mailer, a repository, a gateway, and a queue processor.
 
-## Why
+nestjs-notifications collapses that into one class. The recipient decides *where* a notification can go (`@RouteFor`), the notification decides *what* each channel sends (one decorated `to<Channel>()` method per channel), and the library handles the fan-out, the channel isolation, and — when you ask — the queue. Add a channel by adding a method; the code that calls `send()` is untouched.
 
-Sending a notification is rarely "send an email." It's an email *and* a database row for the
-in-app feed *and* a realtime push *and*, when something is on fire, a Slack message — and half
-of those should happen on a queue, not on the request. Wire that by hand and the logic for one
-event ends up smeared across a mailer, a repository, a gateway, and a queue processor.
+<Callout type="info">
+If you've used Laravel notifications, this API will feel immediately familiar. If you haven't, the [Quickstart](#quickstart) below is the whole loop in three steps.
+</Callout>
 
-nestjs-notifications collapses that into a single class. The recipient decides *where* it goes
-(`routeNotificationFor`), the notification decides *what* each channel sends (`to<Channel>()`),
-and the library handles the fan-out, the failures, and — when you ask — the queue.
+## Quickstart
 
-If you've used Laravel notifications, you already know this API. If you haven't,
-[Getting Started](/docs/getting-started) is five minutes.
+Install the core and a channel, mark a recipient, write a notification, and send it. For the full walkthrough — adding a second channel, going async — see [Getting Started](/docs/getting-started).
+
+<Steps>
+<Step>
+
+Install the core, the mail channel, and the event emitter the core uses for lifecycle events:
+
+```bash
+pnpm add @dudousxd/nestjs-notifications-core @dudousxd/nestjs-notifications-mail @nestjs/event-emitter
+```
+
+Register the modules in your root module. Channels register themselves and are discovered automatically:
+
+```ts title="app.module.ts"
+import { Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
+import { MailChannelModule } from '@dudousxd/nestjs-notifications-mail';
+
+@Module({
+  imports: [
+    EventEmitterModule.forRoot(),
+    NotificationsModule.forRoot(),
+    MailChannelModule.forRoot({
+      from: 'billing@example.com',
+      smtp: { host: 'smtp.example.com', port: 587, auth: { user: '…', pass: '…' } },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+</Step>
+<Step>
+
+Mark a recipient as notifiable. `@RouteFor` declares the per-channel address; `@NotifiableId` provides the stable reference used if you ever queue:
+
+```ts title="user.ts"
+import { Notifiable, NotifiableId, RouteFor } from '@dudousxd/nestjs-notifications-core';
+
+@Notifiable()
+export class User {
+  @NotifiableId()
+  id: number;
+
+  @RouteFor('mail')
+  email: string;
+
+  constructor(id: number, email: string) {
+    this.id = id;
+    this.email = email;
+  }
+}
+```
+
+</Step>
+<Step>
+
+Write the notification. Annotate each payload method with its channel — `@Mail()` — and the library infers that this notification travels over the mail channel. No `via()` array, no magic strings:
+
+```ts title="invoice-paid.notification.ts"
+import { Notification } from '@dudousxd/nestjs-notifications-core';
+import { Mail, MailMessage } from '@dudousxd/nestjs-notifications-mail';
+
+@Notification()
+export class InvoicePaid {
+  constructor(private invoiceId: string) {}
+
+  @Mail()
+  toMail(): MailMessage {
+    return new MailMessage()
+      .subject(`Invoice ${this.invoiceId} paid`)
+      .greeting('Thanks for your payment!')
+      .line('We received your payment. No further action is needed.');
+  }
+}
+```
+
+</Step>
+<Step>
+
+Inject `NotificationService` and call `send` — that's the whole flow:
+
+```ts title="billing.service.ts"
+import { Injectable } from '@nestjs/common';
+import { NotificationService } from '@dudousxd/nestjs-notifications-core';
+import { InvoicePaid } from './invoice-paid.notification';
+import { User } from './user';
+
+@Injectable()
+export class BillingService {
+  constructor(private readonly notifications: NotificationService) {}
+
+  async paid(user: User, invoiceId: string) {
+    await this.notifications.send(user, new InvoicePaid(invoiceId));
+  }
+}
+```
+
+To add an in-app feed entry, install the database channel and add a second decorated method (`@Database()`) — the call site above does not change. The notification simply fans out to both channels.
+
+</Step>
+</Steps>
+
+## Two orthogonal abstractions
+
+The library keeps two concerns strictly separate, and that separation is the key to its flexibility:
+
+- **Channel drivers** decide *how* a notification leaves — mail, database, broadcast, Slack, and more. Each is an opt-in package; a notification opts into a channel by adding one decorated payload method.
+- **Dispatch drivers** decide *where and when* it is processed — inline and synchronous by default, or in-process events, Redis, or the BullMQ you already run.
+
+Because they're independent, any combination works: you can send by mail asynchronously through BullMQ, or to the database synchronously, without either choice leaking into the other. Going async is a `shouldQueue` flag on the notification plus a dispatcher option — the call site stays the same.
+
+## Type-safe and observable
+
+Each channel exports an interface its payload method returns, so `toMail`, `toDatabase`, and `toSlack` are checked at compile time — a malformed payload fails the build, not production. Every send also emits lifecycle events, and a first-class [nestjs-telescope](/docs/recipes/telescope) watcher records each delivery: channel, recipient, notification class, payload, and any failure reason.
+
+For tests, a `NotificationFake` swaps the real service in and exposes Laravel-style assertions, so you can verify what *would* have been sent without touching real SMTP, sockets, or queues.
+
+## Where to go next
+
+<Cards>
+  <Card title="Getting Started" href="/docs/getting-started" description="Install the core and a channel, write your first notification, and send it — then add a second channel and go async." />
+  <Card title="Concepts" href="/docs/concepts" description="Notifiables, notifications, and the line between channels and dispatchers." />
+  <Card title="Channels" href="/docs/channels" description="Mail, database, broadcast, Slack, and the rest — how each channel is wired and what its payload looks like." />
+  <Card title="Dispatchers" href="/docs/dispatchers" description="Sync, in-process events, Redis, and BullMQ — moving delivery off the request." />
+  <Card title="Recipes" href="/docs/recipes" description="Practical patterns, including the nestjs-telescope watcher for observing every send." />
+  <Card title="Reference" href="/docs/reference" description="The full API surface, plus testing with NotificationFake and its assertions." />
+</Cards>
