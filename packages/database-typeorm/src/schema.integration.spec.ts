@@ -92,6 +92,41 @@ describe('TypeOrmNotificationStore.ensureSchema (integration, sqlite)', () => {
     expect(withTenant.tenantId).toBe('acme');
   });
 
+  it('self-heals the captured-context columns (causerType/causerId/traceId) added after v1', async () => {
+    // Simulate a pre-context deployment: drop the three nullable columns from a populated table.
+    const dropQr = dataSource.createQueryRunner();
+    for (const col of ['causerType', 'causerId', 'traceId']) {
+      expect((await dropQr.getTable('notifications'))?.findColumnByName(col)).toBeDefined();
+      await dropQr.dropColumn('notifications', col);
+      expect((await dropQr.getTable('notifications'))?.findColumnByName(col)).toBeUndefined();
+    }
+    await dropQr.release();
+
+    // ensureSchema ADDs them back (nullable → no NOT-NULL skip), no throw.
+    await store.ensureSchema();
+
+    const checkQr = dataSource.createQueryRunner();
+    const repaired = await checkQr.getTable('notifications');
+    for (const col of ['causerType', 'causerId', 'traceId']) {
+      expect(repaired?.findColumnByName(col)?.isNullable).toBe(true);
+    }
+    await checkQr.release();
+
+    // and the store round-trips through the re-added columns.
+    const saved = await store.save({
+      type: 'Audited',
+      notifiableType: 'User',
+      notifiableId: '3',
+      data: { ok: true },
+      causerType: 'Admin',
+      causerId: '7',
+      traceId: 'tx-9',
+    });
+    expect(saved.causerType).toBe('Admin');
+    expect(saved.causerId).toBe('7');
+    expect(saved.traceId).toBe('tx-9');
+  });
+
   it('skips a missing NOT-NULL-no-default column on a populated table with a warning instead of throwing', async () => {
     // The table is populated from prior tests. Simulate an old deployment missing a column that the
     // entity declares NOT NULL with no default ("type") — `ADD COLUMN` of such a column on a table

@@ -1,3 +1,4 @@
+import type { CapturedContext } from './context-accessor';
 import type { Notifiable, Notification } from './interfaces';
 
 /** Emitted before a channel attempts delivery (`notification.sending`). */
@@ -8,6 +9,8 @@ export class NotificationSendingEvent {
     public readonly channel: string,
     /** Tenant the delivery is scoped to, when multi-tenant. */
     public readonly tenant?: string,
+    /** Captured request context (causer/tenant/trace), when nestjs-context is present. */
+    public readonly captured?: CapturedContext,
   ) {}
 }
 
@@ -23,6 +26,8 @@ export class NotificationSentEvent {
     public readonly durationMs?: number,
     /** Whatever the channel driver returned (e.g. a provider message id). */
     public readonly response?: unknown,
+    /** Captured request context (causer/tenant/trace), when nestjs-context is present. */
+    public readonly captured?: CapturedContext,
   ) {}
 }
 
@@ -37,5 +42,7 @@ export class NotificationFailedEvent {
     public readonly tenant?: string,
     /** Wall-clock time before the failure, in milliseconds. */
     public readonly durationMs?: number,
+    /** Captured request context (causer/tenant/trace), when nestjs-context is present. */
+    public readonly captured?: CapturedContext,
   ) {}
 }

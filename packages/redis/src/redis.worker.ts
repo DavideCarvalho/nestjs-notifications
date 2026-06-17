@@ -76,8 +76,11 @@ export class RedisNotificationWorker implements OnModuleInit, OnModuleDestroy {
     try {
       const parsed = JSON.parse(raw) as NotificationJob;
       const { notifiable, notification } = await this.serializer.hydrateJob(parsed);
+      // Re-establish the captured context (causer/tenant/trace) on the worker so the
+      // out-of-process delivery still records WHO triggered it.
       await this.channelRunner.run(notifiable, notification, parsed.channels, {
         tenant: parsed.tenant,
+        captured: parsed.captured,
       });
     } catch (error) {
       this.logger.error(`Failed to process notification job: ${describe(error)}`);

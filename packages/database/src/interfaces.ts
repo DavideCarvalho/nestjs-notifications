@@ -11,6 +11,15 @@ export interface StoredNotification {
   notifiableId: string;
   /** Tenant scope (workspace) this row belongs to, or null for single-tenant. */
   tenantId: string | null;
+  /**
+   * Morph type of WHO triggered this notification (the captured causer's `type`), or null.
+   * Populated from `@dudousxd/nestjs-context` when present; null on old rows / no context.
+   */
+  causerType: string | null;
+  /** Id of WHO triggered this notification (the captured causer's `id`), or null. */
+  causerId: string | null;
+  /** Correlation/trace id of the triggering request, for end-to-end tracing, or null. */
+  traceId: string | null;
   /** Arbitrary payload returned by `toDatabase()`. */
   data: Record<string, unknown>;
   readAt: Date | null;
@@ -25,6 +34,14 @@ export interface NewStoredNotification {
   notifiableId: string;
   data: Record<string, unknown>;
   tenantId?: string | null;
+  /**
+   * WHO triggered the notification + the correlation trace, captured from
+   * `@dudousxd/nestjs-context` at send() time (additive, all optional). Stores that support
+   * the columns persist them; others ignore them. Back-compat: omitted → stored as null.
+   */
+  causerType?: string | null;
+  causerId?: string | null;
+  traceId?: string | null;
 }
 
 /** Data for an upsert — same as {@link NewStoredNotification} plus the caller-controlled id. */

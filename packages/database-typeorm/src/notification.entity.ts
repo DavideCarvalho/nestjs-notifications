@@ -22,6 +22,19 @@ export class NotificationEntity {
   @Column({ type: 'varchar', nullable: true })
   tenantId!: string | null;
 
+  // WHO triggered the notification + the correlation trace, captured from
+  // `@dudousxd/nestjs-context` at send() time. NULLABLE and added after v1 — they self-heal
+  // on existing tables via `ensureNotificationsTable`'s non-destructive column-add. Old rows
+  // (and any send without a context accessor) keep these null.
+  @Column({ type: 'varchar', nullable: true })
+  causerType!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  causerId!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  traceId!: string | null;
+
   @Column({ type: 'simple-json' })
   data!: Record<string, unknown>;
 

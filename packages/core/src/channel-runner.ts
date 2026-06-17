@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ChannelRegistry } from './channel-registry';
+import type { CapturedContext } from './context-accessor';
 import { injectServices } from './decorators';
 import { ChannelNotRegisteredError } from './errors';
 import { NotificationFailedEvent, NotificationSendingEvent, NotificationSentEvent } from './events';
@@ -95,7 +96,15 @@ export class ChannelRunner {
     const driver = this.registry.get(channel);
     if (!driver) {
       const err = new ChannelNotRegisteredError(channel, this.registry.names());
-      this.emitFailed(notifiable, notification, channel, err, context.tenant);
+      this.emitFailed(
+        notifiable,
+        notification,
+        channel,
+        err,
+        context.tenant,
+        undefined,
+        context.captured,
+      );
       if (rethrow) throw err;
       this.logger.error(err.message);
       return { channel, status: 'failed', error: err };
@@ -103,7 +112,13 @@ export class ChannelRunner {
 
     this.events.emit(
       NotificationEvents.sending,
-      new NotificationSendingEvent(notifiable, notification, channel, context.tenant),
+      new NotificationSendingEvent(
+        notifiable,
+        notification,
+        channel,
+        context.tenant,
+        context.captured,
+      ),
     );
 
     const startedAt = Date.now();
@@ -118,6 +133,7 @@ export class ChannelRunner {
           context.tenant,
           Date.now() - startedAt,
           response,
+          context.captured,
         ),
       );
       if (typeof notification.afterSending === 'function') {
@@ -132,6 +148,7 @@ export class ChannelRunner {
         error,
         context.tenant,
         Date.now() - startedAt,
+        context.captured,
       );
       this.logger.error(`Channel "${channel}" failed: ${describe(error)}`);
       if (rethrow) throw error;
@@ -146,10 +163,19 @@ export class ChannelRunner {
     error: unknown,
     tenant?: string,
     durationMs?: number,
+    captured?: CapturedContext,
   ): void {
     this.events.emit(
       NotificationEvents.failed,
-      new NotificationFailedEvent(notifiable, notification, channel, error, tenant, durationMs),
+      new NotificationFailedEvent(
+        notifiable,
+        notification,
+        channel,
+        error,
+        tenant,
+        durationMs,
+        captured,
+      ),
     );
   }
 }

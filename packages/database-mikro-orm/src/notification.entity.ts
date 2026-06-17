@@ -25,6 +25,18 @@ export class NotificationEntity {
   @Property({ type: 'string', nullable: true })
   tenantId?: string | null;
 
+  // WHO triggered the notification + the correlation trace, captured from
+  // `@dudousxd/nestjs-context` at send() time. NULLABLE — they self-heal on existing tables
+  // via the schema updater's safe (non-destructive) update. Old rows / no-context sends = null.
+  @Property({ type: 'string', nullable: true })
+  causerType?: string | null;
+
+  @Property({ type: 'string', nullable: true })
+  causerId?: string | null;
+
+  @Property({ type: 'string', nullable: true })
+  traceId?: string | null;
+
   @Property({ type: 'json' })
   data!: Record<string, unknown>;
 

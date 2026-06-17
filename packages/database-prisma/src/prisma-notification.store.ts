@@ -16,11 +16,33 @@ function toStored(row: any): StoredNotification {
     notifiableType: row.notifiableType,
     notifiableId: row.notifiableId,
     tenantId: row.tenantId ?? null,
+    causerType: row.causerType ?? null,
+    causerId: row.causerId ?? null,
+    traceId: row.traceId ?? null,
     data: row.data,
     readAt: row.readAt ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+/**
+ * The captured-context columns (causer/trace), included in a Prisma write ONLY when supplied.
+ * Prisma is schema-first and consumer-managed: a consumer who has NOT added these columns to
+ * `schema.prisma` must not have them sent (Prisma rejects unknown keys). Omitting them when
+ * absent keeps old consumer schemas working; a consumer who adds the nullable columns gets them
+ * persisted. Documented in the package README / `ensureSchema` note.
+ */
+function capturedColumns(input: {
+  causerType?: string | null;
+  causerId?: string | null;
+  traceId?: string | null;
+}): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  if (input.causerType !== undefined) out.causerType = input.causerType;
+  if (input.causerId !== undefined) out.causerId = input.causerId;
+  if (input.traceId !== undefined) out.traceId = input.traceId;
+  return out;
 }
 
 /** Prisma-backed {@link NotificationStore}. */
@@ -39,6 +61,7 @@ export class PrismaNotificationStore implements NotificationStore {
         notifiableType: notification.notifiableType,
         notifiableId: notification.notifiableId,
         tenantId: notification.tenantId ?? null,
+        ...capturedColumns(notification),
         data: notification.data,
         readAt: null,
       },
@@ -108,6 +131,7 @@ export class PrismaNotificationStore implements NotificationStore {
       notifiableType: input.notifiableType,
       notifiableId: input.notifiableId,
       tenantId: input.tenantId ?? null,
+      ...capturedColumns(input),
       data: input.data,
       readAt: null,
     };
