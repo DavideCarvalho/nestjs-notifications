@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-database-typeorm
 
+## 0.6.0
+
+### Minor Changes
+
+- 64bee81: Non-destructive column-ensure: `ensureNotificationsTable` now adds columns missing from an existing table (not just creating absent tables), via `TableUtils.createTableColumnOptions`. A NOT-NULL-no-default column on a populated table is skipped with a clear warning instead of throwing.
+
 ## 0.5.0
 
 ### Minor Changes
