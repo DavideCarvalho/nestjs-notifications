@@ -48,11 +48,20 @@ export function createChannel(channel: string): ChannelHandle {
   return handle;
 }
 
+// Per-class caches of immutable, class-static reflect-metadata. Keyed by the
+// notification constructor; safe because this metadata is defined at class-decoration
+// time and never changes for a given class. Dynamic, per-instance behaviour (e.g. a
+// `via()` function or a tenant VALUE) is NOT cached.
+const handlerCache = new WeakMap<Function, HandlerMap>();
+
 function readHandlers(notification: Notification): HandlerMap {
-  return (
-    (Reflect.getMetadata(CHANNEL_HANDLERS, notification.constructor) as HandlerMap | undefined) ??
-    {}
-  );
+  const ctor = notification.constructor as Function;
+  const cached = handlerCache.get(ctor);
+  if (cached !== undefined) return cached;
+  const map =
+    (Reflect.getMetadata(CHANNEL_HANDLERS, ctor) as HandlerMap | undefined) ?? {};
+  handlerCache.set(ctor, map);
+  return map;
 }
 
 function toChannelName(channel: string | ChannelRef): string {
@@ -99,11 +108,18 @@ export function getHandler(
  * }
  * ```
  */
+const depsCache = new WeakMap<Function, NestPropertyDep[]>();
+
 export function injectServices(notification: Notification, moduleRef: ModuleRef): void {
-  const deps =
-    (Reflect.getMetadata(NEST_PROPERTY_DEPS, notification.constructor) as
-      | NestPropertyDep[]
-      | undefined) ?? [];
+  const ctor = notification.constructor as Function;
+  let deps = depsCache.get(ctor);
+  if (deps === undefined) {
+    deps =
+      (Reflect.getMetadata(NEST_PROPERTY_DEPS, ctor) as NestPropertyDep[] | undefined) ?? [];
+    depsCache.set(ctor, deps);
+  }
+  // Common-case fast path: nothing to inject.
+  if (deps.length === 0) return;
   const target = notification as Record<string | symbol, unknown>;
   for (const { key, type } of deps) {
     if (target[key] === undefined) {
@@ -216,10 +232,21 @@ export function Tenant(): PropertyDecorator {
   };
 }
 
+// Cache the resolved tenant FIELD key per constructor. `null` is the sentinel for
+// "resolved, no @Tenant field" (distinct from "not yet resolved"). The tenant VALUE is
+// always read dynamically from the live instance below.
+const tenantFieldCache = new WeakMap<Function, string | symbol | null>();
+
 function readTenantField(target: object | undefined): string[] | undefined {
   if (!target) return undefined;
-  const key = Reflect.getMetadata(TENANT_FIELD, target.constructor) as string | symbol | undefined;
-  if (key === undefined) return undefined;
+  const ctor = target.constructor as Function;
+  let key = tenantFieldCache.get(ctor);
+  if (key === undefined) {
+    key =
+      (Reflect.getMetadata(TENANT_FIELD, ctor) as string | symbol | undefined) ?? null;
+    tenantFieldCache.set(ctor, key);
+  }
+  if (key === null) return undefined;
   const value = (target as Record<string | symbol, unknown>)[key];
   if (value === undefined || value === null) return undefined;
   const list = (Array.isArray(value) ? value : [value]).map(String).filter((t) => t.length > 0);
