@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-core
 
+## 0.6.1
+
+### Patch Changes
+
+- 771a66c: perf: cache reflect-metadata per notification class — `WeakMap`-cache the channel handler map, the `@Inject` dependency list (with an empty no-op fast path), and the tenant field key. The dynamic `via()` path and per-instance tenant value resolution are unchanged.
+
 ## 0.6.0
 
 ### Minor Changes
