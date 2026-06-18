@@ -1,4 +1,4 @@
-import MailComposer from 'nodemailer/lib/mail-composer';
+import MailComposer from 'nodemailer/lib/mail-composer/index.js';
 import type { MailTransport, MailTransportPayload } from './transport';
 
 /** The slice of an AWS SES v2 client (`@aws-sdk/client-sesv2`'s `SESv2Client`) this transport uses. */
