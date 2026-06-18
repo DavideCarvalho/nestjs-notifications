@@ -1,6 +1,6 @@
 ---
 title: Notifications
-description: A notification is a plain class. Annotate each payload method with the channel handle — @Mail(), @Database() — and via() is inferred automatically. No magic strings, no implements.
+description: A notification is a plain class. Annotate each payload method with the channel handle — @Mail(), @Database() — and via() is inferred automatically. No magic strings; add the channel interface for compile-time type safety when you want it.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -61,6 +61,44 @@ above sends over `mail` and `database` with nothing else to declare. This is the
 
 You only reach for an explicit `via()` when routing must vary **per recipient** — see
 [Alternative: explicit via()](#alternative-explicit-via-and-interfaces) below.
+
+## Type safety
+
+The decorator is all you need at runtime — the engine finds `@Mail()` and calls it, and a missing or
+misspelled payload method surfaces as a `MissingChannelMethodError` at send time. For **compile-time**
+safety you layer typing on top, from light to strict — pick the tier you want:
+
+**1. Annotate the return type** — the quickest guard. TypeScript flags a payload method that builds
+the wrong shape:
+
+```ts
+@Mail() toMail(ctx: ChannelContext): MailMessage {   // return anything else → type error
+  return new MailMessage().subject('…');
+}
+```
+
+**2. Implement the channel interface** — the full contract, and the recommended setup for a real app.
+Each channel exports a `<Channel>Notification` interface (`MailNotification`, `SmsNotification`, …);
+implementing it turns a missing, misnamed, or mis-typed method into a **build** error instead of a
+runtime one:
+
+```ts
+import { Notification, type ChannelContext } from '@dudousxd/nestjs-notifications-core';
+import { Mail, MailMessage, type MailNotification } from '@dudousxd/nestjs-notifications-mail';
+import { Sms, type SmsMessage, type SmsNotification } from '@dudousxd/nestjs-notifications-sms';
+
+@Notification()
+export class OrderShipped implements MailNotification, SmsNotification {
+  @Mail() toMail(ctx: ChannelContext): MailMessage { /* … */ }
+  @Sms()  toSms(ctx: ChannelContext): SmsMessage | string { /* … */ }
+}
+```
+
+The decorator and the interface are **complementary, not redundant**: the decorator does the runtime
+wiring (which channels, which payload), and the interface is the opt-in compile-time check. Reach for
+the decorator alone on a quick path; add `implements` when you want the contract enforced. (Don't
+treat them as separate styles — `implements` *is* the typed way, and the return annotation in tier 1
+is just optional sugar on top.)
 
 ## Injecting services
 
