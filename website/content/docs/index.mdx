@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: Laravel-style notifications for NestJS — define a notification once and deliver it across many channels (mail, database, broadcast, Slack), synchronously or queued.
+description: Laravel-style notifications for NestJS — define a notification once and deliver it across many channels (mail, database, Slack) and real-time transports (SSE, WebSocket), synchronously or queued.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -135,6 +135,24 @@ The library keeps two concerns strictly separate, and that separation is the key
 
 Because they're independent, any combination works: you can send by mail asynchronously through BullMQ, or to the database synchronously, without either choice leaking into the other. Going async is a `shouldQueue` flag on the notification plus a dispatcher option — the call site stays the same.
 
+## Real-time & in-app notifications
+
+Notifications aren't only email and Slack — a lot of them belong **in your app, live**: a bell that
+lights up, a feed that updates without a refresh, an unread badge that ticks the instant something
+happens. This library is that layer too. Two of its channels push server → browser in real time:
+
+- **[SSE](/docs/channels/sse)** (`@dudousxd/nestjs-notifications-sse`) — native NestJS Server-Sent
+  Events. No socket server; `EventSource` auto-reconnects; a Redis backplane fans out across
+  instances; the React package consumes it directly. **The default for in-app notifications.**
+- **[WebSocket](/docs/channels/broadcast)** (`@dudousxd/nestjs-notifications-broadcast`) — socket.io,
+  for when you want a bidirectional channel or already run one.
+
+Pair either with the **[database channel](/docs/channels/database)** (persist for the inbox and
+unread count) and the **[React inbox](/docs/recipes/react-inbox)** (`<Inbox/>` + hooks) and you have
+the full loop — one `send()` writes the row *and* pushes it live. The
+**[Real-time & in-app guide](/docs/recipes/realtime-in-app)** walks the whole thing end to end and
+helps you pick SSE vs WebSocket.
+
 ## Type-safe and observable
 
 Each channel exports an interface its payload method returns, so `toMail`, `toDatabase`, and `toSlack` are checked at compile time — a malformed payload fails the build, not production. Every send also emits lifecycle events, and a first-class [nestjs-telescope](/docs/recipes/telescope) watcher records each delivery: channel, recipient, notification class, payload, and any failure reason.
@@ -146,7 +164,8 @@ For tests, a `NotificationFake` swaps the real service in and exposes Laravel-st
 <Cards>
   <Card title="Getting Started" href="/docs/getting-started" description="Install the core and a channel, write your first notification, and send it — then add a second channel and go async." />
   <Card title="Concepts" href="/docs/concepts" description="Notifiables, notifications, and the line between channels and dispatchers." />
-  <Card title="Channels" href="/docs/channels" description="Mail, database, broadcast, Slack, and the rest — how each channel is wired and what its payload looks like." />
+  <Card title="Channels" href="/docs/channels" description="Mail, database, SSE, WebSocket, Slack, and the rest — how each channel is wired and what its payload looks like." />
+  <Card title="Real-time & in-app" href="/docs/recipes/realtime-in-app" description="Persist + push + consume: the live notification loop with SSE or WebSocket and the React inbox." />
   <Card title="Dispatchers" href="/docs/dispatchers" description="Sync, in-process events, Redis, and BullMQ — moving delivery off the request." />
   <Card title="Recipes" href="/docs/recipes" description="Practical patterns, including the nestjs-telescope watcher for observing every send." />
   <Card title="Reference" href="/docs/reference" description="The full API surface, plus testing with NotificationFake and its assertions." />

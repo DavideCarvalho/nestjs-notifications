@@ -1,6 +1,6 @@
 ---
 title: Channels
-description: A channel is a transport — mail, database, broadcast, Slack. Import a channel's module and it registers itself; the notification's to<Channel>() method shapes the payload.
+description: A channel is a transport — mail, database, Slack, and the real-time SSE / WebSocket channels. Import a channel's module and it registers itself; the notification's to<Channel>() method shapes the payload.
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
@@ -32,6 +32,15 @@ For the conceptual split between channels (where it goes) and dispatchers (when 
 Each channel ships as its own package, so you only pull in what you send. The handle is both the
 method decorator that declares a payload (`@Mail()`) and a type-safe token you can return from
 `via()` — see [Notifications](/docs/concepts/notifications).
+
+<Callout type="info" title="Real-time / in-app delivery">
+  `sse` and `broadcast` aren't just two more transports — they're how you deliver notifications
+  **live, into your app**: the unread badge, the feed that updates without a refresh.
+  [**SSE**](/docs/channels/sse) (native NestJS Server-Sent Events) is the lightweight default;
+  [**broadcast**](/docs/channels/broadcast) uses socket.io when you want a WebSocket. Pair either with
+  the persisted [`database`](/docs/channels/database) channel — see the
+  [Real-time & in-app guide](/docs/recipes/realtime-in-app).
+</Callout>
 
 ## Registration is just an import
 

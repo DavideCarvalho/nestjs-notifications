@@ -1,0 +1,117 @@
+---
+title: Real-time & in-app
+description: nestjs-notifications is also your real-time delivery layer. Persist with the database channel, push live with SSE or WebSocket, and consume in React — the whole in-app notification loop, and how to pick SSE vs WebSocket.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+If you're reaching for SSE or a WebSocket to power in-app notifications — a bell that lights up, a
+feed that updates without a refresh, a live unread badge — **this library is that layer**. You don't
+add a separate realtime stack: a notification fans out to a channel that *persists* it and a channel
+that *pushes* it, from the same `send()` call.
+
+## The shape: persist + push + consume
+
+An in-app notification is three jobs, and each is a package you already have:
+
+| Job | Use | Why |
+| --- | --- | --- |
+| **Persist** (history, unread count, "mark read") | [`database`](/docs/channels/database) channel | The inbox is a table. The realtime push is fire-and-forget — without persistence a notification sent while the user is offline is gone. |
+| **Push** (deliver live, now) | [`sse`](/docs/channels/sse) **or** [`broadcast`](/docs/channels/broadcast) channel | Server → browser the instant it happens, no polling. |
+| **Consume** (render it) | [`@dudousxd/nestjs-notifications-react`](/docs/recipes/react-inbox) | A bell, badge, dropdown, and hooks that read the REST API and live stream. |
+
+One notification opts into all three by adding one decorated method each — the call site never
+changes:
+
+```ts title="invoice-paid.notification.ts"
+import { Notification, type Notifiable } from '@dudousxd/nestjs-notifications-core';
+import { Database } from '@dudousxd/nestjs-notifications-database';
+import { Sse } from '@dudousxd/nestjs-notifications-sse';
+
+@Notification()
+export class InvoicePaid {
+  constructor(private invoiceId: string) {}
+
+  @Database() // persisted for the inbox
+  toDatabase() {
+    return { type: 'invoice.paid', invoiceId: this.invoiceId };
+  }
+
+  @Sse() // pushed live to the open stream
+  toSse(_notifiable: Notifiable): Record<string, unknown> {
+    return { type: 'invoice.paid', invoiceId: this.invoiceId };
+  }
+}
+```
+
+`await notifications.send(user, new InvoicePaid(id))` now writes a row **and** pushes to the user's
+live stream in one shot.
+
+## SSE or WebSocket — which channel?
+
+Both push server → browser in real time. Pick by how you want the transport to work:
+
+| | [`sse`](/docs/channels/sse) — Server-Sent Events | [`broadcast`](/docs/channels/broadcast) — WebSocket |
+| --- | --- | --- |
+| Package | `@dudousxd/nestjs-notifications-sse` | `@dudousxd/nestjs-notifications-broadcast` |
+| Transport | Native NestJS `@Sse()` over plain HTTP | socket.io (`@nestjs/websockets`) |
+| Direction | One-way (server → client) | Bidirectional |
+| Infra | None — it's just an HTTP response; `EventSource` auto-reconnects | A socket.io server + namespace |
+| Multi-instance | Redis backplane built in | socket.io adapter (e.g. Redis) |
+| React hooks consume it | ✅ directly (`sseUrl`) | via your own client |
+
+<Callout type="info">
+  **Default to SSE.** Notifications are one-way (server → client), and SSE needs no socket server,
+  reconnects on its own, and the React package consumes it out of the box. Reach for `broadcast`
+  when you're already running socket.io or genuinely need a two-way channel.
+</Callout>
+
+## End to end in three steps
+
+<Callout type="info">
+  Each step links to its full recipe — this page is the map that connects them.
+</Callout>
+
+**1. Persist — register the database channel.** It auto-mounts the inbox REST API
+(`GET/POST/DELETE /notifications`) and provides `NotificationsQueryService` (`all`, `unreadCount`,
+`markAllAsRead`, …). See [In-app notifications](/docs/recipes/in-app-notifications).
+
+```ts title="app.module.ts"
+DatabaseChannelModule.forRoot(); // controller on by default, scoped to req.user
+```
+
+**2. Push — register SSE and mount the stream.** The channel publishes into an `SseHub`; you expose
+the endpoint with Nest's own `@Sse()`, keyed per user (and tenant). See the
+[SSE channel](/docs/channels/sse).
+
+```ts title="notifications.controller.ts"
+@Sse('stream')
+stream(@Req() req: any): Observable<MessageEvent> {
+  return this.hub.stream(sseKey(req.tenantId, String(req.user.id)));
+}
+```
+
+**3. Consume — drop in the React inbox.** Point it at the REST base and the stream; the badge updates
+live off SSE. See the [React inbox](/docs/recipes/react-inbox).
+
+```tsx title="AppHeader.tsx"
+<Inbox clientOptions={{ baseUrl: '/notifications' }} sseUrl="/notifications/stream" />
+```
+
+That's the entire loop: `send()` persists + pushes, the browser is already listening, the badge ticks
+up — no polling, no separate realtime service.
+
+## Going deeper
+
+- [Live unread badge](/docs/recipes/live-badge) — the bell count updating the instant a notification
+  lands, via SSE.
+- [Progress / live notifications](/docs/recipes/progress-notifications) — update one notification in
+  place (0% → 100%) across sends with a stable `databaseKey`, instead of spamming rows.
+- [React inbox widget](/docs/recipes/react-inbox) — `<Inbox/>`, `NotificationsProvider`, and the
+  `useNotifications` / `useUnreadCount` hooks.
+
+<Callout type="warn">
+  The live channels are **fire-and-forget**: publishing to a user with no open stream is a no-op.
+  Always pair SSE/broadcast with the [database channel](/docs/channels/database) so a notification
+  sent while the user is away is still waiting in the inbox when they return.
+</Callout>
