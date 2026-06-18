@@ -71,11 +71,35 @@ The queue name is the fixed constant `NOTIFICATIONS_QUEUE` (`'nestjs-notificatio
 from the package. It registers the queue against the connection you configured with
 `BullModule.forRoot()`, so the dispatcher and the app share one Redis connection.
 
-## Retry and backoff
+## Retry, backoff & dead-letter
 
-Jobs are added with retry built in — `3` attempts with exponential backoff starting at one
-second. A transient failure (SMTP hiccup, network blip) is retried automatically rather than
-dropped.
+Jobs are added with retry built in — by default `3` attempts with exponential backoff starting at
+one second, so a transient failure (SMTP hiccup, network blip) is retried rather than dropped. Pass
+`BullmqDispatcherOptions` to `bullmqDispatcher()` to tune it:
+
+```ts title="app.module.ts"
+NotificationsModule.forRoot({
+  ...bullmqDispatcher({
+    attempts: 5,                                   // default 3
+    backoff: { type: 'exponential', delay: 2000 }, // or { type: 'fixed', delay: 1000 }
+    removeOnComplete: { age: 3600, count: 1000 },  // keep 1h / last 1000; default: keep all
+    removeOnFail: false,                           // keep failed jobs for inspection
+    onFailed: (job, reason) => {
+      // dead-letter hook: fires once a job exhausts all attempts
+      deadLetters.record(job?.id, reason);
+    },
+  }),
+});
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `attempts` | `3` | Delivery attempts before a job fails terminally. |
+| `backoff` | `{ type: 'exponential', delay: 1000 }` | Retry strategy — `exponential`, `fixed`, or a custom strategy registered on the worker. |
+| `removeOnComplete` / `removeOnFail` | keep | Job retention — `true` (drop), `false` (keep), a count, or `{ age, count? }`. Passes straight to BullMQ. |
+| `onFailed` | — | **Dead-letter hook** — invoked with `(job, reason)` once a job exhausts all `attempts`. Route it to a DLQ, alert, or persist. Errors thrown here are swallowed so they can't crash the worker. |
+
+Omit `bullmqDispatcher`'s options entirely and you get the original hardcoded behavior.
 
 ## On the worker
 

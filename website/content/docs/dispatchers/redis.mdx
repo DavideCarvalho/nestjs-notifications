@@ -68,13 +68,45 @@ export class AppModule {}
 interface RedisDispatcherOptions {
   /** ioredis connection: a URL string or a host/port (+optional password) object. */
   connection: string | { host: string; port: number; password?: string };
-  /** Redis list key used as the job queue. Defaults to `nestjs-notifications:jobs`. */
+  /** Ready-job queue (Redis list). Defaults to `nestjs-notifications:jobs`. */
   key?: string;
+  /** Delayed-job sorted set (durable across restarts). Defaults to `nestjs-notifications:scheduled`. */
+  scheduledKey?: string;
+  /** Dead-letter list for terminally-failed jobs. Defaults to `nestjs-notifications:dead`. */
+  deadLetterKey?: string;
+  /** Delivery attempts before a job is dead-lettered. `1` = no retry. Defaults to `3`. */
+  maxAttempts?: number;
+  /** How often (ms) the worker polls the scheduled set for due jobs. Defaults to `1000`. */
+  pollIntervalMs?: number;
 }
 ```
 
 The dispatcher `LPUSH`es serialized jobs onto `key`; the worker `BRPOP`s from the same key.
 Override `key` if you run multiple independent queues against one Redis instance.
+
+## Durable scheduling, retries & dead-letter
+
+The dispatcher is durable, not fire-and-forget:
+
+- **Scheduled jobs survive restarts.** Delayed sends are stored in a Redis **sorted set**
+  (`scheduledKey`, score = fire time); a poller moves due jobs onto the ready queue every
+  `pollIntervalMs`. A process restart no longer loses a pending `setTimeout`.
+- **Failed jobs retry, then dead-letter.** The worker delivers a job up to `maxAttempts` times
+  (default `3`); a job that exhausts them is `LPUSH`ed to the **dead-letter queue** (`deadLetterKey`)
+  instead of being dropped. Inspect or replay it from there.
+
+```ts title="app.module.ts"
+RedisDispatcherModule.forRoot({
+  connection: 'redis://localhost:6379',
+  maxAttempts: 5,                       // retry up to 5× before dead-lettering
+  deadLetterKey: 'myapp:notifications:dead',
+});
+```
+
+<Callout type="info">
+  `maxAttempts: 1` reproduces the old behavior of no retry — except the failed job is now
+  dead-lettered rather than silently dropped, so nothing is lost.
+</Callout>
 
 ## The dedicated worker
 
