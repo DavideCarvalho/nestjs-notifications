@@ -1,5 +1,5 @@
 import { type DataSource, type QueryRunner, Table, TableColumn } from 'typeorm';
-import { TableUtils } from 'typeorm/schema-builder/util/TableUtils';
+import { TableUtils } from 'typeorm/schema-builder/util/TableUtils.js';
 import { NotificationEntity } from './notification.entity';
 
 const TABLE = 'notifications';

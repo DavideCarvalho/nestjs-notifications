@@ -1,4 +1,5 @@
 import {
+  type ChannelContext,
   type ChannelDriver,
   type DeliveryContext,
   MissingChannelMethodError,
@@ -22,12 +23,12 @@ export const Sms = createChannel('sms');
 /** Resolved runtime options for the sms channel. */
 export interface SmsChannelOptions {
   /** Default sender number used when a message does not set its own `from`. */
-  from?: string;
+  from?: string | undefined;
 }
 
 /** Implement this on a notification to define its SMS payload. */
 export interface SmsNotification extends Notification {
-  toSms(notifiable: Notifiable): SmsMessage | string;
+  toSms(ctx: ChannelContext): SmsMessage | string;
 }
 
 /**
@@ -67,7 +68,11 @@ export class SmsChannel implements ChannelDriver {
       throw new MissingChannelMethodError('sms', 'toSms()', name);
     }
 
-    const result = handler(notifiable) as SmsMessage | string;
+    const result = handler({
+      notifiable,
+      localization: context?.localization,
+      tenant: context?.tenant,
+    }) as SmsMessage | string;
 
     const text = typeof result === 'string' ? result : result.text;
     const msgFrom = typeof result === 'string' ? undefined : result.fromNumber;

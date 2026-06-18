@@ -36,7 +36,7 @@ export class DatabaseChannel implements ChannelDriver {
     context?: DeliveryContext,
   ): Promise<unknown> {
     const ref = this.referenceFor(notifiable, notification);
-    const data = this.payloadFor(notifiable, notification);
+    const data = this.payloadFor(notifiable, notification, context);
     const type =
       (notification.constructor as { notificationName?: string }).notificationName ??
       notification.constructor.name;
@@ -97,9 +97,15 @@ export class DatabaseChannel implements ChannelDriver {
   private payloadFor(
     notifiable: Notifiable,
     notification: DatabaseNotification,
+    context?: DeliveryContext,
   ): Record<string, unknown> {
     const handler = getHandler(notification, 'database', 'toDatabase');
-    if (handler) return handler(notifiable) as Record<string, unknown>;
+    if (handler)
+      return handler({
+        notifiable,
+        localization: context?.localization,
+        tenant: context?.tenant,
+      }) as Record<string, unknown>;
     if (typeof notification.toArray === 'function') return notification.toArray(notifiable);
     const { ...rest } = notification as unknown as Record<string, unknown>;
     return rest;

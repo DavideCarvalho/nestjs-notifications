@@ -38,12 +38,17 @@ export class NotificationEntity {
   @Column({ type: 'simple-json' })
   data!: Record<string, unknown>;
 
-  @Column({ type: Date, nullable: true })
+  // `precision: 3` keeps millisecond precision on the datetime columns. MySQL's DATETIME defaults
+  // to 0 fractional-second digits (it silently truncates ms), which collapses the JS-set timestamps
+  // and breaks newest-first ordering / upsert createdAt-preservation / prune cutoffs. Postgres
+  // (microsecond default) and SQLite (text) are unaffected; `(3)` is honored on MySQL and harmless
+  // elsewhere — so the timestamps round-trip at ms precision identically across all three engines.
+  @Column({ type: Date, nullable: true, precision: 3 })
   readAt!: Date | null;
 
-  @Column({ type: Date })
+  @Column({ type: Date, precision: 3 })
   createdAt!: Date;
 
-  @Column({ type: Date })
+  @Column({ type: Date, precision: 3 })
   updatedAt!: Date;
 }

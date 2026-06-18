@@ -1,4 +1,5 @@
 import type { CapturedContext } from './context-accessor';
+import type { Localization } from './localization';
 
 export type { CapturedContext } from './context-accessor';
 
@@ -109,8 +110,21 @@ export interface Notification {
   serialize?(): Record<string, unknown>;
 }
 
-/** Outcome of delivering a notification on one channel. */
-export type ChannelDeliveryStatus = 'sent' | 'failed' | 'skipped' | 'queued';
+/**
+ * Outcome of delivering a notification on one channel.
+ * - `suppressed`: dropped as a duplicate by the idempotency guard.
+ * - `throttled`: dropped (or, when deferred, not delivered now) by the rate-limit guard.
+ * - `deferred`: held back by the preference gate (e.g. quiet hours) and re-queued through the
+ *   async dispatcher to deliver after the window — not dropped.
+ */
+export type ChannelDeliveryStatus =
+  | 'sent'
+  | 'failed'
+  | 'skipped'
+  | 'queued'
+  | 'suppressed'
+  | 'throttled'
+  | 'deferred';
 
 /** Per-channel result returned from a send. */
 export interface ChannelResult {
@@ -126,8 +140,8 @@ export interface ChannelResult {
 export interface SendResult {
   notifiable: Notifiable;
   results: ChannelResult[];
-  /** The tenant this delivery was scoped to, when multi-tenant. */
-  tenant?: string;
+  /** The tenant this delivery was scoped to, when multi-tenant (`undefined` = single-tenant). */
+  tenant?: string | undefined;
 }
 
 /**
@@ -179,7 +193,7 @@ export interface NotificationClass {
  * multi-tenant apps (set via `notifications.forTenant(id)`); undefined = single-tenant.
  */
 export interface DeliveryContext {
-  tenant?: string;
+  tenant?: string | undefined;
   /**
    * The request context captured at `send()` time — who triggered the notification
    * (`causer`), the tenant it happened in, and the correlation `traceId`. Populated only
@@ -187,7 +201,38 @@ export interface DeliveryContext {
    * `undefined` and channels behave exactly as before. Survives async dispatch so a
    * worker-delivered notification still records WHO triggered it.
    */
-  captured?: CapturedContext;
+  captured?: CapturedContext | undefined;
+  /**
+   * Set when this delivery is the re-queued tail of a gate `defer` (e.g. quiet hours): the
+   * preference gate is bypassed so the deferred channel actually delivers instead of being
+   * deferred again in an infinite loop. Carries the channels that were deferred.
+   */
+  deferredChannels?: string[] | undefined;
+  /**
+   * The resolved locale + translator for this delivery, populated by the runner from the bound
+   * {@link LocaleResolver}/{@link Translator}. Channels pass it on the {@link ChannelContext} given
+   * to a notification's payload handler (`toMail(ctx)`) so templates/strings can be localized.
+   * Undefined when no resolver/translator is bound (behavior unchanged).
+   */
+  localization?: Localization;
+}
+
+/**
+ * The single argument every channel payload method receives — `toMail(ctx)`, `toSms(ctx)`, … .
+ * Destructure what you need; an object (rather than positional args) keeps the signature stable as
+ * more context is threaded through over time.
+ */
+export interface ChannelContext {
+  /** The recipient this payload is being built for. */
+  notifiable: Notifiable;
+  /**
+   * The resolved locale + translator for this delivery, when [localization](../concepts/localization)
+   * is configured. Use `localization.t(key, params)` to render in the recipient's language; absent
+   * when no resolver/translator is bound.
+   */
+  localization?: Localization;
+  /** The tenant this delivery is scoped to, when multi-tenant; `undefined` in single-tenant apps. */
+  tenant?: string | undefined;
 }
 
 /** Delivers a notification over a single transport (mail, database, slack, ...). */
@@ -209,17 +254,23 @@ export interface NotificationJob {
   notifiable: Notifiable | NotifiableRef;
   notification: Notification | SerializedNotification;
   channels: string[];
-  queue?: string;
+  queue?: string | undefined;
   /** Delivery delay in milliseconds (honored by async dispatchers). */
-  delay?: number;
+  delay?: number | undefined;
   /** Tenant scope for this job (multi-tenant apps). */
-  tenant?: string;
+  tenant?: string | undefined;
   /**
    * The request context captured when the notification was sent. Cross-process dispatchers
    * include this in the job payload and re-establish it on the worker, so an async-delivered
    * notification still records its `causer`/`tenantId`/`traceId`. JSON-safe by construction.
    */
-  captured?: CapturedContext;
+  captured?: CapturedContext | undefined;
+  /**
+   * Channels that were deferred by the preference gate (e.g. quiet hours) and re-queued. When
+   * the worker runs this job those channels bypass the gate so they deliver instead of being
+   * deferred again. JSON-safe (array of strings).
+   */
+  deferredChannels?: string[] | undefined;
 }
 
 /** Decides where/when a job is processed: inline, in-process events, Redis, BullMQ. */
@@ -232,16 +283,86 @@ export interface ChannelGateContext {
   notifiable: Notifiable;
   notification: Notification;
   channel: string;
-  tenant?: string;
+  tenant?: string | undefined;
 }
 
 /**
- * Optional app-wide gate consulted before each channel delivery — return `false` to skip the
- * channel (recorded as `skipped`). The preferences package provides one backed by a store; bind
- * your own under the `NOTIFICATION_PREFERENCE_GATE` token.
+ * Outcome of consulting a {@link PreferenceGate} for one channel:
+ *
+ * - `allow` — deliver the channel now.
+ * - `skip` — drop the channel for this notifiable (recorded as `skipped`); the notification is
+ *   gone for this channel (e.g. the user muted it, or its digest cadence is not instant).
+ * - `defer` — do NOT deliver now, but DO NOT drop it: the runner re-queues the channel through
+ *   the async dispatcher to deliver after `deferUntil` (e.g. quiet hours). Recorded as
+ *   `deferred`.
+ */
+export type GateAction = 'allow' | 'skip' | 'defer';
+
+/**
+ * A digest cadence carried on a `skip` {@link GateDecision}: the channel is not delivered
+ * instantly, but the notification must NOT be lost — instead it is collected into a pending
+ * digest and sent in a batch at the chosen `cadence`. Set by the preference gate when the
+ * notifiable's category cadence is `daily`/`weekly`.
+ */
+export interface DigestDecision {
+  /** Batching window. */
+  cadence: 'daily' | 'weekly';
+  /** The resolved category key (used as the digest group key). */
+  category: string;
+}
+
+/** Rich gate decision, returned by the optional {@link PreferenceGate.evaluate}. */
+export interface GateDecision {
+  action: GateAction;
+  /**
+   * For `defer`: an absolute epoch-ms timestamp the channel should be delivered at (the end of
+   * the quiet-hours window). The runner schedules the re-queue with this delay. Ignored for
+   * other actions.
+   */
+  deferUntil?: number;
+  /**
+   * For `skip`: when present, the channel is suppressed for instant delivery but the
+   * notification must be COLLECTED into a periodic digest (not dropped). The runner forwards it
+   * to a {@link DigestSink} when one is bound; absent, the channel is dropped as before. Purely
+   * additive — gates that don't set it behave exactly as before.
+   */
+  digest?: DigestDecision;
+}
+
+/**
+ * A delivery the gate has decided to batch into a periodic digest instead of dropping. Carries
+ * everything the digest collector needs to re-dispatch the batch later: WHO it was for, the
+ * category/cadence group key, the tenant scope, and the live notification (the collector
+ * serializes it for storage). Bound under {@link NOTIFICATION_DIGEST_SINK}; absent, a `skip`
+ * with a digest cadence falls back to the legacy drop behavior.
+ */
+export interface DigestSink {
+  collect(entry: {
+    notifiable: Notifiable;
+    notification: Notification;
+    channel: string;
+    cadence: 'daily' | 'weekly';
+    category: string;
+    tenant?: string | undefined;
+  }): Promise<void>;
+}
+
+/**
+ * Optional app-wide gate consulted before each channel delivery — return `false` from
+ * {@link isAllowed} to skip the channel (recorded as `skipped`). The preferences package
+ * provides one backed by a store; bind your own under the `NOTIFICATION_PREFERENCE_GATE` token.
+ *
+ * A gate MAY additionally implement {@link evaluate} for a richer decision (allow / skip /
+ * defer). When present the runner prefers it; otherwise it falls back to {@link isAllowed},
+ * keeping every existing boolean gate fully backward-compatible.
  */
 export interface PreferenceGate {
   isAllowed(context: ChannelGateContext): boolean | Promise<boolean>;
+  /**
+   * Optional richer decision used for quiet hours / deferral. When omitted the runner uses
+   * {@link isAllowed} (`true` → allow, `false` → skip).
+   */
+  evaluate?(context: ChannelGateContext): GateDecision | Promise<GateDecision>;
 }
 
 /** Behaviour when a single channel throws. */

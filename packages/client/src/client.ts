@@ -38,8 +38,10 @@ export class NotificationsClient {
     // host that mounts `createNotificationsController({ path })` elsewhere can point the client at it.
     this.path = (options.path ?? 'notifications').replace(/^\/+|\/+$/g, '');
     this.headers = options.headers;
-    this.credentials = options.credentials;
-    this.sseUrl = options.sseUrl;
+    // Assign optional fields only when present so `exactOptionalPropertyTypes` is honored
+    // (these stay absent rather than explicitly `undefined`).
+    if (options.credentials !== undefined) this.credentials = options.credentials;
+    if (options.sseUrl !== undefined) this.sseUrl = options.sseUrl;
     const f = options.fetch ?? (typeof fetch !== 'undefined' ? fetch : undefined);
     if (!f) {
       throw new Error(
@@ -105,7 +107,9 @@ export class NotificationsClient {
 
     const onMessage = (event: MessageEvent) => {
       const count = extractCount(event.data);
-      listener({ count: count ?? undefined });
+      // Omit `count` entirely when absent rather than passing explicit `undefined`
+      // (exactOptionalPropertyTypes), so the listener sees `{}` and re-fetches.
+      listener(count == null ? {} : { count });
     };
 
     source.addEventListener('message', onMessage);
@@ -124,7 +128,9 @@ export class NotificationsClient {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       method,
       headers,
-      credentials: this.credentials,
+      // Spread `credentials` only when configured (exactOptionalPropertyTypes): omitting it
+      // lets `fetch` apply its own default rather than receiving an explicit `undefined`.
+      ...(this.credentials !== undefined ? { credentials: this.credentials } : {}),
     });
     if (!response.ok) {
       throw new NotificationsApiError(

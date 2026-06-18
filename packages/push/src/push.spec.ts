@@ -118,4 +118,66 @@ describe('PushChannel', () => {
 
     await expect(channel.send(new TestUser('t'), bare)).rejects.toThrow(/toPush\(\)/);
   });
+
+  it('prefers a single multicast (sendMany) over per-target send for arrays', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const sendMany = vi.fn().mockResolvedValue({ invalidTargets: [] });
+    const transport: PushTransport = { send, sendMany };
+
+    const channel = new PushChannel(transport);
+    await channel.send(new TestUser(['t1', 't2', 't3']), new OrderShippedNotification());
+
+    expect(sendMany).toHaveBeenCalledOnce();
+    expect(sendMany.mock.calls[0]?.[0]).toEqual(['t1', 't2', 't3']);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('invokes the invalid-token callback with the tokens the provider rejected', async () => {
+    const sendMany = vi.fn().mockResolvedValue({ invalidTargets: ['t2'] });
+    const transport: PushTransport = { send: vi.fn(), sendMany };
+    const onInvalidTokens = vi.fn();
+
+    const channel = new PushChannel(transport, undefined, onInvalidTokens);
+    await channel.send(new TestUser(['t1', 't2']), new OrderShippedNotification(), {
+      tenant: 'acme',
+    });
+
+    expect(onInvalidTokens).toHaveBeenCalledOnce();
+    expect(onInvalidTokens.mock.calls[0]?.[0]).toMatchObject({
+      invalidTargets: ['t2'],
+      tenant: 'acme',
+    });
+  });
+
+  it('does not call the callback when there are no invalid tokens', async () => {
+    const sendMany = vi.fn().mockResolvedValue({ invalidTargets: [] });
+    const transport: PushTransport = { send: vi.fn(), sendMany };
+    const onInvalidTokens = vi.fn();
+
+    const channel = new PushChannel(transport, undefined, onInvalidTokens);
+    await channel.send(new TestUser(['t1']), new OrderShippedNotification());
+
+    expect(onInvalidTokens).not.toHaveBeenCalled();
+  });
+
+  it('swallows errors thrown by the invalid-token callback', async () => {
+    const sendMany = vi.fn().mockResolvedValue({ invalidTargets: ['t1'] });
+    const transport: PushTransport = { send: vi.fn(), sendMany };
+    const onInvalidTokens = vi.fn().mockRejectedValue(new Error('store down'));
+
+    const channel = new PushChannel(transport, undefined, onInvalidTokens);
+    await expect(
+      channel.send(new TestUser(['t1']), new OrderShippedNotification()),
+    ).resolves.toBeUndefined();
+  });
+
+  it('falls back to per-target send when the transport has no sendMany', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const transport: PushTransport = { send };
+
+    const channel = new PushChannel(transport);
+    await channel.send(new TestUser(['t1', 't2']), new OrderShippedNotification());
+
+    expect(send).toHaveBeenCalledTimes(2);
+  });
 });

@@ -1,5 +1,10 @@
-import { subscribeNotificationsStream } from '@dudousxd/nestjs-notifications-client';
+import {
+  type ReadSyncEvent,
+  subscribeNotificationsStream,
+} from '@dudousxd/nestjs-notifications-client';
 import { useEffect, useRef } from 'react';
+
+export type { ReadSyncEvent } from '@dudousxd/nestjs-notifications-client';
 
 /** Options for {@link useNotificationsStream}. */
 export interface UseNotificationsStreamOptions {
@@ -10,6 +15,11 @@ export interface UseNotificationsStreamOptions {
    * e.g. with TanStack Query: `() => queryClient.invalidateQueries({ queryKey: ['notifications'] })`.
    */
   onUpdate: () => void;
+  /**
+   * Called when another device marks a notification (or all) as read — apply it to local inbox
+   * state. Pass `useNotifications().applyReadEvent` here for cross-device read sync.
+   */
+  onRead?: (event: ReadSyncEvent) => void;
   /** fetch implementation; defaults to `globalThis.fetch`. */
   fetch?: typeof fetch;
   /** Forwarded to `fetch`; set `'same-origin'`/`'omit'` to change cookie behavior. Default `'include'`. */
@@ -44,6 +54,8 @@ export function useNotificationsStream(options: UseNotificationsStreamOptions): 
 
   const onUpdateRef = useRef(options.onUpdate);
   onUpdateRef.current = options.onUpdate;
+  const onReadRef = useRef(options.onRead);
+  onReadRef.current = options.onRead;
   const headersRef = useRef(options.headers);
   headersRef.current = options.headers;
   const onErrorRef = useRef(options.onError);
@@ -56,6 +68,7 @@ export function useNotificationsStream(options: UseNotificationsStreamOptions): 
       fetch: fetchImpl,
       credentials,
       onUpdate: () => onUpdateRef.current(),
+      onRead: (event) => onReadRef.current?.(event),
       headers: () => headersRef.current?.() ?? {},
       onError: (err) => onErrorRef.current?.(err),
     });

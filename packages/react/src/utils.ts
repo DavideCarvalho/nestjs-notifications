@@ -1,4 +1,4 @@
-import type { NotificationItem } from '@dudousxd/nestjs-notifications-client';
+import type { NotificationItem, ReadSyncEvent } from '@dudousxd/nestjs-notifications-client';
 
 /**
  * Merge two lists of notifications, de-duplicating by `id` and keeping the
@@ -21,6 +21,22 @@ export function mergeNotifications(
 /** True when the notification has not been read yet. */
 export function isUnread(item: NotificationItem): boolean {
   return item.readAt == null;
+}
+
+/**
+ * Apply a cross-device read event to a list: mark the matching unread item read in place — or every
+ * unread item when `notificationId` is null ("mark all read"). Pure; does not call any API. Items
+ * already read are left untouched (no clobbering of an earlier `readAt`).
+ */
+export function applyReadEvent(
+  items: NotificationItem[],
+  event: ReadSyncEvent,
+): NotificationItem[] {
+  const readAt = new Date(event.readAt);
+  return items.map((item) => {
+    const matches = event.notificationId == null || item.id === event.notificationId;
+    return matches && item.readAt == null ? { ...item, readAt } : item;
+  });
 }
 
 /** Coerce a string|Date (or null) into epoch millis; `0` when missing/invalid. */

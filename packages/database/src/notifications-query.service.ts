@@ -3,8 +3,9 @@ import {
   type NotifiableRef,
   notifiableRef,
 } from '@dudousxd/nestjs-notifications-core';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { NotificationStore, StoredNotification } from './interfaces';
+import { READ_SYNC_PUBLISHER, type ReadSyncPublisher } from './read-sync';
 import { NOTIFICATION_STORE } from './tokens';
 
 /** A notifiable, or just a stable reference to one. Accepted by every query method. */
@@ -13,9 +14,9 @@ export type NotifiableTarget = Notifiable | NotifiableRef;
 /** Pagination options for {@link NotificationsQueryService.paginate}. */
 export interface PaginateOptions {
   /** 1-based page number. Default 1. */
-  page?: number;
+  page?: number | undefined;
   /** Page size. Default 20. */
-  perPage?: number;
+  perPage?: number | undefined;
 }
 
 /** Pagination metadata for a {@link PaginatedNotifications} page. */
@@ -41,7 +42,11 @@ export interface ScopedNotificationsQuery {
   unread(target: NotifiableTarget): Promise<StoredNotification[]>;
   paginate(target: NotifiableTarget, options?: PaginateOptions): Promise<PaginatedNotifications>;
   unreadCount(target: NotifiableTarget): Promise<number>;
-  markAsRead(id: string): Promise<void>;
+  /**
+   * Mark one notification read. Pass the owning `target` to also broadcast a cross-device read
+   * event (so the user's other devices update); omit it to just persist (unchanged behavior).
+   */
+  markAsRead(id: string, target?: NotifiableTarget): Promise<void>;
   markAllAsRead(target: NotifiableTarget): Promise<void>;
   delete(id: string): Promise<void>;
 }
@@ -61,6 +66,10 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
   constructor(
     @Inject(NOTIFICATION_STORE)
     private readonly store: NotificationStore,
+    // Optional cross-device read-sync publisher (e.g. SSE-backed). Absent → no-op.
+    @Optional()
+    @Inject(READ_SYNC_PUBLISHER)
+    private readonly readSync?: ReadSyncPublisher,
   ) {}
 
   all(target: NotifiableTarget): Promise<StoredNotification[]> {
@@ -82,8 +91,9 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
     return this.unreadCountScoped(target, undefined);
   }
 
-  async markAsRead(id: string): Promise<void> {
+  async markAsRead(id: string, target?: NotifiableTarget): Promise<void> {
     await this.store.markAsRead(id);
+    if (target) this.publishRead(this.refOf(target), id, undefined);
   }
 
   markAllAsRead(target: NotifiableTarget): Promise<void> {
@@ -101,7 +111,10 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
       unread: (target) => this.unreadScoped(target, tenant),
       paginate: (target, options) => this.paginateScoped(target, options ?? {}, tenant),
       unreadCount: (target) => this.unreadCountScoped(target, tenant),
-      markAsRead: (id) => this.markAsRead(id),
+      markAsRead: async (id, target) => {
+        await this.store.markAsRead(id);
+        if (target) this.publishRead(this.refOf(target), id, tenant);
+      },
       markAllAsRead: (target) => this.markAllAsReadScoped(target, tenant),
       delete: (id) => this.delete(id),
     };
@@ -130,17 +143,30 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
   ): Promise<PaginatedNotifications> {
     const safePage = Math.max(1, Math.floor(page));
     const safePerPage = Math.max(1, Math.floor(perPage));
-    const items = await this.allScoped(target, tenant);
-    const total = items.length;
-    const start = (safePage - 1) * safePerPage;
+    const offset = (safePage - 1) * safePerPage;
+    const meta = (total: number): PaginationMeta => ({
+      page: safePage,
+      perPage: safePerPage,
+      total,
+      lastPage: Math.max(1, Math.ceil(total / safePerPage)),
+    });
+
+    // Push limit/offset down into the store when it supports it — scales to large feeds.
+    if (this.store.paginateForNotifiable) {
+      const ref = this.refOf(target);
+      const { items, total } = await this.store.paginateForNotifiable(ref.type, String(ref.id), {
+        limit: safePerPage,
+        offset,
+        tenantId: tenant,
+      });
+      return { items, meta: meta(total) };
+    }
+
+    // Fallback for stores without pushdown: fetch all rows and slice (correct, not scalable).
+    const all = await this.allScoped(target, tenant);
     return {
-      items: items.slice(start, start + safePerPage),
-      meta: {
-        page: safePage,
-        perPage: safePerPage,
-        total,
-        lastPage: Math.max(1, Math.ceil(total / safePerPage)),
-      },
+      items: all.slice(offset, offset + safePerPage),
+      meta: meta(all.length),
     };
   }
 
@@ -151,6 +177,25 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
   private async markAllAsReadScoped(target: NotifiableTarget, tenant?: string): Promise<void> {
     const ref = this.refOf(target);
     await this.store.markAllAsRead(ref.type, String(ref.id), tenant);
+    // notificationId: null signals "all read" to the other devices.
+    this.publishRead(ref, null, tenant);
+  }
+
+  /** Broadcast a cross-device read event (no-op when no publisher is bound). Errors are swallowed. */
+  private publishRead(ref: NotifiableRef, notificationId: string | null, tenant?: string): void {
+    if (!this.readSync) return;
+    try {
+      void Promise.resolve(
+        this.readSync.publishRead({
+          ref: { type: ref.type, id: String(ref.id) },
+          tenantId: tenant,
+          notificationId,
+          readAt: new Date().toISOString(),
+        }),
+      ).catch(() => {});
+    } catch {
+      // Read sync is best-effort; never fail the mutation because the broadcast failed.
+    }
   }
 
   /** Accepts a raw ref, a `toNotifiableRef()`, or a `@NotifiableId()`-decorated notifiable. */

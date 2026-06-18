@@ -4,7 +4,7 @@
  */
 export interface PreferenceKey {
   /** Tenant scope; undefined in single-tenant apps. */
-  tenant?: string;
+  tenant?: string | undefined;
   /** The notifiable's morph type (e.g. the class name or `@Notifiable({ type })`). */
   notifiableType: string;
   /** The notifiable's id, stringified. */
@@ -15,7 +15,7 @@ export interface PreferenceKey {
 
 /** A notifiable+tenant scope without a specific channel — used to list muted channels. */
 export interface PreferenceScope {
-  tenant?: string;
+  tenant?: string | undefined;
   notifiableType: string;
   notifiableId: string;
 }

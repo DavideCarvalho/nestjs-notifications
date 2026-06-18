@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-core",
-  "version": "0.6.1",
+  "version": "0.6.0",
   "description": "Laravel-style notifications for NestJS — core abstractions, service and synchronous dispatcher",
   "license": "MIT",
   "author": "Davide Carvalho",
@@ -9,14 +9,27 @@
     "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
     "directory": "packages/core"
   },
-  "type": "commonjs",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {

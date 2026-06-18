@@ -18,14 +18,14 @@ export interface SerializedJob {
   notifiable: NotifiableRef;
   notification: SerializedNotification;
   channels: string[];
-  queue?: string;
-  tenant?: string;
+  queue?: string | undefined;
+  tenant?: string | undefined;
   /**
    * The request context captured at send() time. JSON-safe ({@link CapturedContext} is all
    * primitives), so it rides through Redis/BullMQ and is re-established on the worker — an
    * async-delivered notification still records WHO triggered it.
    */
-  captured?: CapturedContext;
+  captured?: CapturedContext | undefined;
 }
 
 /**

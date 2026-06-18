@@ -21,3 +21,8 @@ export {
   createNotificationsController,
   type NotificationsControllerOptions,
 } from './notifications.controller';
+export {
+  READ_SYNC_PUBLISHER,
+  type ReadEvent,
+  type ReadSyncPublisher,
+} from './read-sync';

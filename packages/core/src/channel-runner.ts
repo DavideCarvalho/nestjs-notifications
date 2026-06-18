@@ -9,12 +9,22 @@ import { NotificationFailedEvent, NotificationSendingEvent, NotificationSentEven
 import type {
   ChannelResult,
   DeliveryContext,
+  DigestSink,
+  DispatchDriver,
+  GateDecision,
   Notifiable,
   Notification,
   PreferenceGate,
 } from './interfaces';
+import { LocalizationService } from './localization.service';
 import type { NotificationsModuleOptions } from './options';
-import { NOTIFICATION_OPTIONS, NOTIFICATION_PREFERENCE_GATE, NotificationEvents } from './tokens';
+import {
+  NOTIFICATION_DIGEST_SINK,
+  NOTIFICATION_DISPATCHER,
+  NOTIFICATION_OPTIONS,
+  NOTIFICATION_PREFERENCE_GATE,
+  NotificationEvents,
+} from './tokens';
 
 /**
  * Runs a notification across its channels and emits lifecycle events. This is the shared
@@ -39,6 +49,11 @@ export class ChannelRunner {
     @Optional()
     @Inject(NOTIFICATION_PREFERENCE_GATE)
     private readonly gate?: PreferenceGate,
+    @Optional()
+    private readonly localization?: LocalizationService,
+    @Optional()
+    @Inject(NOTIFICATION_DIGEST_SINK)
+    private readonly digestSink?: DigestSink,
   ) {}
 
   async run(
@@ -50,18 +65,25 @@ export class ChannelRunner {
     // Populate @InjectService properties from the container (no-op if there are none).
     injectServices(notification, this.moduleRef);
 
+    // Resolve the per-delivery localization (locale + translator) once, unless already provided
+    // (e.g. by a custom dispatcher). No-op when the localization service isn't bound.
+    const ctx: DeliveryContext =
+      !context.localization && this.localization
+        ? { ...context, localization: await this.localization.forNotifiable(notifiable) }
+        : context;
+
     const failFast = this.options.errorPolicy === 'failFast';
 
     if (failFast) {
       const results: ChannelResult[] = [];
       for (const channel of channels) {
-        results.push(await this.deliver(notifiable, notification, channel, true, context));
+        results.push(await this.deliver(notifiable, notification, channel, true, ctx));
       }
       return results;
     }
 
     const settled = await Promise.allSettled(
-      channels.map((channel) => this.deliver(notifiable, notification, channel, false, context)),
+      channels.map((channel) => this.deliver(notifiable, notification, channel, false, ctx)),
     );
     return settled.map((s, i) =>
       s.status === 'fulfilled'
@@ -85,12 +107,30 @@ export class ChannelRunner {
       return { channel, status: 'skipped' };
     }
 
-    // Preferences gate (app-wide, e.g. per-user/per-tenant opt-out): skip when not allowed.
-    if (
-      this.gate &&
-      !(await this.gate.isAllowed({ notifiable, notification, channel, tenant: context.tenant }))
-    ) {
-      return { channel, status: 'skipped' };
+    // Preferences gate (app-wide, e.g. per-user/per-tenant opt-out, quiet hours).
+    // Bypassed for channels that were already deferred and re-queued (so they don't loop).
+    const alreadyDeferred = context.deferredChannels?.includes(channel) ?? false;
+    if (this.gate && !alreadyDeferred) {
+      const decision = await this.evaluateGate(notifiable, notification, channel, context);
+      if (decision.action === 'skip') {
+        // A skip carrying a digest cadence is NOT a drop: the channel is suppressed for instant
+        // delivery, but the notification is collected into a periodic digest (sent later in a
+        // batch). Absent a bound sink it falls back to the legacy drop, unchanged.
+        if (decision.digest && this.digestSink) {
+          await this.digestSink.collect({
+            notifiable,
+            notification,
+            channel,
+            cadence: decision.digest.cadence,
+            category: decision.digest.category,
+            tenant: context.tenant,
+          });
+        }
+        return { channel, status: 'skipped' };
+      }
+      if (decision.action === 'defer') {
+        return this.deferChannel(notifiable, notification, channel, context, decision);
+      }
     }
 
     const driver = this.registry.get(channel);
@@ -154,6 +194,56 @@ export class ChannelRunner {
       if (rethrow) throw error;
       return { channel, status: 'failed', error };
     }
+  }
+
+  /**
+   * Consult the gate. Prefers the richer {@link PreferenceGate.evaluate} (allow/skip/defer);
+   * falls back to the boolean {@link PreferenceGate.isAllowed} (`true` → allow, `false` → skip)
+   * so existing boolean gates behave exactly as before.
+   */
+  private async evaluateGate(
+    notifiable: Notifiable,
+    notification: Notification,
+    channel: string,
+    context: DeliveryContext,
+  ): Promise<GateDecision> {
+    const gate = this.gate as PreferenceGate;
+    const ctx = { notifiable, notification, channel, tenant: context.tenant };
+    if (typeof gate.evaluate === 'function') {
+      return gate.evaluate(ctx);
+    }
+    const allowed = await gate.isAllowed(ctx);
+    return { action: allowed ? 'allow' : 'skip' };
+  }
+
+  /**
+   * Re-queue a single channel deferred by the gate (e.g. quiet hours) through the async
+   * dispatcher with a delay so it delivers after the window. The re-queued job carries
+   * `deferredChannels` so the gate is bypassed on redelivery (no infinite defer loop). The
+   * dispatcher is resolved lazily to avoid a DI cycle (SyncDispatcher depends on this runner).
+   */
+  private async deferChannel(
+    notifiable: Notifiable,
+    notification: Notification,
+    channel: string,
+    context: DeliveryContext,
+    decision: GateDecision,
+  ): Promise<ChannelResult> {
+    const dispatcher = this.moduleRef.get<DispatchDriver>(NOTIFICATION_DISPATCHER, {
+      strict: false,
+    });
+    const delay =
+      decision.deferUntil !== undefined ? Math.max(0, decision.deferUntil - Date.now()) : undefined;
+    await dispatcher.dispatch({
+      notifiable,
+      notification,
+      channels: [channel],
+      delay,
+      tenant: context.tenant,
+      captured: context.captured,
+      deferredChannels: [channel],
+    });
+    return { channel, status: 'deferred' };
   }
 
   private emitFailed(

@@ -1,4 +1,4 @@
-import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
+import type { ChannelContext, Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
 
 /** A persisted notification row, mirroring Laravel's `notifications` table. */
 export interface StoredNotification {
@@ -25,6 +25,23 @@ export interface StoredNotification {
   readAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** Options for {@link NotificationStore.paginateForNotifiable}. */
+export interface PaginateForNotifiableOptions {
+  /** Max rows to return for this page. */
+  limit: number;
+  /** Rows to skip before the page (`(page - 1) * perPage`). */
+  offset: number;
+  /** Tenant scope; `undefined` matches all tenants (single-tenant behavior). */
+  tenantId?: string | undefined;
+}
+
+/** A single page of stored notifications plus the total matching count, returned by the store. */
+export interface PaginatedStoredNotifications {
+  items: StoredNotification[];
+  /** Total matching rows across all pages (for computing `lastPage`). */
+  total: number;
 }
 
 /** Data needed to create a {@link StoredNotification} (id/timestamps assigned by the store). */
@@ -70,6 +87,18 @@ export interface NotificationStore {
   ): Promise<StoredNotification[]>;
   delete(id: string): Promise<void>;
   /**
+   * Optionally fetch a single page of a notifiable's notifications, pushing `limit`/`offset` down
+   * into the data store (instead of fetching every row and slicing in memory). Returns the page
+   * plus the total matching count. Ordered newest-first, like {@link getForNotifiable}. Stores that
+   * don't implement it cause {@link NotificationsQueryService.paginate} to fall back to fetching all
+   * rows and slicing — correct, but not scalable. Implemented by the in-memory and ORM adapters.
+   */
+  paginateForNotifiable?(
+    notifiableType: string,
+    notifiableId: string,
+    options: PaginateForNotifiableOptions,
+  ): Promise<PaginatedStoredNotifications>;
+  /**
    * Optionally create the backing schema if it's missing — non-destructively (never drops).
    * Called on bootstrap when `autoCreateSchema` is enabled. Stores that don't manage schema
    * (in-memory, or schema-first ORMs like Prisma) may omit it or make it a no-op.
@@ -81,7 +110,7 @@ export interface NotificationStore {
    * before `before`; `onlyRead` limits deletion to rows that have been read. Returns how many
    * were deleted. Stores that don't implement it are skipped (the pruner logs a warning).
    */
-  prune?(options: { before: Date; onlyRead?: boolean }): Promise<number>;
+  prune?(options: { before: Date; onlyRead?: boolean | undefined }): Promise<number>;
   /**
    * Optionally insert-or-update a notification by its caller-controlled `id`, for "live" /
    * progress notifications that evolve in place (e.g. an export going 0% → 100%). When the row
@@ -99,7 +128,7 @@ export interface NotificationStore {
  * `toArray()` (Laravel parity) and finally to a structural copy.
  */
 export interface DatabaseNotification extends Notification {
-  toDatabase?(notifiable: Notifiable): Record<string, unknown>;
+  toDatabase?(ctx: ChannelContext): Record<string, unknown>;
   toArray?(notifiable: Notifiable): Record<string, unknown>;
   /**
    * A stable, caller-controlled id for "live"/progress notifications that should update a single row

@@ -1,4 +1,5 @@
 import {
+  type ChannelContext,
   type ChannelDriver,
   type DeliveryContext,
   MissingChannelMethodError,
@@ -27,7 +28,7 @@ export interface TeamsChannelOptions {
  * {@link TeamsMessage} for the fluent builder.
  */
 export interface TeamsNotification extends Notification {
-  toTeams(notifiable: Notifiable): TeamsMessage | Record<string, unknown>;
+  toTeams(ctx: ChannelContext): TeamsMessage | Record<string, unknown>;
 }
 
 function isHttpsUrl(value: unknown): value is string {
@@ -51,7 +52,7 @@ export class TeamsChannel implements ChannelDriver {
   async send(
     notifiable: Notifiable,
     notification: Notification,
-    _context?: DeliveryContext,
+    context?: DeliveryContext,
   ): Promise<void> {
     const handler = getHandler(notification, 'teams', 'toTeams');
     if (!handler) {
@@ -61,7 +62,11 @@ export class TeamsChannel implements ChannelDriver {
       throw new MissingChannelMethodError('teams', 'toTeams()', name);
     }
 
-    const result = handler(notifiable) as TeamsMessage | Record<string, unknown>;
+    const result = handler({
+      notifiable,
+      localization: context?.localization,
+      tenant: context?.tenant,
+    }) as TeamsMessage | Record<string, unknown>;
     const payload = result instanceof TeamsMessage ? result.toPayload() : result;
     const route = routeFor(notifiable, 'teams', notification);
 

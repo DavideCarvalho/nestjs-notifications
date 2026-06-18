@@ -5,6 +5,7 @@ import type {
   DigestFrequency,
   PreferenceCenterStore,
   PreferenceMatrix,
+  QuietHours,
 } from './preference-center.interfaces';
 
 /** Build a stable key for a (tenant, notifiable) scope. */
@@ -20,6 +21,8 @@ function scopeKey(ref: NotifiableRef, tenantId?: string): string {
 export class InMemoryPreferenceCenterStore implements PreferenceCenterStore {
   /** scopeKey -> (category -> CategoryPreference). */
   private readonly matrices = new Map<string, Map<string, CategoryPreference>>();
+  /** scopeKey -> notifiable-level quiet hours. */
+  private readonly quietHours = new Map<string, QuietHours>();
 
   async getMatrix(ref: NotifiableRef, tenantId?: string): Promise<PreferenceMatrix> {
     const stored = this.matrices.get(scopeKey(ref, tenantId));
@@ -29,7 +32,8 @@ export class InMemoryPreferenceCenterStore implements PreferenceCenterStore {
         categories[key] = { ...pref, channels: { ...pref.channels } };
       }
     }
-    return { ref, tenantId, categories };
+    const quiet = this.quietHours.get(scopeKey(ref, tenantId));
+    return { ref, tenantId, categories, quietHours: quiet ? { ...quiet } : undefined };
   }
 
   async setChannel(
@@ -68,6 +72,19 @@ export class InMemoryPreferenceCenterStore implements PreferenceCenterStore {
 
   async resetCategory(ref: NotifiableRef, category: string, tenantId?: string): Promise<void> {
     this.matrices.get(scopeKey(ref, tenantId))?.delete(category);
+  }
+
+  async setQuietHours(
+    ref: NotifiableRef,
+    quietHours: QuietHours | null,
+    tenantId?: string,
+  ): Promise<void> {
+    const key = scopeKey(ref, tenantId);
+    if (quietHours === null) {
+      this.quietHours.delete(key);
+      return;
+    }
+    this.quietHours.set(key, { ...quietHours });
   }
 
   /** Get (or create) the per-scope category map. */

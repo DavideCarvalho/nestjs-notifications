@@ -31,8 +31,10 @@ export interface WebhookChannelModuleOptions {
 export class WebhookChannelModule {
   static forRoot(options: WebhookChannelModuleOptions = {}): DynamicModule {
     const webhookOptions: WebhookChannelOptions = {
-      url: options.url,
-      headers: options.headers,
+      // Set each field only when provided (exactOptionalPropertyTypes); the channel resolves a
+      // per-notifiable URL and default headers when these are absent.
+      ...(options.url !== undefined ? { url: options.url } : {}),
+      ...(options.headers !== undefined ? { headers: options.headers } : {}),
     };
 
     const providers: Provider[] = [

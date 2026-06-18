@@ -8,7 +8,9 @@ import type {
   PreferenceCenterStore,
   PreferenceMatrix,
   PreferenceResolution,
+  QuietHours,
 } from './preference-center.interfaces';
+import { evaluateQuietHours } from './quiet-hours';
 import { PREFERENCE_CENTER_STORE } from './tokens';
 
 /**
@@ -45,7 +47,9 @@ export class PreferenceCenterService {
         categories[key] = this.merge(this.registry.get(key), pref);
       }
     }
-    return { ref, tenantId, categories };
+    // Carry the notifiable-level quiet-hours window through (used by the digest collector and any
+    // UI). Additive: undefined when none stored, so existing consumers are unaffected.
+    return { ref, tenantId, categories, quietHours: stored.quietHours };
   }
 
   /** Toggle one (category × channel) for a notifiable. */
@@ -85,21 +89,41 @@ export class PreferenceCenterService {
   }
 
   /**
+   * Set (or clear with `null`) the notifiable-level quiet-hours window. Throws if the bound store
+   * predates quiet hours (doesn't implement {@link PreferenceCenterStore.setQuietHours}).
+   */
+  async setQuietHours(
+    ref: NotifiableRef,
+    quietHours: QuietHours | null,
+    tenantId?: string,
+  ): Promise<void> {
+    if (typeof this.store.setQuietHours !== 'function') {
+      throw new Error(
+        'The configured PreferenceCenterStore does not support quiet hours (setQuietHours).',
+      );
+    }
+    await this.store.setQuietHours(ref, quietHours, tenantId);
+  }
+
+  /**
    * Resolve whether `channel` may deliver instantly for `category` to this notifiable.
    *
    * - Mandatory categories are always `{ allowed: true, digest: 'instant' }`.
    * - If the channel is disabled (stored, or not in defaults), `allowed` is false.
    * - If the category's digest is not `instant`, instant delivery is suppressed (`allowed`
-   *   false) — a scheduled digest job would batch+send these; batching is out of scope here.
+   *   false). For an enabled channel on `daily`/`weekly` the resolution is marked
+   *   {@link PreferenceResolution.digestEligible} so the gate collects it into a periodic digest.
    */
   async resolve(
     ref: NotifiableRef,
     category: string,
     channel: string,
     tenantId?: string,
+    now: Date = new Date(),
   ): Promise<PreferenceResolution> {
     const def = this.registry.get(category);
     if (def.mandatory) {
+      // Mandatory categories bypass everything, including quiet hours.
       return { allowed: true, digest: 'instant' };
     }
 
@@ -115,8 +139,24 @@ export class PreferenceCenterService {
       return { allowed: false, digest: pref.digest };
     }
 
-    // Non-instant digest: suppress instant delivery; the digest job collects+sends later.
-    return { allowed: pref.digest === 'instant', digest: pref.digest };
+    // Non-instant digest on an ENABLED channel: suppress instant delivery but mark the channel
+    // digest-eligible so the gate collects the notification into a periodic digest (sent later
+    // in a batch) rather than dropping it. `off` is handled above (a true drop).
+    if (pref.digest !== 'instant') {
+      return { allowed: false, digest: pref.digest, digestEligible: true };
+    }
+
+    // Quiet hours: when inside the window, defer (re-queue) instead of dropping. A per-category
+    // window overrides the notifiable-level one.
+    const quiet = pref.quietHours ?? stored.quietHours;
+    if (quiet) {
+      const evaluation = evaluateQuietHours(quiet, now);
+      if (evaluation.active) {
+        return { allowed: false, digest: 'instant', deferUntil: evaluation.resumeAt };
+      }
+    }
+
+    return { allowed: true, digest: 'instant' };
   }
 
   /** Merge a stored category preference over the registry defaults. */
@@ -141,6 +181,7 @@ export class PreferenceCenterService {
       category: def.key,
       channels,
       digest: stored?.digest ?? 'instant',
+      quietHours: stored?.quietHours,
     };
   }
 }

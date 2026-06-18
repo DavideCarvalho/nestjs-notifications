@@ -3,6 +3,8 @@ import { Injectable } from '@nestjs/common';
 import type {
   NewStoredNotification,
   NotificationStore,
+  PaginateForNotifiableOptions,
+  PaginatedStoredNotifications,
   StoredNotification,
   UpsertStoredNotification,
 } from './interfaces';
@@ -85,6 +87,18 @@ export class InMemoryStore implements NotificationStore {
     this.rows.delete(id);
   }
 
+  async paginateForNotifiable(
+    notifiableType: string,
+    notifiableId: string,
+    options: PaginateForNotifiableOptions,
+  ): Promise<PaginatedStoredNotifications> {
+    const matching = await this.getForNotifiable(notifiableType, notifiableId, options.tenantId);
+    return {
+      items: matching.slice(options.offset, options.offset + options.limit),
+      total: matching.length,
+    };
+  }
+
   async upsert(input: UpsertStoredNotification): Promise<StoredNotification> {
     const now = new Date();
     const existing = this.rows.get(input.id);
@@ -107,7 +121,7 @@ export class InMemoryStore implements NotificationStore {
     return row;
   }
 
-  async prune(options: { before: Date; onlyRead?: boolean }): Promise<number> {
+  async prune(options: { before: Date; onlyRead?: boolean | undefined }): Promise<number> {
     const cutoff = options.before.getTime();
     let deleted = 0;
     for (const [id, row] of this.rows) {

@@ -3,6 +3,7 @@ import {
   Body,
   type CanActivate,
   Controller,
+  Delete,
   Get,
   Param,
   Put,
@@ -14,6 +15,7 @@ import type {
   CategoryDefinition,
   DigestFrequency,
   PreferenceMatrix,
+  QuietHours,
 } from './preference-center.interfaces';
 import { PreferenceCenterService } from './preference-center.service';
 
@@ -50,6 +52,8 @@ interface SetDigestBody {
  * - `GET /preferences` — the resolved matrix for the current notifiable
  * - `PUT /preferences/:category/channels/:channel` — body `{ enabled: boolean }`
  * - `PUT /preferences/:category/digest` — body `{ digest: DigestFrequency }`
+ * - `PUT /preferences/quiet-hours` — body {@link QuietHours} (set the do-not-disturb window)
+ * - `DELETE /preferences/quiet-hours` — clear the window
  *
  * Mount it by adding the returned class to a module's `controllers`, alongside
  * `PreferencesModule.forCenter(...)` (which provides {@link PreferenceCenterService}):
@@ -101,6 +105,22 @@ export function createPreferenceCenterController(
       const ref = await options.resolveRef(req);
       const tenantId = await options.resolveTenant?.(req);
       await this.preferences.setDigest(ref, category, body.digest, tenantId);
+      return this.preferences.getMatrix(ref, tenantId);
+    }
+
+    @Put('quiet-hours')
+    async setQuietHours(@Req() req: any, @Body() body: QuietHours): Promise<PreferenceMatrix> {
+      const ref = await options.resolveRef(req);
+      const tenantId = await options.resolveTenant?.(req);
+      await this.preferences.setQuietHours(ref, body, tenantId);
+      return this.preferences.getMatrix(ref, tenantId);
+    }
+
+    @Delete('quiet-hours')
+    async clearQuietHours(@Req() req: any): Promise<PreferenceMatrix> {
+      const ref = await options.resolveRef(req);
+      const tenantId = await options.resolveTenant?.(req);
+      await this.preferences.setQuietHours(ref, null, tenantId);
       return this.preferences.getMatrix(ref, tenantId);
     }
   }

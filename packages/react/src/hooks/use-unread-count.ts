@@ -6,25 +6,25 @@ import { useResolvedContext } from './use-notifications-provider';
 /** Options for {@link useUnreadCount}. */
 export interface UseUnreadCountOptions {
   /** Explicit client (overrides the provider). */
-  client?: NotificationsClient;
+  client?: NotificationsClient | undefined;
   /** Build a client inline (overrides the provider). */
-  clientOptions?: NotificationsClientOptions;
+  clientOptions?: NotificationsClientOptions | undefined;
   /**
    * SSE endpoint to subscribe to (overrides the provider's `sseUrl`). When set
    * and `EventSource` is available, the count refreshes on every message.
    */
-  sseUrl?: string;
+  sseUrl?: string | undefined;
   /**
    * Poll interval (ms) used when no SSE URL is available, or as a backstop. Set
    * to `0` to disable polling. Default `30000`. When SSE is connected, polling
    * is skipped unless you keep it as a safety net.
    */
-  pollIntervalMs?: number;
+  pollIntervalMs?: number | undefined;
   /**
    * `withCredentials` for the `EventSource` (sends cookies cross-origin).
    * Mirrors the client's `credentials: 'include'`.
    */
-  withCredentials?: boolean;
+  withCredentials?: boolean | undefined;
 }
 
 /** Return value of {@link useUnreadCount}. */
@@ -81,7 +81,14 @@ export function useUnreadCount(options: UseUnreadCountOptions = {}): UseUnreadCo
     if (!sseUrl || !hasEventSource()) return;
     let source: EventSource | null = null;
     try {
-      source = new EventSource(sseUrl, { withCredentials: options.withCredentials });
+      source = new EventSource(
+        sseUrl,
+        // Pass `withCredentials` only when set (exactOptionalPropertyTypes): the lib's
+        // EventSourceInit rejects an explicit `undefined`.
+        options.withCredentials !== undefined
+          ? { withCredentials: options.withCredentials }
+          : undefined,
+      );
     } catch {
       return;
     }

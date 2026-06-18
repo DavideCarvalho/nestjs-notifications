@@ -7,7 +7,7 @@ export interface NotificationsContextValue {
   /** Configured client the hooks call. */
   client: NotificationsClient;
   /** Optional SSE endpoint the hooks subscribe to (browser `EventSource`). */
-  sseUrl?: string;
+  sseUrl?: string | undefined;
 }
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
@@ -70,9 +70,9 @@ export function useNotificationsContext(): NotificationsContextValue | null {
  * (it reads context) — call it from the top level of other hooks only.
  */
 export function useResolvedContext(explicit?: {
-  client?: NotificationsClient;
-  clientOptions?: NotificationsClientOptions;
-  sseUrl?: string;
+  client?: NotificationsClient | undefined;
+  clientOptions?: NotificationsClientOptions | undefined;
+  sseUrl?: string | undefined;
 }): NotificationsContextValue {
   const ctx = useNotificationsContext();
   const client =

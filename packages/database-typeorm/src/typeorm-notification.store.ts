@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type {
   NewStoredNotification,
   NotificationStore,
+  PaginateForNotifiableOptions,
+  PaginatedStoredNotifications,
   StoredNotification,
   UpsertStoredNotification,
 } from '@dudousxd/nestjs-notifications-database';
@@ -110,6 +112,24 @@ export class TypeOrmNotificationStore implements NotificationStore {
 
   async delete(id: string): Promise<void> {
     await this.repo.delete(id);
+  }
+
+  async paginateForNotifiable(
+    notifiableType: string,
+    notifiableId: string,
+    options: PaginateForNotifiableOptions,
+  ): Promise<PaginatedStoredNotifications> {
+    const [rows, total] = await this.repo.findAndCount({
+      where: {
+        notifiableType,
+        notifiableId,
+        ...(options.tenantId !== undefined ? { tenantId: options.tenantId } : {}),
+      },
+      order: { createdAt: 'DESC' },
+      skip: options.offset,
+      take: options.limit,
+    });
+    return { items: rows.map(toStored), total };
   }
 
   async upsert(input: UpsertStoredNotification): Promise<StoredNotification> {

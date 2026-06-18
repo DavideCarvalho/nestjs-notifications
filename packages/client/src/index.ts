@@ -1,6 +1,6 @@
 export { NotificationsClient, NotificationsApiError, createNotificationsClient } from './client';
-export { subscribeNotificationsStream } from './stream';
-export type { NotificationsStreamOptions } from './stream';
+export { subscribeNotificationsStream, READ_EVENT } from './stream';
+export type { NotificationsStreamOptions, ReadSyncEvent } from './stream';
 export type {
   NotificationItem,
   PaginatedNotifications,

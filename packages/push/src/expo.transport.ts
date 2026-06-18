@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Expo } from 'expo-server-sdk';
+import { Expo, type ExpoPushMessage } from 'expo-server-sdk';
 import type { PushMessage } from './push-message';
 import { EXPO_OPTIONS } from './tokens';
-import type { PushTransport } from './transport';
+import type { BatchSendResult, PushTransport } from './transport';
 
 /** Options forwarded to the `expo-server-sdk` client constructor. */
 export interface ExpoOptions {
@@ -31,8 +31,62 @@ export class ExpoTransport implements PushTransport {
 
   async send(target: unknown, message: PushMessage): Promise<void> {
     const to = String(target);
+    // `toObject()` already omits absent fields, so spreading keeps `title`/`body`/`data` out of the
+    // message entirely when unset (exactOptionalPropertyTypes) rather than passing explicit undefined.
     const { title, body, data } = message.toObject();
 
-    await this.expo.sendPushNotificationsAsync([{ to, title, body, data }]);
+    await this.expo.sendPushNotificationsAsync([
+      {
+        to,
+        ...(title !== undefined ? { title } : {}),
+        ...(body !== undefined ? { body } : {}),
+        ...(data !== undefined ? { data } : {}),
+      },
+    ]);
+  }
+
+  /**
+   * Batch delivery to many Expo tokens, chunked with the SDK's own `chunkPushNotifications`.
+   * Tickets that come back with `DeviceNotRegistered` map to permanently-invalid tokens, which
+   * are collected and returned for pruning. (Malformed tokens are also dropped from the request
+   * by the SDK and reported as invalid here.)
+   */
+  async sendMany(targets: unknown[], message: PushMessage): Promise<BatchSendResult> {
+    const { title, body, data } = message.toObject();
+    const invalidTargets: unknown[] = [];
+
+    // The SDK only accepts well-formed Expo tokens; anything else is already a dead token.
+    const valid: { target: unknown; to: string }[] = [];
+    for (const target of targets) {
+      const to = String(target);
+      if (Expo.isExpoPushToken(to)) valid.push({ target, to });
+      else invalidTargets.push(target);
+    }
+
+    const messages: ExpoPushMessage[] = valid.map(({ to }) => ({
+      to,
+      ...(title !== undefined ? { title } : {}),
+      ...(body !== undefined ? { body } : {}),
+      ...(data !== undefined ? { data } : {}),
+    }));
+    const chunks = this.expo.chunkPushNotifications(messages);
+
+    let cursor = 0;
+    for (const chunk of chunks) {
+      const tickets = await this.expo.sendPushNotificationsAsync(chunk);
+      tickets.forEach((ticket, j) => {
+        const source = valid[cursor + j];
+        if (
+          source &&
+          ticket.status === 'error' &&
+          ticket.details?.error === 'DeviceNotRegistered'
+        ) {
+          invalidTargets.push(source.target);
+        }
+      });
+      cursor += chunk.length;
+    }
+
+    return { invalidTargets };
   }
 }

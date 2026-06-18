@@ -39,7 +39,8 @@ export interface PrismaNotificationDelegate {
   update(args: { where: any; data: any }): Promise<any>;
   upsert(args: { where: any; create: any; update: any }): Promise<any>;
   updateMany(args: { where: any; data: any }): Promise<any>;
-  findMany(args: { where: any; orderBy?: any }): Promise<any[]>;
+  findMany(args: { where: any; orderBy?: any; skip?: number; take?: number }): Promise<any[]>;
+  count(args: { where: any }): Promise<number>;
   delete(args: { where: any }): Promise<any>;
   deleteMany(args: { where: any }): Promise<{ count: number }>;
 }

@@ -1,11 +1,15 @@
 import type { NotifiableRef } from '@dudousxd/nestjs-notifications-core';
+import type { QuietHours } from './quiet-hours';
+
+export type { QuietHours } from './quiet-hours';
 
 /**
  * How often a category's notifications should be delivered on a channel:
  *
  * - `instant` — deliver immediately (the default; the gate lets instant delivery through).
- * - `daily` / `weekly` — batch into a digest; instant delivery is suppressed and a scheduled
- *   digest job would collect+send these (digest batching/sending is out of scope here).
+ * - `daily` / `weekly` — batch into a digest; instant delivery is suppressed and the suppressed
+ *   notifications are collected into a pending digest, flushed in a batch at this cadence by the
+ *   {@link DigestCollector} (wire it with `PreferencesModule.forDigest()`).
  * - `off` — never deliver for this category (equivalent to disabling every channel).
  */
 export type DigestFrequency = 'instant' | 'daily' | 'weekly' | 'off';
@@ -49,6 +53,11 @@ export interface CategoryPreference {
   channels: Record<string, boolean>;
   /** Delivery cadence for this category. */
   digest: DigestFrequency;
+  /**
+   * Optional per-category quiet-hours override. When set it takes precedence over the
+   * notifiable-level {@link PreferenceMatrix.quietHours} for this category. Omitted = inherit.
+   */
+  quietHours?: QuietHours | undefined;
 }
 
 /**
@@ -59,9 +68,14 @@ export interface PreferenceMatrix {
   /** The notifiable this matrix belongs to. */
   ref: NotifiableRef;
   /** Tenant scope; undefined in single-tenant apps. */
-  tenantId?: string;
+  tenantId?: string | undefined;
   /** Stored category preferences, keyed by category key. */
   categories: Record<string, CategoryPreference>;
+  /**
+   * Notifiable-level quiet-hours window. Applies to every non-mandatory category unless a
+   * category declares its own {@link CategoryPreference.quietHours}. Omitted = no quiet hours.
+   */
+  quietHours?: QuietHours | undefined;
 }
 
 /**
@@ -98,6 +112,16 @@ export interface PreferenceCenterStore {
   ): Promise<void>;
   /** Drop a category's stored preference, reverting it to the registry defaults. */
   resetCategory(ref: NotifiableRef, category: string, tenantId?: string): Promise<void>;
+  /**
+   * Optional: set (or clear with `null`) the notifiable-level quiet-hours window. Stores written
+   * before quiet hours existed may omit this — the service treats a store without it as "no quiet
+   * hours stored", so existing stores keep working unchanged.
+   */
+  setQuietHours?(
+    ref: NotifiableRef,
+    quietHours: QuietHours | null,
+    tenantId?: string,
+  ): Promise<void>;
 }
 
 /** Outcome of resolving a (category × channel) preference for delivery. */
@@ -106,4 +130,18 @@ export interface PreferenceResolution {
   allowed: boolean;
   /** The effective digest frequency for this category. */
   digest: DigestFrequency;
+  /**
+   * Set when delivery is currently inside the notifiable's quiet hours: the channel should not be
+   * delivered now but should be DEFERRED (re-queued) to `deferUntil` (absolute epoch ms) rather
+   * than dropped. When present, `allowed` is `false`.
+   */
+  deferUntil?: number | undefined;
+  /**
+   * Set (`true`) when the channel is suppressed for instant delivery PURELY because the category
+   * cadence is non-instant (`daily`/`weekly`) — i.e. the channel is enabled and the notifiable
+   * just chose batching. When present, `allowed` is `false` and `digest` is `daily`/`weekly`: the
+   * notification must be COLLECTED into a periodic digest, not dropped. Distinct from a disabled
+   * channel or `off`, which drop the notification entirely (this flag is absent for those).
+   */
+  digestEligible?: boolean;
 }

@@ -1,4 +1,5 @@
 import {
+  type ChannelContext,
   type ChannelDriver,
   type DeliveryContext,
   MissingChannelMethodError,
@@ -20,12 +21,17 @@ export const Mail = createChannel('mail');
 /** Resolved runtime options for the mail channel. */
 export interface MailChannelOptions {
   /** Default sender address used when a message does not set its own `from`. */
-  from?: string;
+  from?: string | undefined;
 }
 
 /** Implement this on a notification to define its email payload. */
 export interface MailNotification extends Notification {
-  toMail(notifiable: Notifiable): MailMessage;
+  /**
+   * Build the email. The `ctx` carries the recipient and the resolved localization (locale +
+   * translator) so the message can be localized: `toMail({ notifiable, localization }) => ...`.
+   * Ignoring `localization` renders exactly as before.
+   */
+  toMail(ctx: ChannelContext): MailMessage;
 }
 
 /**
@@ -63,7 +69,11 @@ export class MailChannel implements ChannelDriver {
       throw new MissingChannelMethodError('mail', 'toMail()', name);
     }
 
-    const message = handler(notifiable) as MailMessage;
+    const message = handler({
+      notifiable,
+      localization: context?.localization,
+      tenant: context?.tenant,
+    }) as MailMessage;
     const rendered = await this.renderer.render(message);
 
     const transport =

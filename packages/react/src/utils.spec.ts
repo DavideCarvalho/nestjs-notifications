@@ -1,6 +1,7 @@
 import type { NotificationItem } from '@dudousxd/nestjs-notifications-client';
 import { describe, expect, it } from 'vitest';
 import {
+  applyReadEvent,
   formatRelativeTime,
   isUnread,
   mergeNotifications,
@@ -118,5 +119,31 @@ describe('notificationAction', () => {
   it('returns null when there is no url', () => {
     expect(notificationAction(make({ id: 'a', data: { action: { label: 'x' } } }))).toBeNull();
     expect(notificationAction(make({ id: 'a', data: {} }))).toBeNull();
+  });
+});
+
+describe('applyReadEvent', () => {
+  it('marks the matching unread item read in place', () => {
+    const items = [make({ id: 'a' }), make({ id: 'b' })];
+    const out = applyReadEvent(items, {
+      notificationId: 'a',
+      readAt: '2026-02-02T00:00:00.000Z',
+    });
+    expect(out[0]?.readAt).toEqual(new Date('2026-02-02T00:00:00.000Z'));
+    expect(out[1]?.readAt).toBeNull();
+  });
+
+  it('marks every unread item read when notificationId is null', () => {
+    const items = [make({ id: 'a' }), make({ id: 'b' })];
+    const out = applyReadEvent(items, { notificationId: null, readAt: '2026-02-02T00:00:00.000Z' });
+    expect(out.every((n) => n.readAt != null)).toBe(true);
+  });
+
+  it('does not clobber an already-read item', () => {
+    const already = '2026-01-01T00:00:00.000Z';
+    const items = [make({ id: 'a', readAt: already })];
+    const out = applyReadEvent(items, { notificationId: 'a', readAt: '2026-02-02T00:00:00.000Z' });
+    // unchanged (still the original string readAt, not the new Date)
+    expect(out[0]?.readAt).toBe(already);
   });
 });

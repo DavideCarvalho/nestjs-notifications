@@ -11,6 +11,12 @@ const TENANT_FIELD = Symbol('nestjs-notifications:tenant-field');
 // (PROPERTY_DEPS_METADATA from @nestjs/common): an array of { key, type }.
 const NEST_PROPERTY_DEPS = 'self:properties_metadata';
 
+/**
+ * A class constructor reference. Used purely as a by-identity cache key (and as the target of
+ * `Reflect.getMetadata`), so a precise call signature is enough — and avoids the banned `Function`.
+ */
+type Ctor = abstract new (...args: never[]) => object;
+
 /** Maps a channel name to the notification method that builds its payload. */
 type HandlerMap = Record<string, string | symbol>;
 interface NestPropertyDep {
@@ -52,14 +58,13 @@ export function createChannel(channel: string): ChannelHandle {
 // notification constructor; safe because this metadata is defined at class-decoration
 // time and never changes for a given class. Dynamic, per-instance behaviour (e.g. a
 // `via()` function or a tenant VALUE) is NOT cached.
-const handlerCache = new WeakMap<Function, HandlerMap>();
+const handlerCache = new WeakMap<Ctor, HandlerMap>();
 
 function readHandlers(notification: Notification): HandlerMap {
-  const ctor = notification.constructor as Function;
+  const ctor = notification.constructor as Ctor;
   const cached = handlerCache.get(ctor);
   if (cached !== undefined) return cached;
-  const map =
-    (Reflect.getMetadata(CHANNEL_HANDLERS, ctor) as HandlerMap | undefined) ?? {};
+  const map = (Reflect.getMetadata(CHANNEL_HANDLERS, ctor) as HandlerMap | undefined) ?? {};
   handlerCache.set(ctor, map);
   return map;
 }
@@ -108,14 +113,13 @@ export function getHandler(
  * }
  * ```
  */
-const depsCache = new WeakMap<Function, NestPropertyDep[]>();
+const depsCache = new WeakMap<Ctor, NestPropertyDep[]>();
 
 export function injectServices(notification: Notification, moduleRef: ModuleRef): void {
-  const ctor = notification.constructor as Function;
+  const ctor = notification.constructor as Ctor;
   let deps = depsCache.get(ctor);
   if (deps === undefined) {
-    deps =
-      (Reflect.getMetadata(NEST_PROPERTY_DEPS, ctor) as NestPropertyDep[] | undefined) ?? [];
+    deps = (Reflect.getMetadata(NEST_PROPERTY_DEPS, ctor) as NestPropertyDep[] | undefined) ?? [];
     depsCache.set(ctor, deps);
   }
   // Common-case fast path: nothing to inject.
@@ -235,15 +239,14 @@ export function Tenant(): PropertyDecorator {
 // Cache the resolved tenant FIELD key per constructor. `null` is the sentinel for
 // "resolved, no @Tenant field" (distinct from "not yet resolved"). The tenant VALUE is
 // always read dynamically from the live instance below.
-const tenantFieldCache = new WeakMap<Function, string | symbol | null>();
+const tenantFieldCache = new WeakMap<Ctor, string | symbol | null>();
 
 function readTenantField(target: object | undefined): string[] | undefined {
   if (!target) return undefined;
-  const ctor = target.constructor as Function;
+  const ctor = target.constructor as Ctor;
   let key = tenantFieldCache.get(ctor);
   if (key === undefined) {
-    key =
-      (Reflect.getMetadata(TENANT_FIELD, ctor) as string | symbol | undefined) ?? null;
+    key = (Reflect.getMetadata(TENANT_FIELD, ctor) as string | symbol | undefined) ?? null;
     tenantFieldCache.set(ctor, key);
   }
   if (key === null) return undefined;

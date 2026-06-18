@@ -1,4 +1,5 @@
 import {
+  type ChannelContext,
   type ChannelDriver,
   type DeliveryContext,
   MissingChannelMethodError,
@@ -32,7 +33,7 @@ export type SlackOptionsResolver = (tenant: string) => SlackChannelOptions;
 
 /** Implement this on a notification to define its Slack payload. */
 export interface SlackNotification extends Notification {
-  toSlack(notifiable: Notifiable): SlackMessage;
+  toSlack(ctx: ChannelContext): SlackMessage;
 }
 
 function isHttpsUrl(value: unknown): value is string {
@@ -72,7 +73,11 @@ export class SlackChannel implements ChannelDriver {
       throw new MissingChannelMethodError('slack', 'toSlack()', name);
     }
 
-    const message = handler(notifiable) as SlackMessage;
+    const message = handler({
+      notifiable,
+      localization: context?.localization,
+      tenant: context?.tenant,
+    }) as SlackMessage;
     const payload = message.toPayload();
     const route = routeFor(notifiable, 'slack', notification);
 

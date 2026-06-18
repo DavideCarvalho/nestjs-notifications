@@ -15,3 +15,6 @@ export const APNS_OPTIONS = Symbol('APNS_OPTIONS');
 
 /** DI token for the optional per-tenant {@link PushTransport} resolver. */
 export const PUSH_TRANSPORT_RESOLVER = Symbol('PUSH_TRANSPORT_RESOLVER');
+
+/** DI token for the optional {@link InvalidTokenCallback} invoked to prune dead device tokens. */
+export const PUSH_INVALID_TOKEN_CALLBACK = Symbol('PUSH_INVALID_TOKEN_CALLBACK');

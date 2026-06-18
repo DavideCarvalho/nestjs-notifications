@@ -2,6 +2,8 @@ import { type DynamicModule, Module, type Provider } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 import { ChannelRegistry } from './channel-registry';
 import { ChannelRunner } from './channel-runner';
+import { DispatchGuards } from './dispatch-guard.service';
+import { LocalizationService } from './localization.service';
 import { NotificationService } from './notification.service';
 import type { NotificationsModuleAsyncOptions, NotificationsModuleOptions } from './options';
 import { NotificationSerializer } from './serializer';
@@ -12,6 +14,8 @@ const CORE_PROVIDERS: Provider[] = [
   NotificationSerializer,
   ChannelRegistry,
   ChannelRunner,
+  DispatchGuards,
+  LocalizationService,
   NotificationService,
 ];
 
@@ -20,6 +24,7 @@ const EXPORTS = [
   ChannelRegistry,
   ChannelRunner,
   NotificationSerializer,
+  LocalizationService,
   NOTIFICATION_DISPATCHER,
   NOTIFICATION_OPTIONS,
 ];
@@ -42,7 +47,9 @@ export class NotificationsModule {
 
     return {
       module: NotificationsModule,
-      global: resolved.global,
+      // Spread `global` only when set: NestJS's `DynamicModule.global` is `?: boolean`, and under
+      // exactOptionalPropertyTypes an explicit `undefined` is rejected.
+      ...(resolved.global !== undefined ? { global: resolved.global } : {}),
       imports: [DiscoveryModule, ...(options.imports ?? [])],
       providers,
       exports: EXPORTS,

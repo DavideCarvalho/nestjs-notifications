@@ -1,4 +1,5 @@
 import {
+  type ChannelContext,
   type ChannelDriver,
   type DeliveryContext,
   MissingChannelMethodError,
@@ -23,7 +24,7 @@ export interface DiscordChannelOptions {
 
 /** Implement this on a notification to define its Discord payload. */
 export interface DiscordNotification extends Notification {
-  toDiscord(notifiable: Notifiable): DiscordMessage;
+  toDiscord(ctx: ChannelContext): DiscordMessage;
 }
 
 function isHttpsUrl(value: unknown): value is string {
@@ -47,7 +48,7 @@ export class DiscordChannel implements ChannelDriver {
   async send(
     notifiable: Notifiable,
     notification: Notification,
-    _context?: DeliveryContext,
+    context?: DeliveryContext,
   ): Promise<void> {
     const handler = getHandler(notification, 'discord', 'toDiscord');
     if (!handler) {
@@ -57,7 +58,11 @@ export class DiscordChannel implements ChannelDriver {
       throw new MissingChannelMethodError('discord', 'toDiscord()', name);
     }
 
-    const message = handler(notifiable) as DiscordMessage;
+    const message = handler({
+      notifiable,
+      localization: context?.localization,
+      tenant: context?.tenant,
+    }) as DiscordMessage;
     const payload = message.toPayload();
     const route = routeFor(notifiable, 'discord', notification);
 

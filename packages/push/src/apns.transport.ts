@@ -38,7 +38,7 @@ type ApnsTarget = string | { deviceToken: string; topic?: string };
 
 /** The shape of `apn.Notification` fields we set, narrowed for type-safety. */
 interface ApnsNotification {
-  alert?: { title?: string; body?: string };
+  alert?: { title?: string | undefined; body?: string | undefined };
   payload?: Record<string, unknown>;
   topic?: string;
   sound?: string;
@@ -48,7 +48,10 @@ interface ApnsNotification {
 function resolveTarget(target: unknown): { deviceToken: string; topic?: string } {
   if (typeof target === 'string') return { deviceToken: target };
   const obj = target as { deviceToken: string; topic?: string };
-  return { deviceToken: String(obj.deviceToken), topic: obj.topic };
+  // Include `topic` only when present (exactOptionalPropertyTypes).
+  return obj.topic !== undefined
+    ? { deviceToken: String(obj.deviceToken), topic: obj.topic }
+    : { deviceToken: String(obj.deviceToken) };
 }
 
 /**

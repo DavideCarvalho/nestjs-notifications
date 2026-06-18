@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type {
   NewStoredNotification,
   NotificationStore,
+  PaginateForNotifiableOptions,
+  PaginatedStoredNotifications,
   StoredNotification,
   UpsertStoredNotification,
 } from '@dudousxd/nestjs-notifications-database';
@@ -123,6 +125,28 @@ export class PrismaNotificationStore implements NotificationStore {
 
   async delete(id: string): Promise<void> {
     await this.client.notification.delete({ where: { id } });
+  }
+
+  async paginateForNotifiable(
+    notifiableType: string,
+    notifiableId: string,
+    options: PaginateForNotifiableOptions,
+  ): Promise<PaginatedStoredNotifications> {
+    const where = {
+      notifiableType,
+      notifiableId,
+      ...(options.tenantId !== undefined ? { tenantId: options.tenantId } : {}),
+    };
+    const [rows, total] = await Promise.all([
+      this.client.notification.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: options.offset,
+        take: options.limit,
+      }),
+      this.client.notification.count({ where }),
+    ]);
+    return { items: rows.map(toStored), total };
   }
 
   async upsert(input: UpsertStoredNotification): Promise<StoredNotification> {

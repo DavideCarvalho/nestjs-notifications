@@ -1,5 +1,7 @@
 import {
+  type ChannelContext,
   type ChannelDriver,
+  type DeliveryContext,
   type Notifiable,
   type Notification,
   createChannel,
@@ -21,7 +23,7 @@ export interface BroadcastChannelOptions {
 
 /** Implement this on a notification to define its real-time payload. */
 export interface BroadcastNotification extends Notification {
-  toBroadcast?(notifiable: Notifiable): Record<string, unknown>;
+  toBroadcast?(ctx: ChannelContext): Record<string, unknown>;
   toArray?(notifiable: Notifiable): Record<string, unknown>;
 }
 
@@ -40,10 +42,14 @@ export class BroadcastChannel implements ChannelDriver {
     private readonly options: BroadcastChannelOptions,
   ) {}
 
-  async send(notifiable: Notifiable, notification: Notification): Promise<void> {
+  async send(
+    notifiable: Notifiable,
+    notification: Notification,
+    context?: DeliveryContext,
+  ): Promise<void> {
     const room = String(routeFor(notifiable, 'broadcast', notification));
     const event = this.options.event ?? 'notification';
-    const payload = this.payloadFor(notifiable, notification as BroadcastNotification);
+    const payload = this.payloadFor(notifiable, notification as BroadcastNotification, context);
 
     this.gateway.emitToRoom(room, event, payload);
   }
@@ -51,9 +57,15 @@ export class BroadcastChannel implements ChannelDriver {
   private payloadFor(
     notifiable: Notifiable,
     notification: BroadcastNotification,
+    context?: DeliveryContext,
   ): Record<string, unknown> {
     const handler = getHandler(notification, 'broadcast', 'toBroadcast');
-    if (handler) return handler(notifiable) as Record<string, unknown>;
+    if (handler)
+      return handler({
+        notifiable,
+        localization: context?.localization,
+        tenant: context?.tenant,
+      }) as Record<string, unknown>;
     if (typeof notification.toArray === 'function') return notification.toArray(notifiable);
     const { ...rest } = notification as unknown as Record<string, unknown>;
     return rest;

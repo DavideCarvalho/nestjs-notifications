@@ -1,4 +1,5 @@
 import {
+  type ChannelContext,
   type ChannelDriver,
   type DeliveryContext,
   type Notifiable,
@@ -23,7 +24,7 @@ export interface SseChannelOptions {
 
 /** Implement this on a notification to define its SSE payload. */
 export interface SseNotification extends Notification {
-  toSse?(notifiable: Notifiable): Record<string, unknown>;
+  toSse?(ctx: ChannelContext): Record<string, unknown>;
   toArray?(notifiable: Notifiable): Record<string, unknown>;
 }
 
@@ -69,7 +70,7 @@ export class SseChannel implements ChannelDriver {
     const routeValue = String(routeFor(notifiable, 'sse', notification));
     const key = sseKey(context?.tenant, routeValue);
     const event = this.options.event ?? 'notification';
-    const payload = this.payloadFor(notifiable, notification as SseNotification);
+    const payload = this.payloadFor(notifiable, notification as SseNotification, context);
 
     this.hub.publish(key, payload, { event });
   }
@@ -77,9 +78,15 @@ export class SseChannel implements ChannelDriver {
   private payloadFor(
     notifiable: Notifiable,
     notification: SseNotification,
+    context?: DeliveryContext,
   ): Record<string, unknown> {
     const handler = getHandler(notification, 'sse', 'toSse');
-    if (handler) return handler(notifiable) as Record<string, unknown>;
+    if (handler)
+      return handler({
+        notifiable,
+        localization: context?.localization,
+        tenant: context?.tenant,
+      }) as Record<string, unknown>;
     if (typeof notification.toArray === 'function') return notification.toArray(notifiable);
     const { ...rest } = notification as unknown as Record<string, unknown>;
     return rest;
