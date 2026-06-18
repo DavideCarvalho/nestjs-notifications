@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-event-emitter",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "In-process async dispatcher for nestjs-notifications using @nestjs/event-emitter",
   "license": "MIT",
   "author": "Davide Carvalho",
