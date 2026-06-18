@@ -5,10 +5,7 @@ import { defineConfig } from 'tsup';
  * that a `require()` consumer resolves under NodeNext. esbuild honors `emitDecoratorMetadata`
  * from tsconfig, so NestJS DI / ORM `design:paramtypes` metadata survives in both outputs.
  */
-const external = [
-  '@dudousxd/nestjs-codegen',
-  'reflect-metadata',
-];
+const external = ['@dudousxd/nestjs-codegen', 'reflect-metadata'];
 
 export default defineConfig([
   {

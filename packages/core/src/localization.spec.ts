@@ -2,7 +2,13 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { ChannelRegistry } from './channel-registry';
-import type { ChannelContext, ChannelDriver, DeliveryContext, Notifiable, Notification } from './interfaces';
+import type {
+  ChannelContext,
+  ChannelDriver,
+  DeliveryContext,
+  Notifiable,
+  Notification,
+} from './interfaces';
 import {
   InMemoryTranslator,
   type LocaleResolver,
