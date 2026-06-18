@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-sms",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "SMS channel for nestjs-notifications — send SMS notifications via a pluggable transport (Twilio built-in)",
   "license": "MIT",
   "author": "Davide Carvalho",
