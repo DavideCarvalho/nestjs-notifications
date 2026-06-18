@@ -66,7 +66,7 @@ export class InvoicePaid {
   constructor(private invoiceId: string) {}
 
   @Broadcast()
-  toBroadcast(notifiable: Notifiable): Record<string, unknown> {
+  toBroadcast({ notifiable }: ChannelContext): Record<string, unknown> {
     return { invoiceId: this.invoiceId, message: 'Your invoice was paid' };
   }
 }

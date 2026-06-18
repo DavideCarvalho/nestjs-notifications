@@ -12,6 +12,7 @@ function makeClient() {
     update: vi.fn(async () => ({})),
     updateMany: vi.fn(async () => ({ count: 0 })),
     findMany: vi.fn(async () => [] as any[]),
+    count: vi.fn(async () => 0),
     delete: vi.fn(async () => ({})),
   };
   return { client: { notification }, notification };
@@ -108,6 +109,42 @@ describe('PrismaNotificationStore', () => {
       where: { notifiableType: 'User', notifiableId: '42', readAt: null },
       data: expect.objectContaining({ readAt: expect.any(Date) }),
     });
+  });
+
+  it('paginateForNotifiable() pushes skip/take down and returns total from count()', async () => {
+    const { client, notification } = makeClient();
+    notification.findMany.mockResolvedValueOnce([
+      {
+        id: 'n1',
+        type: 'InvoicePaid',
+        notifiableType: 'User',
+        notifiableId: '42',
+        data: {},
+        readAt: null,
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]);
+    notification.count.mockResolvedValueOnce(57);
+    const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);
+
+    const result = await store.paginateForNotifiable('User', '42', {
+      limit: 10,
+      offset: 20,
+      tenantId: 'tenant-1',
+    });
+
+    expect(notification.findMany).toHaveBeenCalledWith({
+      where: { notifiableType: 'User', notifiableId: '42', tenantId: 'tenant-1' },
+      orderBy: { createdAt: 'desc' },
+      skip: 20,
+      take: 10,
+    });
+    expect(notification.count).toHaveBeenCalledWith({
+      where: { notifiableType: 'User', notifiableId: '42', tenantId: 'tenant-1' },
+    });
+    expect(result.total).toBe(57);
+    expect(result.items).toHaveLength(1);
   });
 
   it('delete() deletes by id', async () => {

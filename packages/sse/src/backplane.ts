@@ -2,7 +2,7 @@
 export interface SseBackplaneMessage {
   data: unknown;
   /** SSE event `type`. */
-  event?: string;
+  event?: string | undefined;
 }
 
 /**

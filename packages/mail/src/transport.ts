@@ -1,3 +1,4 @@
+import { failover } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { MAIL_SMTP_OPTIONS } from './tokens';
@@ -19,7 +20,7 @@ export interface MailAttachment {
 /** The fully-rendered message handed to a transport for delivery. */
 export interface MailTransportPayload {
   to: string;
-  from?: string;
+  from?: string | undefined;
   subject: string;
   html: string;
   text: string;
@@ -90,16 +91,10 @@ export class FailoverMailTransport implements MailTransport {
   }
 
   async send(payload: MailTransportPayload): Promise<void> {
-    let lastError: unknown;
-    for (const transport of this.transports) {
-      try {
-        await transport.send(payload);
-        return;
-      } catch (error) {
-        lastError = error;
-        this.onFailover?.(transport, error);
-      }
-    }
-    throw lastError;
+    await failover(
+      this.transports,
+      (transport) => transport.send(payload),
+      this.onFailover && ((transport, error) => this.onFailover?.(transport, error)),
+    );
   }
 }

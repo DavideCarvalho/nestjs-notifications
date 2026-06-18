@@ -32,7 +32,9 @@ export class SnsTransport implements SmsTransport {
   ) {
     this.client = new SNSClient({
       region: this.options.region,
-      credentials: this.options.credentials,
+      // Pass `credentials` only when configured (exactOptionalPropertyTypes); otherwise let the
+      // AWS SDK resolve them from the default provider chain (env/instance role/etc).
+      ...(this.options.credentials !== undefined ? { credentials: this.options.credentials } : {}),
     });
   }
 

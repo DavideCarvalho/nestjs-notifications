@@ -9,6 +9,8 @@
     "declarationMap": true,
     "sourceMap": true,
     "strict": true,
+    "isolatedModules": true,
+    "noImplicitAny": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
@@ -16,6 +18,7 @@
     "emitDecoratorMetadata": true,
     "resolveJsonModule": true,
     "noUncheckedIndexedAccess": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true
   }
 }

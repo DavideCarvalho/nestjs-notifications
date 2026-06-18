@@ -55,6 +55,18 @@ re-importing. **Defaults to `true`.**
 `SyncDispatcher` stays registered even when you override this, so custom dispatchers can delegate to
 inline delivery. See [Dispatchers](/docs/dispatchers).
 
+### dispatchGuards
+
+`DispatchGuardOptions` — opt-in dedup (idempotency) and throttle (rate-limit) applied before any
+channel runs. Notifications opt in per-instance via `idempotencyKey()` / `throttle()`. Omitting it is
+a no-op. See [Dispatch guards](/docs/concepts/dispatch-guards).
+
+### localization
+
+`LocalizationOptions` (`{ defaultLocale?, resolver?, translator?, catalog? }`) — per-recipient
+translation of channel payloads. Omitting it is a no-op; payload methods receive a `localization`
+argument only when it's configured. See [Localization](/docs/concepts/localization).
+
 ### imports
 
 `ModuleMetadata['imports']` — extra modules the dispatcher or channels need, e.g.
@@ -132,8 +144,18 @@ export class NotificationMetrics {
 
 Events are for cross-cutting listeners; for the **outcome of a specific call**, every `send` /
 `notify` / `sendNow` / `sendAsync` returns a `SendResult[]` — one entry per notifiable, each with a
-`ChannelResult` per channel (`status: 'sent' | 'failed' | 'skipped' | 'queued'`, plus the transport
-`response` or `error`).
+`ChannelResult` per channel (`status`, plus the transport `response` or `error`). The status is one
+of:
+
+| Status | Meaning |
+| --- | --- |
+| `sent` | Delivered to the channel transport. |
+| `failed` | The channel threw. |
+| `skipped` | Gated out — `shouldSend()` returned false, or a [preference](/docs/recipes/preferences) muted the channel. |
+| `queued` | Handed to an async [dispatcher](/docs/dispatchers) (or deferred for later). |
+| `suppressed` | A [dispatch guard](/docs/concepts/dispatch-guards) deduped it (idempotency). |
+| `throttled` | A [dispatch guard](/docs/concepts/dispatch-guards) rate-limited it (`overflow: 'drop'`). |
+| `deferred` | Held to be re-delivered later — e.g. [quiet hours](/docs/recipes/digests-and-quiet-hours) or a throttle `overflow: 'defer'`. |
 
 A notification can also gate and observe its own delivery: `shouldSend(notifiable, channel)` skips a
 channel at delivery time (recorded as `skipped`), and `afterSending(notifiable, channel, response)`

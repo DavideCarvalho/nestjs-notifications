@@ -5,6 +5,9 @@
     "notifications",
     "channels-and-dispatchers",
     "async-dispatch",
-    "multi-tenancy"
+    "multi-tenancy",
+    "dispatch-guards",
+    "fallback-chains",
+    "localization"
   ]
 }

@@ -154,6 +154,27 @@ describe('TypeOrmNotificationStore (integration, sqlite)', () => {
     expect(without.causerId).toBeNull();
     expect(without.traceId).toBeNull();
   });
+
+  it('paginateForNotifiable() returns a single page with the total via skip/take', async () => {
+    for (let i = 0; i < 5; i++) {
+      await store.save({
+        type: `P${i}`,
+        notifiableType: 'User',
+        notifiableId: 'paged-user',
+        data: { n: i },
+      });
+      await delay();
+    }
+
+    const page1 = await store.paginateForNotifiable('User', 'paged-user', { limit: 2, offset: 0 });
+    expect(page1.total).toBe(5);
+    expect(page1.items).toHaveLength(2);
+    expect(page1.items.map((r) => r.type)).toEqual(['P4', 'P3']);
+
+    const page3 = await store.paginateForNotifiable('User', 'paged-user', { limit: 2, offset: 4 });
+    expect(page3.total).toBe(5);
+    expect(page3.items.map((r) => r.type)).toEqual(['P0']);
+  });
 });
 
 function delay(ms = 5): Promise<void> {

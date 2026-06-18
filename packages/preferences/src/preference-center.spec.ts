@@ -162,7 +162,8 @@ describe('preference center', () => {
       await service.setDigest(ref, 'billing', 'daily');
 
       const resolution = await service.resolve(ref, 'billing', 'mail');
-      expect(resolution).toEqual({ allowed: false, digest: 'daily' });
+      // Suppressed for instant delivery, but digest-eligible so it's collected (not dropped).
+      expect(resolution).toEqual({ allowed: false, digest: 'daily', digestEligible: true });
       // Channel is still enabled — it's the digest cadence that suppresses instant delivery.
       const matrix = await service.getMatrix(ref);
       expect(matrix.categories.billing.channels.mail).toBe(true);
@@ -176,10 +177,52 @@ describe('preference center', () => {
       ).toBe(false);
     });
 
+    it('digest != instant on an enabled channel marks the resolution digest-eligible', async () => {
+      const ref = { type: 'User', id: '1' };
+      await service.setDigest(ref, 'billing', 'daily');
+      expect(await service.resolve(ref, 'billing', 'mail')).toEqual({
+        allowed: false,
+        digest: 'daily',
+        digestEligible: true,
+      });
+    });
+
+    it('gate emits a skip+digest decision for a non-instant cadence (collect, not drop)', async () => {
+      const ref = { type: 'User', id: '1' };
+      await service.setDigest(ref, 'billing', 'weekly');
+      const decision = await gate.evaluate({
+        notifiable: new User('1'),
+        notification: new BillingNotification(),
+        channel: 'mail',
+      });
+      expect(decision).toEqual({
+        action: 'skip',
+        digest: { cadence: 'weekly', category: 'billing' },
+      });
+    });
+
+    it('gate emits a plain skip (no digest) for a disabled channel — a true drop', async () => {
+      const ref = { type: 'User', id: '1' };
+      await service.setChannel(ref, 'billing', 'mail', false);
+      const decision = await gate.evaluate({
+        notifiable: new User('1'),
+        notification: new BillingNotification(),
+        channel: 'mail',
+      });
+      expect(decision).toEqual({ action: 'skip' });
+    });
+
     it('digest off blocks the channel', async () => {
       const ref = { type: 'User', id: '1' };
       await service.setDigest(ref, 'social', 'off');
       expect((await service.resolve(ref, 'social', 'mail')).allowed).toBe(false);
+      // `off` is a true drop — no digest collection.
+      const decision = await gate.evaluate({
+        notifiable: new User('1'),
+        notification: { category: 'social', via: () => ['mail'] } as Notification,
+        channel: 'mail',
+      });
+      expect(decision).toEqual({ action: 'skip' });
     });
 
     it('allows delivery when the notifiable has no derivable reference', async () => {
@@ -191,6 +234,96 @@ describe('preference center', () => {
           channel: 'mail',
         }),
       ).toBe(true);
+    });
+  });
+
+  describe('quiet hours', () => {
+    /** Build a UTC Date for a wall-clock UTC hour today. */
+    const utcAt = (hour: number): Date => {
+      const d = new Date('2026-06-17T00:00:00.000Z');
+      d.setUTCHours(hour, 0, 0, 0);
+      return d;
+    };
+
+    it('defers (not drops) instant delivery inside the window, with deferUntil', async () => {
+      const ref = { type: 'User', id: '1' };
+      await service.setQuietHours(ref, {
+        enabled: true,
+        start: '22:00',
+        end: '07:00',
+        timezone: 'UTC',
+      });
+
+      // 23:00 UTC is inside the window.
+      const inside = await service.resolve(ref, 'billing', 'mail', undefined, utcAt(23));
+      expect(inside.allowed).toBe(false);
+      // resumes at 07:00 the next day = now (23:00) + 8h.
+      expect(inside.deferUntil).toBe(utcAt(23).getTime() + 8 * 60 * 60_000);
+
+      const decision = await gate.evaluate({
+        notifiable: new User('1'),
+        notification: new BillingNotification(),
+        channel: 'mail',
+        // gate uses real now; assert via service resolution above. Here just confirm shape.
+      });
+      expect(['allow', 'defer']).toContain(decision.action);
+    });
+
+    it('delivers normally outside the window', async () => {
+      const ref = { type: 'User', id: '1' };
+      await service.setQuietHours(ref, {
+        enabled: true,
+        start: '22:00',
+        end: '07:00',
+        timezone: 'UTC',
+      });
+      const outside = await service.resolve(ref, 'billing', 'mail', undefined, utcAt(12));
+      expect(outside).toEqual({ allowed: true, digest: 'instant' });
+    });
+
+    it('respects the timezone', async () => {
+      const ref = { type: 'User', id: '1' };
+      await service.setQuietHours(ref, {
+        enabled: true,
+        start: '22:00',
+        end: '07:00',
+        timezone: 'Asia/Tokyo',
+      });
+      // 03:00 UTC = 12:00 Tokyo → outside.
+      expect((await service.resolve(ref, 'billing', 'mail', undefined, utcAt(3))).allowed).toBe(
+        true,
+      );
+      // 14:00 UTC = 23:00 Tokyo → inside.
+      const inside = await service.resolve(ref, 'billing', 'mail', undefined, utcAt(14));
+      expect(inside.allowed).toBe(false);
+      expect(inside.deferUntil).toBeDefined();
+    });
+
+    it('mandatory categories bypass quiet hours', async () => {
+      const ref = { type: 'User', id: '1' };
+      await service.setQuietHours(ref, {
+        enabled: true,
+        start: '00:00',
+        end: '23:59',
+        timezone: 'UTC',
+      });
+      // security is mandatory → always allowed, never deferred.
+      const result = await service.resolve(ref, 'security', 'mail', undefined, utcAt(12));
+      expect(result).toEqual({ allowed: true, digest: 'instant' });
+    });
+
+    it('clearing quiet hours restores normal delivery', async () => {
+      const ref = { type: 'User', id: '1' };
+      await service.setQuietHours(ref, {
+        enabled: true,
+        start: '00:00',
+        end: '23:59',
+        timezone: 'UTC',
+      });
+      await service.setQuietHours(ref, null);
+      expect((await service.resolve(ref, 'billing', 'mail', undefined, utcAt(12))).allowed).toBe(
+        true,
+      );
     });
   });
 });

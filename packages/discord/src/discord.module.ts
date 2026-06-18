@@ -20,7 +20,9 @@ export interface DiscordChannelModuleOptions {
 export class DiscordChannelModule {
   static forRoot(options: DiscordChannelModuleOptions = {}): DynamicModule {
     const discordOptions: DiscordChannelOptions = {
-      webhookUrl: options.webhookUrl,
+      // Set `webhookUrl` only when provided (exactOptionalPropertyTypes); the channel falls back
+      // to a per-notifiable route when it is absent.
+      ...(options.webhookUrl !== undefined ? { webhookUrl: options.webhookUrl } : {}),
     };
 
     const providers: Provider[] = [

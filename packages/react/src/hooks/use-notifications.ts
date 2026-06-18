@@ -2,19 +2,20 @@ import type { NotificationsClient } from '@dudousxd/nestjs-notifications-client'
 import type {
   NotificationItem,
   NotificationsClientOptions,
+  ReadSyncEvent,
 } from '@dudousxd/nestjs-notifications-client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { mergeNotifications } from '../utils';
+import { applyReadEvent as applyReadEventToList, mergeNotifications } from '../utils';
 import { useResolvedContext } from './use-notifications-provider';
 
 /** Options for {@link useNotifications}. */
 export interface UseNotificationsOptions {
   /** Explicit client (overrides the provider). */
-  client?: NotificationsClient;
+  client?: NotificationsClient | undefined;
   /** Build a client inline (overrides the provider). */
-  clientOptions?: NotificationsClientOptions;
+  clientOptions?: NotificationsClientOptions | undefined;
   /** Page size for `list` / `loadMore`. Default 20. */
-  perPage?: number;
+  perPage?: number | undefined;
 }
 
 /** Return value of {@link useNotifications}. */
@@ -33,6 +34,12 @@ export interface UseNotificationsResult {
   remove: (id: string) => Promise<void>;
   /** Reload page 1 from scratch. */
   refresh: () => Promise<void>;
+  /**
+   * Apply a cross-device read event (from {@link useNotificationsStream}'s `onRead`): patch the
+   * matching item read in place — or all items when `notificationId` is null — WITHOUT a refetch.
+   * Local-only: it does not call the API (the other device already persisted the read).
+   */
+  applyReadEvent: (event: ReadSyncEvent) => void;
 }
 
 /**
@@ -156,6 +163,10 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
     [client, notifications],
   );
 
+  const applyReadEvent = useCallback((event: ReadSyncEvent) => {
+    setNotifications((prev) => applyReadEventToList(prev, event));
+  }, []);
+
   return {
     notifications,
     loading,
@@ -166,6 +177,7 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
     markAllAsRead,
     remove,
     refresh,
+    applyReadEvent,
   };
 }
 

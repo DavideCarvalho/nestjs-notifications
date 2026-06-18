@@ -31,9 +31,11 @@ export interface SlackChannelModuleOptions {
 export class SlackChannelModule {
   static forRoot(options: SlackChannelModuleOptions = {}): DynamicModule {
     const slackOptions: SlackChannelOptions = {
-      webhookUrl: options.webhookUrl,
-      token: options.token,
-      defaultChannel: options.defaultChannel,
+      // Set each field only when provided (exactOptionalPropertyTypes); the channel resolves
+      // per-notifiable routing / defaults when these are absent.
+      ...(options.webhookUrl !== undefined ? { webhookUrl: options.webhookUrl } : {}),
+      ...(options.token !== undefined ? { token: options.token } : {}),
+      ...(options.defaultChannel !== undefined ? { defaultChannel: options.defaultChannel } : {}),
     };
 
     const providers: Provider[] = [

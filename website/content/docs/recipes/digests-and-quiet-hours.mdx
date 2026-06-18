@@ -1,0 +1,132 @@
+---
+title: Digests & quiet hours
+description: Batch notifications into a daily or weekly summary, and defer delivery during a recipient's quiet hours. Collect suppressed notifications in a pending-digest store and flush them on a schedule.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Two ways to respect a recipient's attention, both built on the
+[preference center](/docs/recipes/preferences):
+
+- **Digests** — a user who set a category to `daily` or `weekly` doesn't get each notification
+  instantly; they're **collected** and delivered as one summary on a schedule.
+- **Quiet hours** — a recipient's "do not disturb" window (e.g. 22:00–07:00 in *their* timezone);
+  instant notifications are **deferred** to when the window ends, not dropped.
+
+## Quiet hours
+
+A quiet-hours window is wall-clock times in the recipient's IANA timezone, and it may wrap midnight.
+Store it per notifiable through the preference center service:
+
+```ts
+await preferenceCenter.setQuietHours(
+  { type: 'User', id: user.id },
+  { enabled: true, start: '22:00', end: '07:00', timezone: 'America/Sao_Paulo' },
+);
+```
+
+`QuietHours` is `{ enabled, start, end, timezone }`. While a send falls inside the window, the gate
+**defers** it (re-queues it to resume at the window's end) instead of delivering or dropping it —
+mandatory categories still go through. Pass `null` to clear it.
+
+<Callout type="info">
+  Quiet hours need a `PreferenceCenterStore` that implements `setQuietHours` (the bundled stores do).
+  For custom evaluation you can call `evaluateQuietHours(quiet, now)` directly — it returns
+  `{ active, resumeAt? }`.
+</Callout>
+
+## Digests
+
+### 1. Enable collection
+
+A user opts into a digest cadence per category in the [preference center](/docs/recipes/preferences)
+(`daily` / `weekly`). When they do, matching notifications are **suppressed from instant delivery and
+collected** instead. Wire the collector with `PreferencesModule.forDigest()`:
+
+```ts title="app.module.ts"
+PreferencesModule.forDigest({
+  store: MikroOrmPendingDigestStore, // where collected notifications wait; defaults to in-memory
+  // buildDigest:  custom summary notification (optional)
+  // channels:    ['mail'],          restrict the digest dispatch to specific channels (optional)
+  // dailyCron / weeklyCron:          cron expressions (only used when @nestjs/schedule is wired)
+});
+```
+
+`DigestModuleOptions` is `{ store?, buildDigest?, channels?, dailyCron?, weeklyCron?, global? }`.
+Without a `store` it uses an in-memory one (fine for tests, not for production).
+
+### 2. Flush on a schedule
+
+`DigestCollector.flushDigests(cadence, now?)` is the trigger — it groups everything collected by
+`(tenant, notifiable, category)`, builds one summary notification per group, and dispatches it. Call
+it from your own scheduler:
+
+```ts title="digest.cron.ts"
+@Injectable()
+export class DigestCron {
+  constructor(private readonly digests: DigestCollector) {}
+
+  @Cron('0 8 * * *')      // every day at 08:00
+  flushDaily() {
+    return this.digests.flushDigests('daily');
+  }
+
+  @Cron('0 8 * * 1')      // every Monday at 08:00
+  flushWeekly() {
+    return this.digests.flushDigests('weekly');
+  }
+}
+```
+
+`flushDigests` returns a `DigestFlushResult` (`{ cadence, sent, deferred, cleared, alreadyRun }`) for
+logging — it's idempotent per window (the `alreadyRun` flag), and groups whose recipients are in
+quiet hours are deferred to the next run. Groups dispatch through the normal pipeline, so they still
+honor preferences.
+
+<Callout type="info" title="Auto-cron (optional)">
+  If `@nestjs/schedule` is installed and you set `dailyCron` / `weeklyCron` in `forDigest()`, the
+  bundled `DigestScheduler` registers the cron jobs for you — no `@Cron` controller needed. When
+  `@nestjs/schedule` is absent it's a no-op; call `flushDigests` yourself, as above.
+</Callout>
+
+### 3. Customize the summary
+
+By default each group becomes a generic `DefaultDigestNotification` (a `{ digest, category, cadence,
+count, items[] }` payload). Return your own notification from `buildDigest` to control the copy:
+
+```ts
+PreferencesModule.forDigest({
+  store: MikroOrmPendingDigestStore,
+  buildDigest: (ctx) => new WeeklyDigestEmail(ctx), // your @Mail()/@Database() notification
+});
+```
+
+## The pending-digest store
+
+Collected notifications wait in a store with two tables — `notification_pending_digests` (the
+entries) and `notification_digest_windows` (idempotency locks per flush). Each ORM ships an adapter,
+mirroring the [notification stores](/docs/channels/database):
+
+| ORM | Module | Schema |
+| --- | --- | --- |
+| MikroORM | `MikroOrmPendingDigestStoreModule.forFeature()` | `ensurePendingDigestTables(em)` (or `pendingDigestSchemaSql(em)` for a migration) |
+| TypeORM | `TypeOrmPendingDigestStoreModule.forFeature()` | `createPendingDigestTables(queryRunner)` in a migration, or `ensurePendingDigestTables(dataSource)` |
+| Prisma | `PrismaPendingDigestStoreModule.forRoot({ client })` | Add the `PendingDigest` + `DigestWindow` models to your `schema.prisma` and migrate |
+
+```ts title="app.module.ts — MikroORM example"
+@Module({
+  imports: [
+    MikroOrmPendingDigestStoreModule.forFeature(),
+    PreferencesModule.forDigest({ store: MikroOrmPendingDigestStore }),
+  ],
+})
+export class AppModule {}
+```
+
+The TypeORM adapter needs its `PendingDigestEntity` / `DigestWindowEntity` registered on the
+`DataSource`, exactly like the notification entities.
+
+## See also
+
+- [Channel preferences](/docs/recipes/preferences) — the preference center that sets a category's
+  digest cadence and powers the gate.

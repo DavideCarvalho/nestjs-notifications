@@ -21,12 +21,12 @@ export interface NotificationsControllerOptions {
    */
   resolveRef: (req: any) => NotifiableRef | Promise<NotifiableRef>;
   /** Controller base path. Default `'notifications'`. */
-  path?: string;
+  path?: string | undefined;
   /**
    * Guards to protect the endpoints with (e.g. your auth guard). Applied via `@UseGuards` — the
    * inbox is per-user, so it should almost always be authenticated.
    */
-  guards?: Array<Type<CanActivate> | CanActivate>;
+  guards?: Array<Type<CanActivate> | CanActivate> | undefined;
 }
 
 /**
@@ -87,8 +87,10 @@ export function createNotificationsController(
     }
 
     @Post(':id/read')
-    async markAsRead(@Param('id') id: string): Promise<void> {
-      await this.notifications.markAsRead(id);
+    async markAsRead(@Req() req: any, @Param('id') id: string): Promise<void> {
+      // Pass the resolved ref so a cross-device read event is broadcast to the user's devices.
+      const ref = await options.resolveRef(req);
+      await this.notifications.markAsRead(id, ref);
     }
 
     @Post('read-all')

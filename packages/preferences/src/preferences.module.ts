@@ -1,6 +1,14 @@
-import { NOTIFICATION_PREFERENCE_GATE } from '@dudousxd/nestjs-notifications-core';
+import {
+  NOTIFICATION_DIGEST_SINK,
+  NOTIFICATION_PREFERENCE_GATE,
+} from '@dudousxd/nestjs-notifications-core';
 import { type DynamicModule, Module, type Provider, type Type } from '@nestjs/common';
 import { CategoryRegistry } from './category-registry';
+import { DigestCollector, type DigestOptions } from './digest-collector';
+import { DigestScheduler } from './digest-scheduler';
+import { DigestSinkAdapter } from './digest-sink.adapter';
+import type { PendingDigestStore } from './digest.interfaces';
+import { InMemoryPendingDigestStore } from './in-memory.pending-digest.store';
 import { InMemoryPreferenceCenterStore } from './in-memory.preference-center.store';
 import { InMemoryPreferenceStore } from './in-memory.store';
 import type { PreferenceStore } from './interfaces';
@@ -10,7 +18,9 @@ import type { CategoryDefinition, PreferenceCenterStore } from './preference-cen
 import { PreferenceCenterService } from './preference-center.service';
 import { PreferenceGateAdapter } from './preference-gate.adapter';
 import {
+  DIGEST_OPTIONS,
   NOTIFICATION_PREFERENCE_STORE,
+  PENDING_DIGEST_STORE,
   PREFERENCE_CENTER_CATEGORIES,
   PREFERENCE_CENTER_STORE,
 } from './tokens';
@@ -33,6 +43,17 @@ export interface PreferenceCenterModuleOptions {
    */
   store?: Type<PreferenceCenterStore>;
   /** Register globally so the service and gate are available app-wide. Default true. */
+  global?: boolean;
+}
+
+/** Options for {@link PreferencesModule.forDigest}. */
+export interface DigestModuleOptions extends DigestOptions {
+  /**
+   * A {@link PendingDigestStore} class to instantiate; defaults to
+   * {@link InMemoryPendingDigestStore}. Use a persistent adapter (e.g. the TypeORM one) in prod.
+   */
+  store?: Type<PendingDigestStore>;
+  /** Register globally so the collector is injectable app-wide. Default true. */
   global?: boolean;
 }
 
@@ -93,6 +114,45 @@ export class PreferencesModule {
         PREFERENCE_CENTER_STORE,
         PREFERENCE_CENTER_CATEGORIES,
       ],
+    };
+  }
+
+  /**
+   * REAL digest collection + flush. Layer this ON TOP of {@link forCenter} (it reuses the gate,
+   * the category registry and the preference service). It:
+   *
+   * - binds a {@link PendingDigestStore} (in-memory by default; pass a persistent adapter),
+   * - binds the core `NOTIFICATION_DIGEST_SINK` so the gate's non-instant `skip` decisions are
+   *   COLLECTED (not dropped),
+   * - provides the {@link DigestCollector} (`flushDigests(cadence, now?)`), and
+   * - provides an optional {@link DigestScheduler} that wires `@nestjs/schedule` cron jobs when
+   *   the package is present and `dailyCron`/`weeklyCron` are configured.
+   *
+   * Entirely opt-in: an app that never calls `forDigest` behaves exactly as before (non-instant
+   * cadences still suppress instant delivery — but now nothing is silently lost once it's wired).
+   *
+   * ```ts
+   * PreferencesModule.forCenter({ categories }),
+   * PreferencesModule.forDigest({ store: TypeOrmPendingDigestStore, dailyCron: '0 9 * * *' }),
+   * ```
+   */
+  static forDigest(options: DigestModuleOptions = {}): DynamicModule {
+    const storeClass = options.store ?? InMemoryPendingDigestStore;
+    const { store: _store, global: _global, ...digestOptions } = options;
+    const providers: Provider[] = [
+      storeClass,
+      { provide: PENDING_DIGEST_STORE, useExisting: storeClass },
+      { provide: DIGEST_OPTIONS, useValue: digestOptions },
+      DigestSinkAdapter,
+      { provide: NOTIFICATION_DIGEST_SINK, useExisting: DigestSinkAdapter },
+      DigestCollector,
+      DigestScheduler,
+    ];
+    return {
+      module: PreferencesModule,
+      global: options.global ?? true,
+      providers,
+      exports: [DigestCollector, PENDING_DIGEST_STORE],
     };
   }
 }

@@ -110,6 +110,7 @@ Pick exactly one transport and supply its matching options:
 | `expo` | `ExpoOptions` | — | Expo client options. Supply with `ExpoTransport`. |
 | `apns` | `ApnsOptions` | — | Apple credentials. Supply with `ApnsTransport`. |
 | `resolveTransport` | `(tenant: string) => PushTransport` | — | Per-tenant transport resolver. See [Per-tenant config](#per-tenant-config). |
+| `onInvalidTokens` | `InvalidTokenCallback` | — | Called with the dead device tokens a multicast send rejected, so you can prune them. See [Multicast & invalid tokens](#multicast--invalid-tokens). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
 
 ### APNs (native iOS)
@@ -145,7 +146,7 @@ export class OrderShipped {
   constructor(private orderId: number) {}
 
   @Push()
-  toPush(notifiable: Notifiable): PushMessage {
+  toPush({ notifiable }: ChannelContext): PushMessage {
     return new PushMessage()
       .title('Order shipped')
       .body('Your order is on its way.')
@@ -212,3 +213,27 @@ PushChannelModule.forRoot({
 
 Sends with no tenant scope keep the default transport. See
 [Multi-tenancy](/docs/concepts/multi-tenancy) for the full picture.
+
+## Multicast & invalid tokens
+
+When a recipient routes **many** device tokens (a `string[]`), transports that support multicast —
+**FCM** and **Expo** — deliver them in a single batch via `sendMany()` instead of one call per token.
+Transports without it (web-push, APNs) fall back to per-token `send()`. It's transparent to the
+notification; you just get fewer provider round-trips.
+
+Push providers also report tokens that are no longer valid (the app was uninstalled, the token
+rotated). Hand the channel an `onInvalidTokens` callback to learn about them and prune your store:
+
+```ts title="app.module.ts"
+PushChannelModule.forRoot({
+  transport: FcmTransport,
+  fcm: { /* … */ },
+  onInvalidTokens: async ({ notifiable, invalidTargets, tenant }) => {
+    await deviceTokens.removeAll(notifiable, invalidTargets); // stop pushing to dead tokens
+  },
+});
+```
+
+The callback receives an `InvalidTokenReport` (`{ notifiable, invalidTargets, tenant? }`). It fires
+after a batch send when the provider flags rejected tokens — keeping your token list clean so
+deliverability doesn't rot over time.

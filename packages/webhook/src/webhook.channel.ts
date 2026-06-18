@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import {
+  type ChannelContext,
   type ChannelDriver,
   type DeliveryContext,
   MissingChannelMethodError,
@@ -41,7 +42,7 @@ export interface WebhookChannelOptions {
  * control over the url, method and headers.
  */
 export interface WebhookNotification extends Notification {
-  toWebhook(notifiable: Notifiable): WebhookMessage | Record<string, unknown>;
+  toWebhook(ctx: ChannelContext): WebhookMessage | Record<string, unknown>;
 }
 
 /** Resolves per-tenant {@link WebhookChannelOptions} from a tenant id. */
@@ -80,7 +81,11 @@ export class WebhookChannel implements ChannelDriver {
       throw new MissingChannelMethodError('webhook', 'toWebhook()', name);
     }
 
-    const result = handler(notifiable) as WebhookMessage | Record<string, unknown>;
+    const result = handler({
+      notifiable,
+      localization: context?.localization,
+      tenant: context?.tenant,
+    }) as WebhookMessage | Record<string, unknown>;
     const message =
       result instanceof WebhookMessage ? result : new WebhookMessage().payload(result);
     const request = message.toRequest();

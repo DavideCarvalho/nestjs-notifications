@@ -7,11 +7,12 @@ import {
   APNS_OPTIONS,
   EXPO_OPTIONS,
   FCM_OPTIONS,
+  PUSH_INVALID_TOKEN_CALLBACK,
   PUSH_TRANSPORT,
   PUSH_TRANSPORT_RESOLVER,
   WEB_PUSH_OPTIONS,
 } from './tokens';
-import type { PushTransport } from './transport';
+import type { InvalidTokenCallback, PushTransport } from './transport';
 import type { WebPushOptions } from './web-push.transport';
 
 export interface PushChannelModuleOptions {
@@ -34,6 +35,13 @@ export interface PushChannelModuleOptions {
    * `context.tenant`, the returned transport is used instead of the default one.
    */
   resolveTransport?: PushTransportResolver;
+  /**
+   * Invoked after a batch send with the device tokens the provider rejected as permanently
+   * invalid (FCM `UNREGISTERED`, Expo `DeviceNotRegistered`). Use it to prune dead tokens from
+   * your store. Only fires for transports that support multicast ({@link FcmTransport},
+   * {@link ExpoTransport}).
+   */
+  onInvalidTokens?: InvalidTokenCallback;
   /** Register globally so the channel is discoverable app-wide. Default true. */
   global?: boolean;
 }
@@ -86,6 +94,7 @@ export class PushChannelModule {
       transportClass,
       { provide: PUSH_TRANSPORT, useExisting: transportClass },
       { provide: PUSH_TRANSPORT_RESOLVER, useValue: options.resolveTransport ?? null },
+      { provide: PUSH_INVALID_TOKEN_CALLBACK, useValue: options.onInvalidTokens ?? null },
       PushChannel,
     ];
 

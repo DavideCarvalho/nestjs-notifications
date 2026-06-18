@@ -13,11 +13,13 @@ export type {
   NotificationsClientOptions,
   ListParams,
   NotificationsStreamOptions,
+  ReadSyncEvent,
 } from '@dudousxd/nestjs-notifications-client';
 
 // Pure helpers (also useful for custom renderers)
 export {
   mergeNotifications,
+  applyReadEvent,
   isUnread,
   toTime,
   formatRelativeTime,

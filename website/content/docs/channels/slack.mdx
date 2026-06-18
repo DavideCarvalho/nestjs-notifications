@@ -64,7 +64,7 @@ export class DeployFinished {
   constructor(private service: string) {}
 
   @Slack()
-  toSlack(notifiable: Notifiable): SlackMessage {
+  toSlack({ notifiable }: ChannelContext): SlackMessage {
     return new SlackMessage()
       .text(`Deploy finished: ${this.service}`)
       .block({ type: 'section', text: { type: 'mrkdwn', text: `*${this.service}* is live :rocket:` } });

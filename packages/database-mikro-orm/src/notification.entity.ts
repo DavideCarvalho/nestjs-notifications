@@ -41,13 +41,17 @@ export class NotificationEntity {
   data!: Record<string, unknown>;
 
   // Explicit `datetime` type so the value round-trips as a Date on every driver
-  // (SQLite otherwise hydrates it as a raw timestamp string/number).
-  @Property({ type: 'datetime', nullable: true })
+  // (SQLite otherwise hydrates it as a raw timestamp string/number). `length: 3` keeps millisecond
+  // precision: MySQL's DATETIME defaults to 0 fractional digits (truncating ms), which collapses
+  // the JS-set timestamps and breaks newest-first ordering / upsert createdAt-preservation / prune
+  // cutoffs. It maps to `datetime(3)` on MySQL and is harmless on Postgres/SQLite — so timestamps
+  // round-trip at ms precision identically across all three engines.
+  @Property({ type: 'datetime', nullable: true, length: 3 })
   readAt?: Date | null;
 
-  @Property({ type: 'datetime' })
+  @Property({ type: 'datetime', length: 3 })
   createdAt!: Date;
 
-  @Property({ type: 'datetime', onUpdate: () => new Date() })
+  @Property({ type: 'datetime', onUpdate: () => new Date(), length: 3 })
   updatedAt!: Date;
 }

@@ -9,14 +9,14 @@
     "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
     "directory": "packages/database-mikro-orm"
   },
-  "type": "commonjs",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
@@ -24,17 +24,41 @@
     "@mikro-orm/decorators": "^7.0.0",
     "@mikro-orm/nestjs": "^7.0.0",
     "@dudousxd/nestjs-notifications-database": ">=0.1.0 <1.0.0",
+    "@dudousxd/nestjs-notifications-preferences": ">=0.1.0 <1.0.0",
     "@nestjs/common": "^10.0.0 || ^11.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@dudousxd/nestjs-notifications-preferences": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@mikro-orm/core": "7.1.4",
     "@mikro-orm/decorators": "7.1.4",
+    "@mikro-orm/mysql": "7.1.4",
     "@mikro-orm/nestjs": "7.0.2",
+    "@mikro-orm/postgresql": "7.1.4",
     "@mikro-orm/sqlite": "7.1.4",
     "@dudousxd/nestjs-notifications-core": "workspace:^",
     "@dudousxd/nestjs-notifications-database": "workspace:^",
+    "@dudousxd/nestjs-notifications-preferences": "workspace:^",
     "@nestjs/common": "11.1.26",
+    "@testcontainers/mysql": "10.18.0",
+    "@testcontainers/postgresql": "10.18.0",
     "reflect-metadata": "0.2.2",
     "typescript": "5.9.3"
+  },
+  "module": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
   }
 }

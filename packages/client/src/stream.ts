@@ -1,3 +1,12 @@
+/** SSE event name carrying cross-device read-sync payloads (mirrors the SSE package). */
+export const READ_EVENT = 'read';
+
+/** Payload of a cross-device read event (`event: read`). `notificationId` is null for "all read". */
+export interface ReadSyncEvent {
+  notificationId: string | null;
+  readAt: string;
+}
+
 /**
  * Options for {@link subscribeNotificationsStream}.
  *
@@ -11,12 +20,22 @@ export interface NotificationsStreamOptions {
   /**
    * Called whenever the server pushes a change. There's no payload by design — the SSE channel
    * only signals "your notifications changed"; refetch your inbox/unread queries here.
+   *
+   * Note: a cross-device read event (`event: read`) does NOT trigger `onUpdate` — handle it via
+   * {@link onRead} instead, so reading on one device patches the inbox in place rather than
+   * forcing a refetch.
    */
   onUpdate: () => void;
+  /**
+   * Called when another device marks a notification (or all) as read — the cross-device read sync
+   * signal. Apply it to your local inbox state (mark the matching item read). `notificationId` is
+   * `null` for a "mark all read" event.
+   */
+  onRead?: (event: ReadSyncEvent) => void;
   /** fetch implementation; defaults to `globalThis.fetch`. */
-  fetch?: typeof fetch;
+  fetch?: typeof fetch | undefined;
   /** Forwarded to `fetch`; set `'same-origin'`/`'omit'` to change cookie behavior. Default `'include'`. */
-  credentials?: RequestCredentials;
+  credentials?: RequestCredentials | undefined;
   /** Dynamic request headers (e.g. a bearer token), evaluated on every (re)connect. */
   headers?: () => Record<string, string>;
   /** Invoked when a connection attempt fails or drops, before the reconnect backoff. */
@@ -50,6 +69,7 @@ export function subscribeNotificationsStream(options: NotificationsStreamOptions
   const {
     url,
     onUpdate,
+    onRead,
     headers,
     onError,
     credentials = 'include',
@@ -79,8 +99,13 @@ export function subscribeNotificationsStream(options: NotificationsStreamOptions
           throw new Error(`notifications stream HTTP ${response.status}`);
         }
         retryDelayMs = initialRetryDelayMs; // connected — reset the backoff
-        await readFrames(response.body, () => {
-          if (!cancelled) onUpdate();
+        await readFrames(response.body, (frame) => {
+          if (cancelled) return;
+          if (frame.type === 'read') {
+            if (frame.read) onRead?.(frame.read);
+            return;
+          }
+          onUpdate();
         });
       } catch (err) {
         if (!cancelled) onError?.(err);
@@ -106,8 +131,19 @@ export function subscribeNotificationsStream(options: NotificationsStreamOptions
   };
 }
 
-/** Read an SSE body stream, firing `onPush` once per non-heartbeat frame. */
-async function readFrames(body: ReadableStream<Uint8Array>, onPush: () => void): Promise<void> {
+/** A parsed SSE frame, classified for the subscriber. */
+interface ParsedFrame {
+  /** `'read'` for a cross-device read event, else `'push'` for a generic change signal. */
+  type: 'read' | 'push';
+  /** The read payload, when `type` is `'read'` and the JSON parsed. */
+  read?: ReadSyncEvent;
+}
+
+/** Read an SSE body stream, firing `onFrame` once per non-heartbeat frame. */
+async function readFrames(
+  body: ReadableStream<Uint8Array>,
+  onFrame: (frame: ParsedFrame) => void,
+): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffered = '';
@@ -119,24 +155,47 @@ async function readFrames(body: ReadableStream<Uint8Array>, onPush: () => void):
     const frames = buffered.split('\n\n');
     buffered = frames.pop() ?? '';
     for (const frame of frames) {
-      if (isPushFrame(frame)) onPush();
+      const parsed = parseFrame(frame);
+      if (parsed) onFrame(parsed);
     }
   }
 }
 
 /**
- * A "real" push: carries a non-empty `data:` payload and isn't the keep-alive heartbeat (which the
- * stream sends as `event: heartbeat` with an empty data line).
+ * Classify an SSE frame. Returns `null` for heartbeats and empty frames. A `read` event carries a
+ * JSON `data:` payload; any other non-empty-data frame is a generic `push` signal (unchanged).
  */
-function isPushFrame(frame: string): boolean {
-  let isHeartbeat = false;
-  let hasData = false;
+function parseFrame(frame: string): ParsedFrame | null {
+  let event: string | undefined;
+  let data = '';
   for (const line of frame.split('\n')) {
     if (line.startsWith('event:')) {
-      if (line.slice('event:'.length).trim() === 'heartbeat') isHeartbeat = true;
+      event = line.slice('event:'.length).trim();
     } else if (line.startsWith('data:')) {
-      if (line.slice('data:'.length).trim().length > 0) hasData = true;
+      data += line.slice('data:'.length).trim();
     }
   }
-  return hasData && !isHeartbeat;
+  if (event === 'heartbeat') return null;
+  if (data.length === 0) return null;
+  if (event === READ_EVENT) {
+    const read = parseReadPayload(data);
+    // Omit `read` when the payload was malformed (exactOptionalPropertyTypes); the consumer
+    // already guards with `if (frame.read)`, so an absent field behaves identically.
+    return read === undefined ? { type: 'read' } : { type: 'read', read };
+  }
+  return { type: 'push' };
+}
+
+/** Parse a read-event JSON payload defensively; returns undefined when malformed. */
+function parseReadPayload(data: string): ReadSyncEvent | undefined {
+  try {
+    const obj = JSON.parse(data) as Partial<ReadSyncEvent>;
+    if (typeof obj.readAt !== 'string') return undefined;
+    return {
+      notificationId: typeof obj.notificationId === 'string' ? obj.notificationId : null,
+      readAt: obj.readAt,
+    };
+  } catch {
+    return undefined;
+  }
 }

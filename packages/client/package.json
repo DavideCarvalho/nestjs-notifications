@@ -9,17 +9,30 @@
     "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
     "directory": "packages/client"
   },
-  "type": "commonjs",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./tanstack": {
-      "types": "./dist/tanstack.d.ts",
-      "default": "./dist/tanstack.js"
+      "import": {
+        "types": "./dist/tanstack.d.ts",
+        "default": "./dist/tanstack.js"
+      },
+      "require": {
+        "types": "./dist/tanstack.d.cts",
+        "default": "./dist/tanstack.cjs"
+      }
     }
   },
   "files": [
@@ -34,7 +47,7 @@
     "sse"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

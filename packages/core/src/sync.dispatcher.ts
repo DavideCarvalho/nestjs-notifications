@@ -20,6 +20,7 @@ export class SyncDispatcher implements DispatchDriver {
     await this.runner.run(notifiable, notification, job.channels, {
       tenant: job.tenant,
       captured: job.captured,
+      deferredChannels: job.deferredChannels,
     });
   }
 }

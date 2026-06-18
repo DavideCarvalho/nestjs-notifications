@@ -20,8 +20,8 @@ export interface SentNotificationRecord {
   notification: Notification;
   channels: string[];
   mode: 'sync' | 'async';
-  /** Tenant the send was scoped to, when multi-tenant. */
-  tenant?: string;
+  /** Tenant the send was scoped to, when multi-tenant (`undefined` = single-tenant). */
+  tenant?: string | undefined;
 }
 
 /** Constructor type used by the class-based assertions. */

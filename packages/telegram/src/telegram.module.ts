@@ -20,7 +20,9 @@ export interface TelegramChannelModuleOptions {
 export class TelegramChannelModule {
   static forRoot(options: TelegramChannelModuleOptions = {}): DynamicModule {
     const telegramOptions: TelegramChannelOptions = {
-      botToken: options.botToken,
+      // Set `botToken` only when provided (exactOptionalPropertyTypes); the channel raises a clear
+      // error at send time when it is absent.
+      ...(options.botToken !== undefined ? { botToken: options.botToken } : {}),
     };
 
     const providers: Provider[] = [

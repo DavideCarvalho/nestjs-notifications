@@ -1,0 +1,110 @@
+---
+title: Localization (i18n)
+description: Translate each notification per recipient. Resolve a locale off the notifiable, look strings up in a catalog (or your own translator), and render channel payloads in the recipient's language with localization.t().
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Notifications go to people who don't all speak the same language. **Localization** resolves a
+**locale per recipient** and gives each channel payload method a translator, so one notification
+renders as English for one user and Portuguese for another — the call site never changes. It's opt-in
+and backward compatible: a payload method that ignores the translator keeps working.
+
+## Configure a catalog
+
+The simplest setup passes a translation **catalog** to `forRoot`. The default in-memory translator
+looks keys up in it, and the default resolver reads the recipient's locale off the notifiable:
+
+```ts title="app.module.ts"
+NotificationsModule.forRoot({
+  localization: {
+    defaultLocale: 'en',
+    catalog: {
+      en: {
+        'invoice.paid.subject': 'Invoice {id} paid',
+        'invoice.paid.body': 'Thanks for your payment!',
+      },
+      'pt-BR': {
+        'invoice.paid.subject': 'Fatura {id} paga',
+        'invoice.paid.body': 'Obrigado pelo seu pagamento!',
+      },
+    },
+  },
+});
+```
+
+`LocalizationOptions` is `{ defaultLocale?, resolver?, translator?, catalog? }` — all optional.
+
+## Translate in a payload method
+
+Every `to<Channel>()` method receives a **context object** carrying the resolved `localization`
+(alongside the `notifiable` and `tenant`). Destructure what you need and call `localization.t(key,
+params)` — it resolves the key in the recipient's locale and interpolates `{placeholders}`:
+
+```ts title="invoice-paid.notification.ts"
+@Notification()
+export class InvoicePaid implements MailNotification {
+  constructor(private invoiceId: string) {}
+
+  @Mail()
+  toMail({ localization }: ChannelContext): MailMessage {
+    return new MailMessage()
+      .subject(localization.t('invoice.paid.subject', { id: this.invoiceId }))
+      .line(localization.t('invoice.paid.body'));
+  }
+}
+```
+
+Send to a `pt-BR` recipient and the subject is *"Fatura 42 paga"*; to an `en` recipient, *"Invoice 42
+paid"*. `Localization` is `{ locale: string; t(key, params?): string }`, and `params` is a
+`Record<string, string | number>`.
+
+## Where the locale comes from
+
+By default `PropertyLocaleResolver` reads the first present of `locale`, `preferredLocale`, `lang`, or
+`language` off the notifiable, falling back to `defaultLocale`:
+
+```ts
+class User implements Notifiable {
+  constructor(public id: string, public locale = 'en') {} // 'pt-BR', 'es', …
+}
+```
+
+Need the locale from somewhere else — a DB row, a request header, a preferences table? Bind a custom
+`LocaleResolver`:
+
+```ts
+interface LocaleResolver {
+  resolve(notifiable: Notifiable): string | undefined | Promise<string | undefined>;
+}
+
+NotificationsModule.forRoot({
+  localization: {
+    resolver: { resolve: async (u) => await prefs.localeFor(u.id) },
+  },
+});
+```
+
+## Bring your own translator
+
+The default catalog translator is deliberately minimal. To use i18next, ICU messages, or a remote
+catalog, implement `Translator` and pass it (or bind it under `NOTIFICATION_TRANSLATOR`):
+
+```ts
+interface Translator {
+  translate(key: string, locale: string, params?: TranslateParams): string;
+}
+
+NotificationsModule.forRoot({
+  localization: {
+    translator: { translate: (key, locale, params) => i18next.t(key, { lng: locale, ...params }) },
+  },
+});
+```
+
+<Callout type="info">
+  Localization is resolved **once per delivery**, per recipient, so a single `send()` to many
+  notifiables renders each in its own language. The resolver and translator can also be supplied via
+  DI under `NOTIFICATION_LOCALE_RESOLVER` / `NOTIFICATION_TRANSLATOR` if you'd rather wire them as
+  providers than inline options.
+</Callout>

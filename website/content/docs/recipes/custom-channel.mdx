@@ -34,7 +34,7 @@ export interface SmsMessage {
 
 /** Implement this on any notification routed to the `sms` channel for type safety. */
 export interface SmsNotification {
-  toSms(notifiable: unknown): SmsMessage;
+  toSms(ctx: ChannelContext): SmsMessage;
 }
 ```
 
@@ -88,7 +88,7 @@ export class SmsChannel implements ChannelDriver {
       );
     }
 
-    const message = handler(notifiable) as SmsMessage;
+    const message = handler({ notifiable }) as SmsMessage;
     await this.client.send({ to, body: message.body });
   }
 }

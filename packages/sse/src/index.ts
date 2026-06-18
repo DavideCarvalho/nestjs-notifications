@@ -23,3 +23,8 @@ export {
   type RedisSseBackplaneOptions,
   type RedisPubSubClient,
 } from './redis.backplane';
+export {
+  SseReadSyncPublisher,
+  SSE_READ_EVENT,
+  type ReadSyncEvent,
+} from './read-sync.publisher';

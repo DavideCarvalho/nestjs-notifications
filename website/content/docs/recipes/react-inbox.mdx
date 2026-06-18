@@ -90,6 +90,21 @@ const {
 
 Mutations are optimistic — the UI updates immediately and rolls back if the request fails.
 
+### Cross-device read sync
+
+`useNotifications()` also returns `applyReadEvent` — patch the local list when *another* tab or device
+marks a notification read, so this view updates without a refetch. Feed it the stream's `onRead`:
+
+```tsx
+const { applyReadEvent } = useNotifications();
+useNotificationsStream({ url: '/notifications/stream', onRead: applyReadEvent });
+```
+
+`onRead` fires with a `ReadSyncEvent` (`{ notificationId, readAt }`; `notificationId: null` = all
+read). `<Inbox/>` and `NotificationsProvider` already wire this when an `sseUrl` is set — you only
+need it when you compose the hooks yourself. The server side (binding the SSE read publisher) is in
+the [Real-time & in-app guide](/docs/recipes/realtime-in-app#cross-device-read-sync-optional).
+
 ## Customizing the row
 
 `<Inbox/>` renders a sensible default row from `item.data`: title, body, relative time, and — when

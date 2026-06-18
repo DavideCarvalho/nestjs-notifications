@@ -169,6 +169,43 @@ describe('subscribeNotificationsStream', () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('routes a read event to onRead (not onUpdate)', async () => {
+    const onUpdate = vi.fn();
+    const onRead = vi.fn();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        sseResponse([
+          'event: read\ndata: {"notificationId":"abc","readAt":"2026-06-17T00:00:00.000Z"}\n\n',
+          'data: {"type":"notifications-updated"}\n\n',
+          'event: read\ndata: {"notificationId":null,"readAt":"2026-06-17T01:00:00.000Z"}\n\n',
+        ]),
+      );
+
+    const stop = subscribeNotificationsStream({
+      url: 'https://api.test/notifications/stream',
+      fetch: fetchMock as unknown as typeof fetch,
+      onUpdate,
+      onRead,
+      initialRetryDelayMs: 5,
+      maxRetryDelayMs: 5,
+    });
+    await flush();
+    stop();
+
+    // The push frame triggers onUpdate; the two read frames trigger onRead.
+    expect(onUpdate).toHaveBeenCalledTimes(1);
+    expect(onRead).toHaveBeenCalledTimes(2);
+    expect(onRead).toHaveBeenNthCalledWith(1, {
+      notificationId: 'abc',
+      readAt: '2026-06-17T00:00:00.000Z',
+    });
+    expect(onRead).toHaveBeenNthCalledWith(2, {
+      notificationId: null,
+      readAt: '2026-06-17T01:00:00.000Z',
+    });
+  });
+
   it('stops fetching after unsubscribe', async () => {
     const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
       Promise.resolve(openSseResponse(init?.signal as AbortSignal)),

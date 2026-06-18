@@ -4,7 +4,7 @@ export type WebhookMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'GET';
 /** The resolved request description produced by {@link WebhookMessage.toRequest}. */
 export interface WebhookRequest {
   /** Target URL, when set on the message; otherwise resolved by the channel. */
-  url?: string;
+  url?: string | undefined;
   method: WebhookMethod;
   headers: Record<string, string>;
   /** The JSON body to send (a plain object). */

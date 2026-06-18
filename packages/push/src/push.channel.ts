@@ -1,4 +1,5 @@
 import {
+  type ChannelContext,
   type ChannelDriver,
   type DeliveryContext,
   MissingChannelMethodError,
@@ -8,10 +9,10 @@ import {
   getHandler,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { PushMessage } from './push-message';
-import { PUSH_TRANSPORT, PUSH_TRANSPORT_RESOLVER } from './tokens';
-import type { PushTransport } from './transport';
+import { PUSH_INVALID_TOKEN_CALLBACK, PUSH_TRANSPORT, PUSH_TRANSPORT_RESOLVER } from './tokens';
+import type { InvalidTokenCallback, PushTransport } from './transport';
 
 /** Resolves a per-tenant {@link PushTransport} from a tenant id. */
 export type PushTransportResolver = (tenant: string) => PushTransport;
@@ -21,7 +22,7 @@ export const Push = createChannel('push');
 
 /** Implement this on a notification to define its push payload. */
 export interface PushNotification extends Notification {
-  toPush(notifiable: Notifiable): PushMessage;
+  toPush(ctx: ChannelContext): PushMessage;
 }
 
 /**
@@ -32,6 +33,7 @@ export interface PushNotification extends Notification {
 @Injectable()
 export class PushChannel implements ChannelDriver {
   readonly channel = 'push';
+  private readonly logger = new Logger('PushChannel');
 
   constructor(
     @Inject(PUSH_TRANSPORT)
@@ -39,6 +41,9 @@ export class PushChannel implements ChannelDriver {
     @Optional()
     @Inject(PUSH_TRANSPORT_RESOLVER)
     private readonly resolveTransport?: PushTransportResolver,
+    @Optional()
+    @Inject(PUSH_INVALID_TOKEN_CALLBACK)
+    private readonly onInvalidTokens?: InvalidTokenCallback,
   ) {}
 
   async send(
@@ -60,9 +65,20 @@ export class PushChannel implements ChannelDriver {
       throw new MissingChannelMethodError('push', 'toPush()', name);
     }
 
-    const message = handler(notifiable) as PushMessage;
+    const message = handler({
+      notifiable,
+      localization: context?.localization,
+      tenant: context?.tenant,
+    }) as PushMessage;
 
     if (Array.isArray(target)) {
+      // Prefer a single multicast round-trip when the transport supports it, and report any
+      // permanently-invalid tokens back so the app can prune them.
+      if (typeof transport.sendMany === 'function' && target.length > 0) {
+        const { invalidTargets } = await transport.sendMany(target, message);
+        await this.reportInvalid(notifiable, invalidTargets, context?.tenant);
+        return;
+      }
       for (const one of target) {
         await transport.send(one, message);
       }
@@ -70,5 +86,21 @@ export class PushChannel implements ChannelDriver {
     }
 
     await transport.send(target, message);
+  }
+
+  /** Invoke the prune callback for invalid tokens; never let it break delivery. */
+  private async reportInvalid(
+    notifiable: Notifiable,
+    invalidTargets: unknown[],
+    tenant: string | undefined,
+  ): Promise<void> {
+    if (!this.onInvalidTokens || invalidTargets.length === 0) return;
+    try {
+      await this.onInvalidTokens({ notifiable, invalidTargets, tenant });
+    } catch (error) {
+      this.logger.error(
+        `Invalid-token callback threw: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

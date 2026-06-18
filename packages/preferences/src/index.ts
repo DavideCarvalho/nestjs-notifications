@@ -1,6 +1,8 @@
 export type { PreferenceKey, PreferenceScope, PreferenceStore } from './interfaces';
 export {
+  DIGEST_OPTIONS,
   NOTIFICATION_PREFERENCE_STORE,
+  PENDING_DIGEST_STORE,
   PREFERENCE_CENTER_CATEGORIES,
   PREFERENCE_CENTER_STORE,
 } from './tokens';
@@ -15,7 +17,31 @@ export {
   PreferencesModule,
   type PreferencesModuleOptions,
   type PreferenceCenterModuleOptions,
+  type DigestModuleOptions,
 } from './preferences.module';
+
+// --- Digests ---
+export type {
+  DigestCadence,
+  NewPendingDigestEntry,
+  PendingDigestEntry,
+  PendingDigestGroup,
+  PendingDigestStore,
+} from './digest.interfaces';
+export { InMemoryPendingDigestStore } from './in-memory.pending-digest.store';
+export {
+  DigestCollector,
+  type DigestOptions,
+  type DigestFlushResult,
+} from './digest-collector';
+export { DigestScheduler } from './digest-scheduler';
+export { DigestSinkAdapter } from './digest-sink.adapter';
+export {
+  DefaultDigestNotification,
+  type DigestContext,
+  type DigestItem,
+  type DigestNotificationFactory,
+} from './digest-notification';
 
 // --- Preference center ---
 export type {
@@ -32,6 +58,11 @@ export {
   DEFAULT_CATEGORY,
   getCategory,
 } from './category-registry';
+export {
+  type QuietHours,
+  type QuietHoursEvaluation,
+  evaluateQuietHours,
+} from './quiet-hours';
 export { InMemoryPreferenceCenterStore } from './in-memory.preference-center.store';
 export { PreferenceCenterService } from './preference-center.service';
 export { PreferenceCenterGate } from './preference-center.gate';

@@ -1,5 +1,11 @@
 export { PushMessage, type PushPayload } from './push-message';
-export type { PushTransport, PushTarget } from './transport';
+export type {
+  PushTransport,
+  PushTarget,
+  BatchSendResult,
+  InvalidTokenCallback,
+  InvalidTokenReport,
+} from './transport';
 export {
   Push,
   PushChannel,
@@ -17,6 +23,7 @@ export {
 export {
   PUSH_TRANSPORT,
   PUSH_TRANSPORT_RESOLVER,
+  PUSH_INVALID_TOKEN_CALLBACK,
   WEB_PUSH_OPTIONS,
   FCM_OPTIONS,
   EXPO_OPTIONS,

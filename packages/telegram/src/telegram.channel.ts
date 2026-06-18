@@ -1,4 +1,5 @@
 import {
+  type ChannelContext,
   type ChannelDriver,
   type DeliveryContext,
   MissingChannelMethodError,
@@ -27,7 +28,7 @@ export interface TelegramChannelOptions {
  * over the parse mode.
  */
 export interface TelegramNotification extends Notification {
-  toTelegram(notifiable: Notifiable): TelegramMessage | string;
+  toTelegram(ctx: ChannelContext): TelegramMessage | string;
 }
 
 /**
@@ -46,7 +47,7 @@ export class TelegramChannel implements ChannelDriver {
   async send(
     notifiable: Notifiable,
     notification: Notification,
-    _context?: DeliveryContext,
+    context?: DeliveryContext,
   ): Promise<void> {
     const handler = getHandler(notification, 'telegram', 'toTelegram');
     if (!handler) {
@@ -56,7 +57,11 @@ export class TelegramChannel implements ChannelDriver {
       throw new MissingChannelMethodError('telegram', 'toTelegram()', name);
     }
 
-    const result = handler(notifiable) as TelegramMessage | string;
+    const result = handler({
+      notifiable,
+      localization: context?.localization,
+      tenant: context?.tenant,
+    }) as TelegramMessage | string;
     const message = result instanceof TelegramMessage ? result : new TelegramMessage(result);
     const payload = message.toPayload();
 
