@@ -64,7 +64,7 @@ export class InvoicePaid {
   constructor(private invoiceId: string, private amount: number) {}
 
   @Database()
-  toDatabase(notifiable: Notifiable): Record<string, unknown> {
+  toDatabase({ notifiable }: ChannelContext): Record<string, unknown> {
     return { invoiceId: this.invoiceId, amount: this.amount };
   }
 }

@@ -1,0 +1,91 @@
+---
+title: Fallback chains
+description: Deliver a notification down an ordered chain of channels — push first, escalate to SMS, then email — stopping at the first that reaches the recipient. Opt in per notification with fallback().
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+By default a notification fans out to **every** channel its `via()` resolves to, in parallel. A
+**fallback chain** does the opposite: it tries channels **in order**, escalating to the next only
+when the current one doesn't reach the recipient — and stops at the first that does. It models
+real-world escalation: *try push; if it isn't delivered, SMS; if that fails, email.*
+
+## Opt in with `fallback()`
+
+A notification declares a chain by implementing `fallback()`. Return an ordered `FallbackPolicy`;
+return `undefined` (or omit the method) and delivery is unchanged — the normal parallel fan-out.
+
+```ts title="critical-alert.notification.ts"
+@Notification()
+export class CriticalAlert implements FallbackAware {
+  fallback(notifiable: Notifiable): FallbackPolicy {
+    return {
+      channels: ['push', 'sms', 'mail'], // preferred → last resort
+      timeoutMs: 10 * 60_000,            // how long to wait for delivery confirmation per channel
+    };
+  }
+
+  @Push() toPush() { /* … */ }
+  @Sms() toSms() { /* … */ }
+  @Mail() toMail() { /* … */ }
+}
+```
+
+`FallbackPolicy` is `{ channels: string[]; timeoutMs?: number }`. The result reports which channel
+won via `deliveredVia`.
+
+## How "delivered" is decided
+
+The chain escalates when a channel **doesn't reach** the recipient. By default that's the channel's
+immediate result — a `sent` result counts as delivered, anything else escalates to the next channel.
+
+For channels where "sent" doesn't mean "reached" (a push can be sent but never opened), bind a
+**`DeliveryConfirmation`** probe. The chain then waits up to `timeoutMs` for it to confirm before
+deciding to escalate:
+
+```ts
+interface DeliveryConfirmation {
+  // Did `channel` reach `notifiable` within timeoutMs? Return false to escalate.
+  confirm(input: {
+    channel: string;
+    notifiable: Notifiable;
+    notification: Notification;
+    result: ChannelResult;
+    timeoutMs: number;
+  }): Promise<boolean>;
+}
+```
+
+Bind it under the `NOTIFICATION_DELIVERY_CONFIRMATION` token:
+
+```ts title="app.module.ts"
+NotificationsModule.forRoot({
+  providers: [
+    {
+      provide: NOTIFICATION_DELIVERY_CONFIRMATION,
+      useValue: {
+        confirm: async ({ channel, notifiable, timeoutMs }) => {
+          // e.g. poll your push provider's receipts, or a read flag, until timeoutMs
+          return await wasOpened(channel, notifiable, timeoutMs);
+        },
+      },
+    },
+  ],
+});
+```
+
+<Callout type="info">
+  Fallback chains apply to **synchronous** delivery (the inline `send`/`sendNow` path), where the
+  chain can wait and escalate. They also honor ad-hoc channel scoping — `only()` / `except()` narrow
+  the channels the chain considers.
+</Callout>
+
+## Fallback vs. the other reliability tools
+
+- **Fallback chain** — *one notification, many channels, tried in order.* "Reach them somehow."
+- **[Failover](/docs/channels/mail#multi-provider-failover)** — *one channel, many providers, tried
+  in order.* "Send the email even if provider A is down."
+- **[Dispatch guards](/docs/concepts/dispatch-guards)** — *don't over-send.* Dedup and rate-limit
+  before any channel runs.
+
+They compose: a throttled, deduped notification can still escalate down a fallback chain.

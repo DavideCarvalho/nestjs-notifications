@@ -58,7 +58,7 @@ export class DeployFinished {
   constructor(private service: string) {}
 
   @Discord()
-  toDiscord(notifiable: Notifiable): DiscordMessage {
+  toDiscord({ notifiable }: ChannelContext): DiscordMessage {
     return new DiscordMessage()
       .content(`Deploy finished: ${this.service}`)
       .embed({ title: 'Done!', description: `**${this.service}** is live`, color: 0x57f287 });

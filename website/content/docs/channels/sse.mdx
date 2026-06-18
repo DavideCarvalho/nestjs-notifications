@@ -63,7 +63,7 @@ export class InvoicePaid {
   constructor(private invoiceId: string) {}
 
   @Sse()
-  toSse(notifiable: Notifiable): Record<string, unknown> {
+  toSse({ notifiable }: ChannelContext): Record<string, unknown> {
     return { type: 'invoice.paid', invoiceId: this.invoiceId };
   }
 }
@@ -133,3 +133,11 @@ right stream.
   SSE is fire-and-forget: publishing to a key with no live subscriber is a no-op. To persist
   notifications for an inbox, also route to the [database channel](/docs/channels/database).
 </Callout>
+
+## Cross-device read sync
+
+The same stream also carries **read** events. Bind `SseReadSyncPublisher` under the database
+channel's `READ_SYNC_PUBLISHER` token and, when a user marks a notification read, their other open
+streams get an `event: read` frame — so the unread badge clears everywhere without a refetch. Full
+setup in the
+[Real-time & in-app guide](/docs/recipes/realtime-in-app#cross-device-read-sync-optional).

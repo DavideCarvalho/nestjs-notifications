@@ -97,7 +97,7 @@ export class OrderPaid {
   constructor(private orderId: number) {}
 
   @Webhook()
-  toWebhook(notifiable: Notifiable): Record<string, unknown> {
+  toWebhook({ notifiable }: ChannelContext): Record<string, unknown> {
     return { event: 'order.paid', id: this.orderId };
   }
 }
@@ -116,7 +116,7 @@ a per-notification URL, a non-`POST` method, or signed headers. Each method retu
 import { Webhook, WebhookMessage } from '@dudousxd/nestjs-notifications-webhook';
 
 @Webhook()
-toWebhook(notifiable: Notifiable): WebhookMessage {
+toWebhook({ notifiable }: ChannelContext): WebhookMessage {
   return new WebhookMessage()
     .url('https://example.com/hooks/orders')
     .header('X-Signature', sign(this.orderId))

@@ -1,0 +1,129 @@
+---
+title: Dispatch guards
+description: Dedup (idempotency) and throttle (rate-limit) a notification before any channel runs. Opt in per notification with idempotencyKey() and throttle(); back them with an in-memory or Redis store.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+**Dispatch guards** are two checks the core runs in the dispatch path, *before* any channel
+executes: **idempotency** (don't send the same thing twice) and **throttle** (don't send more than N
+in a window). They're fully opt-in — a notification that declares neither hook is never guarded — and
+each is backed by a pluggable store (in-memory by default, Redis for multi-instance).
+
+## Enable the guards
+
+Configure module-level defaults and stores on `forRoot`. Omitting `dispatchGuards` entirely is a
+no-op:
+
+```ts title="app.module.ts"
+NotificationsModule.forRoot({
+  dispatchGuards: {
+    idempotency: { ttlMs: 60_000 },     // default dedup window (1 min)
+    throttle: { overflow: 'drop' },     // default behavior for over-limit sends
+  },
+});
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `idempotency.store` | `InMemoryIdempotencyStore` | Backs dedup. Swap for a Redis-backed `IdempotencyStore` to dedup across instances. |
+| `idempotency.ttlMs` | `60000` | Default dedup window when a notification doesn't specify one. |
+| `throttle.store` | `InMemoryThrottleStore` | Backs rate-limiting. Swap for Redis to share counters across instances. |
+| `throttle.overflow` | `'drop'` | What happens to an over-limit send by default: `'drop'` or `'defer'`. |
+
+<Callout type="warn">
+  The in-memory stores are per-process — fine for a single instance, but two pods won't share a dedup
+  key or a rate-limit counter. Bind a Redis-backed `IdempotencyStore` / `ThrottleStore` to guard
+  across a cluster.
+</Callout>
+
+## Idempotency (dedup)
+
+A notification opts in by implementing `idempotencyKey()`. Two sends with the same key — per
+notifiable + tenant, within the window — deliver **once**; the duplicate returns a `suppressed`
+result.
+
+```ts title="invoice-paid.notification.ts"
+@Notification()
+export class InvoicePaid implements IdempotencyAware {
+  constructor(private invoiceId: string) {}
+
+  idempotencyKey(): string {
+    return `invoice-paid:${this.invoiceId}`;
+  }
+
+  // optional, per-notification overrides:
+  idempotencyTtlMs = 5 * 60_000;        // widen this one's window to 5 min
+  idempotencyScope: 'notifiable' | 'global' = 'notifiable';
+
+  @Mail() toMail() { /* … */ }
+}
+```
+
+- **`idempotencyKey(notifiable)`** — return the stable key, or `undefined` to opt this instance out.
+- **`idempotencyTtlMs`** — override the module default window for this notification.
+- **`idempotencyScope`** — `'notifiable'` (default) keys the dedup per recipient, so the same key
+  still delivers to two different users; `'global'` dedups the key across everyone.
+
+## Throttle (rate-limit)
+
+Implement `throttle()` to cap how often a notification reaches a recipient:
+
+```ts title="price-alert.notification.ts"
+@Notification()
+export class PriceAlert implements ThrottleAware {
+  throttle(): ThrottleConfig {
+    return {
+      max: 5,
+      windowMs: 60 * 60_000,   // at most 5 per hour…
+      category: 'price-alert',  // …shared across all PriceAlert sends to this user
+      overflow: 'defer',        // re-queue the excess instead of dropping it
+    };
+  }
+
+  @Push() toPush() { /* … */ }
+}
+```
+
+`ThrottleConfig` is `{ max, windowMs, category?, overflow? }`. The bucket is keyed per notifiable
+(and tenant), further split by `category` when set, so unrelated notification types don't share a
+limit. Over the limit, `overflow` decides:
+
+- **`'drop'`** — the send is skipped and returns a `throttled` result.
+- **`'defer'`** — the send is re-queued for later (returns `queued`), smoothing a burst instead of
+  losing it.
+
+## What a guarded send returns
+
+Guards surface as delivery statuses on the send result, so you can observe them:
+
+| Status | Cause |
+| --- | --- |
+| `suppressed` | An idempotency key matched within its window — a duplicate. |
+| `throttled` | Over the throttle limit with `overflow: 'drop'`. |
+| `queued` | Over the limit with `overflow: 'defer'` — re-queued for later. |
+
+## Custom stores
+
+Bind your own to guard across a cluster — the interfaces are tiny:
+
+```ts
+interface IdempotencyStore {
+  // Reserve a key for ttlMs. Returns true only if it wasn't already present (Redis: SET key NX PX ttl).
+  reserve(key: string, ttlMs: number): boolean | Promise<boolean>;
+}
+
+interface ThrottleStore {
+  // Increment the key's counter within a windowMs window; return the post-increment count.
+  increment(key: string, windowMs: number): number | Promise<number>;
+}
+```
+
+```ts
+NotificationsModule.forRoot({
+  dispatchGuards: {
+    idempotency: { store: new RedisIdempotencyStore(redis) },
+    throttle: { store: new RedisThrottleStore(redis) },
+  },
+});
+```

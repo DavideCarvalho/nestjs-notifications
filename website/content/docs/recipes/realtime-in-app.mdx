@@ -38,7 +38,7 @@ export class InvoicePaid {
   }
 
   @Sse() // pushed live to the open stream
-  toSse(_notifiable: Notifiable): Record<string, unknown> {
+  toSse({ notifiable }: ChannelContext): Record<string, unknown> {
     return { type: 'invoice.paid', invoiceId: this.invoiceId };
   }
 }
@@ -100,6 +100,39 @@ live off SSE. See the [React inbox](/docs/recipes/react-inbox).
 
 That's the entire loop: `send()` persists + pushes, the browser is already listening, the badge ticks
 up — no polling, no separate realtime service.
+
+## Cross-device read sync (optional)
+
+The live channels push *new* notifications. **Read-sync** pushes the inverse — when a user marks one
+read on their phone, the unread badge on their laptop clears too, without a refetch. It rides the
+same SSE stream.
+
+Bind the SSE publisher under the database channel's `READ_SYNC_PUBLISHER` token; with it bound,
+marking read publishes a `read` event to the user's other open streams:
+
+```ts title="app.module.ts"
+import { READ_SYNC_PUBLISHER } from '@dudousxd/nestjs-notifications-database';
+import { SseReadSyncPublisher } from '@dudousxd/nestjs-notifications-sse';
+
+@Module({
+  providers: [{ provide: READ_SYNC_PUBLISHER, useClass: SseReadSyncPublisher }],
+})
+export class AppModule {}
+```
+
+The auto-mounted inbox controller already passes the current notifiable to `markAsRead(id, target)` /
+`markAllAsRead(target)`, so the read event is scoped to that user (and tenant). Absent the binding,
+read-sync is simply a no-op.
+
+On the client, feed the stream's `onRead` into the inbox so other tabs patch in place:
+
+```tsx title="React"
+const { applyReadEvent } = useNotifications();
+useNotificationsStream({ url: '/notifications/stream', onRead: applyReadEvent });
+```
+
+`ReadSyncEvent` is `{ notificationId: string | null; readAt: string }` — `notificationId: null` means
+"mark all read". (`<Inbox/>` wires this for you.)
 
 ## Going deeper
 

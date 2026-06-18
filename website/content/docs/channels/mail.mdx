@@ -67,7 +67,7 @@ export class InvoicePaid {
   constructor(private invoiceId: string) {}
 
   @Mail()
-  toMail(notifiable: Notifiable): MailMessage {
+  toMail({ notifiable }: ChannelContext): MailMessage {
     return new MailMessage()
       .subject(`Invoice ${this.invoiceId} paid`)
       .greeting('Thanks for your payment!')
@@ -81,6 +81,11 @@ export class InvoicePaid {
 The `Mail` handle doubles as a `via()` token (`via() { return [Mail]; }`) for the cases where you
 need [explicit routing](/docs/concepts/notifications#alternative-explicit-via-and-interfaces). For
 compile-time checks on `toMail()`'s shape, implement `MailNotification` alongside the decorator.
+
+`toMail()` receives a **context object** — `toMail({ notifiable, localization })` — so you can
+translate the subject and lines per recipient. Destructure only what you need; use
+`localization.t(key, params)` to render in the recipient's language. See
+[Localization](/docs/concepts/localization).
 
 ### MailMessage builder
 

@@ -58,7 +58,7 @@ export class LoginCode {
   constructor(private code: string) {}
 
   @Telegram()
-  toTelegram(notifiable: Notifiable): string {
+  toTelegram({ notifiable }: ChannelContext): string {
     return `Your code is ${this.code}`;
   }
 }
@@ -77,7 +77,7 @@ Return a `TelegramMessage` when you need a parse mode for rich formatting. Each 
 import { Telegram, TelegramMessage } from '@dudousxd/nestjs-notifications-telegram';
 
 @Telegram()
-toTelegram(notifiable: Notifiable): TelegramMessage {
+toTelegram({ notifiable }: ChannelContext): TelegramMessage {
   return new TelegramMessage()
     .text('*Deploy finished*')
     .parseMode('MarkdownV2');

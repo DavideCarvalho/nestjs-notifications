@@ -58,7 +58,7 @@ export class DeployFinished {
   constructor(private service: string) {}
 
   @Teams()
-  toTeams(notifiable: Notifiable): TeamsMessage {
+  toTeams({ notifiable }: ChannelContext): TeamsMessage {
     return new TeamsMessage()
       .title('Deploy finished')
       .text(`**${this.service}** is live.`);

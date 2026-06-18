@@ -95,7 +95,7 @@ export class LoginCode {
   constructor(private code: string) {}
 
   @Sms()
-  toSms(notifiable: Notifiable): string {
+  toSms({ notifiable }: ChannelContext): string {
     return `Your code is ${this.code}`;
   }
 }
@@ -114,7 +114,7 @@ method returns `this`:
 import { Sms, SmsMessage } from '@dudousxd/nestjs-notifications-sms';
 
 @Sms()
-toSms(notifiable: Notifiable): SmsMessage {
+toSms({ notifiable }: ChannelContext): SmsMessage {
   return new SmsMessage()
     .content(`Your code is ${this.code}`)
     .from('+15555550199');
