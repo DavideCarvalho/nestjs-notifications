@@ -53,6 +53,7 @@ export class AppModule {}
 | --- | --- | --- | --- |
 | `from` | `string` | — | Default sender number for messages that don't set their own. |
 | `transport` | `Type<SmsTransport>` | `TwilioTransport` | Transport class used to deliver. |
+| `transportInstance` | `SmsTransport` | — | A pre-built transport instance (takes precedence over `transport`). Use for transports needing constructor args, e.g. [`FailoverSmsTransport`](#multi-provider-failover). |
 | `twilio` | `{ accountSid, authToken, from? }` | — | Credentials for the built-in `TwilioTransport`. |
 | `vonage` | `{ apiKey, apiSecret, from? }` | — | Credentials for the built-in `VonageTransport`. |
 | `sns` | `{ region, credentials?, senderId? }` | — | Config for the built-in AWS `SnsTransport`. |
@@ -169,6 +170,33 @@ SmsChannelModule.forRoot({ from: '+15555550100', transport: VonageTransport });
   A custom transport is a normal Nest provider, so you can inject config or an HTTP client into it.
   The `twilio` option is ignored unless you use the default `TwilioTransport`.
 </Callout>
+
+## Multi-provider failover
+
+`FailoverSmsTransport` wraps an ordered list of transports and tries each until one succeeds — so when
+Twilio is down, the next provider (say Vonage) takes over. Because it needs its list at construction
+time, pass it as a pre-built instance via `transportInstance` (which takes precedence over the
+`transport` class):
+
+```ts title="app.module.ts"
+import {
+  FailoverSmsTransport,
+  TwilioTransport,
+  VonageTransport,
+} from '@dudousxd/nestjs-notifications-sms';
+
+SmsChannelModule.forRoot({
+  from: '+15555550100',
+  transportInstance: new FailoverSmsTransport(
+    [new TwilioTransport(twilioOpts), new VonageTransport(vonageOpts)],
+    (failed, error) => logger.warn(`sms transport failed over: ${error}`),
+  ),
+});
+```
+
+The last error is rethrown only if **every** transport fails. The optional second argument is called
+on each failover so you can log/alert. It mirrors `FailoverMailTransport` — both delegate to the
+core `failover()` helper.
 
 ## Per-tenant config
 

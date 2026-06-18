@@ -17,6 +17,11 @@ export interface SmsChannelModuleOptions {
   from?: string;
   /** Custom transport class. Defaults to {@link TwilioTransport}. */
   transport?: Type<SmsTransport>;
+  /**
+   * A pre-built transport instance, taking precedence over `transport`. Use it when the transport
+   * needs constructor arguments — e.g. `new FailoverSmsTransport([twilio, vonage])`.
+   */
+  transportInstance?: SmsTransport;
   /** Twilio credentials for the default transport. */
   twilio?: TwilioOptions;
   /** Vonage credentials. Supply when using {@link VonageTransport}. */
@@ -65,11 +70,15 @@ export class SmsChannelModule {
       { provide: SMS_TWILIO_OPTIONS, useValue: options.twilio ?? {} },
       { provide: SMS_VONAGE_OPTIONS, useValue: options.vonage ?? {} },
       { provide: SMS_SNS_OPTIONS, useValue: options.sns ?? {} },
-      transportClass,
-      { provide: SMS_TRANSPORT, useExisting: transportClass },
       { provide: SMS_TRANSPORT_RESOLVER, useValue: options.resolveTransport ?? null },
       SmsChannel,
     ];
+
+    if (options.transportInstance) {
+      providers.push({ provide: SMS_TRANSPORT, useValue: options.transportInstance });
+    } else {
+      providers.push(transportClass, { provide: SMS_TRANSPORT, useExisting: transportClass });
+    }
 
     return {
       module: SmsChannelModule,

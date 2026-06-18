@@ -54,7 +54,7 @@ export class TwilioTransport implements SmsTransport {
  *
  * ```ts
  * SmsChannelModule.forRoot({
- *   transport: new FailoverSmsTransport([twilioTransport, vonageTransport]),
+ *   transportInstance: new FailoverSmsTransport([twilioTransport, vonageTransport]),
  * });
  * ```
  */
