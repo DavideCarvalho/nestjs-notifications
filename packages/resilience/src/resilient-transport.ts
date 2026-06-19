@@ -47,7 +47,10 @@ export interface ResilientTransport<P> {
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
-const DEFAULT_BREAKER: ResilientBreakerOptions = Object.freeze({ threshold: 5, cooldownMs: 30_000 });
+const DEFAULT_BREAKER: ResilientBreakerOptions = Object.freeze({
+  threshold: 5,
+  cooldownMs: 30_000,
+});
 
 /**
  * Wrap an ordered list of provider transports into a single resilient transport.
