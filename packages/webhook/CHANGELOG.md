@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-webhook
 
+## 0.5.1
+
+### Patch Changes
+
+- 9402607: Internal refactors (behavior-preserving): extract a shared `BaseChannel` + common HTTP helpers to dedupe the 8 channel adapters, and add a `defineChannelModule` factory that the simple HTTP channels (slack/discord/teams/telegram/webhook) delegate to.
+
 ## 0.5.0
 
 ### Minor Changes
