@@ -13,7 +13,6 @@ export {
   type MailTransportPayload,
   type SMTPOptions,
   NodemailerTransport,
-  FailoverMailTransport,
 } from './transport';
 export {
   SesTransport,

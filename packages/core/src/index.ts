@@ -45,7 +45,6 @@ export {
   baseLocale,
 } from './localization';
 export { LocalizationService } from './localization.service';
-export { failover, type FailoverListener } from './failover';
 export {
   type FallbackAware,
   type FallbackPolicy,

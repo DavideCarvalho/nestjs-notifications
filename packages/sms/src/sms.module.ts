@@ -19,7 +19,7 @@ export interface SmsChannelModuleOptions {
   transport?: Type<SmsTransport>;
   /**
    * A pre-built transport instance, taking precedence over `transport`. Use it when the transport
-   * needs constructor arguments — e.g. `new FailoverSmsTransport([twilio, vonage])`.
+   * needs constructor arguments — e.g. a resilientTransport() from @dudousxd/nestjs-notifications-resilience.
    */
   transportInstance?: SmsTransport;
   /** Twilio credentials for the default transport. */

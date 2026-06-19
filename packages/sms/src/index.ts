@@ -4,7 +4,6 @@ export {
   type SmsTransportPayload,
   type TwilioOptions,
   TwilioTransport,
-  FailoverSmsTransport,
 } from './transport';
 export { VonageTransport, type VonageOptions } from './vonage.transport';
 export { SnsTransport, type SnsOptions } from './sns.transport';

@@ -1,4 +1,3 @@
-import { failover } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { MAIL_SMTP_OPTIONS } from './tokens';
@@ -66,35 +65,5 @@ export class NodemailerTransport implements MailTransport {
       text: payload.text,
       ...(payload.attachments?.length ? { attachments: payload.attachments } : {}),
     });
-  }
-}
-
-/**
- * Wraps an ordered list of transports and tries each in turn until one succeeds — a simple
- * provider failover (e.g. SES went down → fall back to Resend). The last error is rethrown
- * if every transport fails.
- *
- * ```ts
- * MailChannelModule.forRoot({
- *   transport: new FailoverMailTransport([sesTransport, resendTransport]),
- * });
- * ```
- */
-export class FailoverMailTransport implements MailTransport {
-  constructor(
-    private readonly transports: MailTransport[],
-    private readonly onFailover?: (failed: MailTransport, error: unknown) => void,
-  ) {
-    if (transports.length === 0) {
-      throw new Error('FailoverMailTransport needs at least one transport.');
-    }
-  }
-
-  async send(payload: MailTransportPayload): Promise<void> {
-    await failover(
-      this.transports,
-      (transport) => transport.send(payload),
-      this.onFailover && ((transport, error) => this.onFailover?.(transport, error)),
-    );
   }
 }

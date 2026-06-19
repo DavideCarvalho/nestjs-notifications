@@ -17,7 +17,7 @@ export interface MailChannelModuleOptions {
   transport?: Type<MailTransport>;
   /**
    * A pre-built transport instance. Use this for transports that need constructor args, such
-   * as `new FailoverMailTransport([ses, resend])`. Takes precedence over `transport`.
+   * as a `resilientTransport()` from `@dudousxd/nestjs-notifications-resilience`. Takes precedence over `transport`.
    */
   transportInstance?: MailTransport;
   /** Custom renderer class. Defaults to {@link DefaultMailRenderer}. */

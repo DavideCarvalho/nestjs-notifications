@@ -1,4 +1,3 @@
-import { failover } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
 import twilio from 'twilio';
 import { SMS_TWILIO_OPTIONS } from './tokens';
@@ -44,35 +43,5 @@ export class TwilioTransport implements SmsTransport {
       ...(from !== undefined ? { from } : {}),
       body: payload.text,
     });
-  }
-}
-
-/**
- * Wraps an ordered list of SMS transports and tries each in turn until one succeeds — provider
- * failover (e.g. Twilio is down → fall back to Vonage). The last error is rethrown if every
- * transport fails. Mirrors `FailoverMailTransport`; both delegate to core's `failover()`.
- *
- * ```ts
- * SmsChannelModule.forRoot({
- *   transportInstance: new FailoverSmsTransport([twilioTransport, vonageTransport]),
- * });
- * ```
- */
-export class FailoverSmsTransport implements SmsTransport {
-  constructor(
-    private readonly transports: SmsTransport[],
-    private readonly onFailover?: (failed: SmsTransport, error: unknown) => void,
-  ) {
-    if (transports.length === 0) {
-      throw new Error('FailoverSmsTransport needs at least one transport.');
-    }
-  }
-
-  async send(payload: SmsTransportPayload): Promise<void> {
-    await failover(
-      this.transports,
-      (transport) => transport.send(payload),
-      this.onFailover && ((transport, error) => this.onFailover?.(transport, error)),
-    );
   }
 }
