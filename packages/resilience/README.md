@@ -79,3 +79,11 @@ share the `Symbol.for('@dudousxd/nestjs-context:accessor')` accessor).
   (e.g. BullMQ) retries by skipping a now-open provider. The "succeeded-but-reported-failed" case is
   the confirmation/wait-based path and is out of scope; pair failover with the idempotency
   dispatch-guard for effectively-once semantics.
+
+## Development note (pre-publish)
+
+Until `@dudousxd/nestjs-resilience` is published to npm, this package's `@dudousxd/nestjs-resilience`
+**devDependency** is an interim local `file:` link to the sibling `nestjs-resilience` repo (so it can
+build and test in this monorepo). The shipped **peerDependency** already targets the published range
+`>=0.1.0 <1.0.0`. Before publishing this package — and before relying on a fresh-clone install — publish
+`@dudousxd/nestjs-resilience` and change the devDependency to the published version (`^0.1.0`).
