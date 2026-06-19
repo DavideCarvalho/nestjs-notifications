@@ -3,15 +3,10 @@
   "pages": [
     "index",
     "getting-started",
-    "---Concepts---",
     "concepts",
-    "---Channels---",
     "channels",
-    "---Dispatchers---",
     "dispatchers",
-    "---Recipes---",
     "recipes",
-    "---Reference---",
     "reference"
   ]
 }
