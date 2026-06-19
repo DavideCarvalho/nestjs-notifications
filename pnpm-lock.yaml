@@ -505,8 +505,8 @@ importers:
   packages/resilience:
     devDependencies:
       '@dudousxd/nestjs-resilience':
-        specifier: file:../../../nestjs-resilience/packages/core
-        version: file:../nestjs-resilience/packages/core(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26)
+        specifier: ^0.2.0
+        version: 0.2.0(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26)
       '@nestjs/common':
         specifier: ^11.0.0
         version: 11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -967,8 +967,8 @@ packages:
       '@nestjs/core': '>=10.0.0'
       reflect-metadata: '>=0.1.13'
 
-  '@dudousxd/nestjs-resilience@file:../nestjs-resilience/packages/core':
-    resolution: {directory: ../nestjs-resilience/packages/core, type: directory}
+  '@dudousxd/nestjs-resilience@0.2.0':
+    resolution: {integrity: sha512-AyuBvUTtJZxMaKWQ1LoQl92x7Sn1uenWmiKH76eepwz7LaRdjOaGIO/P59Im5UhTEAdVOoqG5pJ53KVlot51Eg==}
     peerDependencies:
       '@dudousxd/nestjs-diagnostics': '>=0.2.0 <1'
       '@nestjs/common': ^10 || ^11
@@ -7452,7 +7452,7 @@ snapshots:
       '@nestjs/core': 11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.26)(@nestjs/websockets@11.1.26)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       reflect-metadata: 0.2.2
 
-  '@dudousxd/nestjs-resilience@file:../nestjs-resilience/packages/core(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26)':
+  '@dudousxd/nestjs-resilience@0.2.0(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.26)':
     dependencies:
       '@nestjs/common': 11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core': 11.1.26(@nestjs/common@11.1.26(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@11.1.26)(@nestjs/websockets@11.1.26)(reflect-metadata@0.2.2)(rxjs@7.8.2)
