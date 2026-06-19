@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-diagnostics",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Aviary diagnostics bus integration for nestjs-notifications — every send/sent/failed on aviary:notifications:*",
   "license": "MIT",
   "author": "Davide Carvalho",
