@@ -53,7 +53,7 @@ export class AppModule {}
 | --- | --- | --- | --- |
 | `from` | `string` | — | Default sender number for messages that don't set their own. |
 | `transport` | `Type<SmsTransport>` | `TwilioTransport` | Transport class used to deliver. |
-| `transportInstance` | `SmsTransport` | — | A pre-built transport instance (takes precedence over `transport`). Use for transports needing constructor args, e.g. [`FailoverSmsTransport`](#multi-provider-failover). |
+| `transportInstance` | `SmsTransport` | — | A pre-built transport instance (takes precedence over `transport`). Use for transports needing constructor args, e.g. a [resilient failover transport](#multi-provider-failover). |
 | `twilio` | `{ accountSid, authToken, from? }` | — | Credentials for the built-in `TwilioTransport`. |
 | `vonage` | `{ apiKey, apiSecret, from? }` | — | Credentials for the built-in `VonageTransport`. |
 | `sns` | `{ region, credentials?, senderId? }` | — | Config for the built-in AWS `SnsTransport`. |
@@ -173,30 +173,42 @@ SmsChannelModule.forRoot({ from: '+15555550100', transport: VonageTransport });
 
 ## Multi-provider failover
 
-`FailoverSmsTransport` wraps an ordered list of transports and tries each until one succeeds — so when
-Twilio is down, the next provider (say Vonage) takes over. Because it needs its list at construction
-time, pass it as a pre-built instance via `transportInstance` (which takes precedence over the
-`transport` class):
+`resilientTransport` (from [`@dudousxd/nestjs-notifications-resilience`](https://davidecarvalho.github.io/aviary/docs/resilience))
+wraps an ordered list of transports and tries each until one succeeds — so when Twilio is down, the
+next provider (say Vonage) takes over. Beyond plain try-in-order, it adds a **per-provider circuit
+breaker** (a known-dead provider is skipped instantly instead of retried every send) and a
+**per-attempt timeout** (a slow provider is treated as a failure). Pass it as a pre-built instance
+via `transportInstance` (which takes precedence over the `transport` class):
+
+```bash
+pnpm add @dudousxd/nestjs-notifications-resilience @dudousxd/nestjs-resilience
+```
 
 ```ts title="app.module.ts"
-import {
-  FailoverSmsTransport,
-  TwilioTransport,
-  VonageTransport,
-} from '@dudousxd/nestjs-notifications-sms';
+import { TwilioTransport, VonageTransport } from '@dudousxd/nestjs-notifications-sms';
+import { resilientTransport } from '@dudousxd/nestjs-notifications-resilience';
 
 SmsChannelModule.forRoot({
   from: '+15555550100',
-  transportInstance: new FailoverSmsTransport(
-    [new TwilioTransport(twilioOpts), new VonageTransport(vonageOpts)],
-    (failed, error) => logger.warn(`sms transport failed over: ${error}`),
+  transportInstance: resilientTransport(
+    [
+      { id: 'twilio', transport: new TwilioTransport(twilioOpts) },
+      { id: 'vonage', transport: new VonageTransport(vonageOpts) },
+    ],
+    {
+      keyPrefix: 'sms',                              // circuit keys: 'sms:twilio', 'sms:vonage'
+      timeoutMs: 8_000,                              // per-attempt timeout
+      breaker: { threshold: 5, cooldownMs: 30_000 }, // open after 5 failures, probe after 30s
+      onFailover: (id, error) => logger.warn(`sms provider ${id} failed over: ${error}`),
+    },
   ),
 });
 ```
 
-The last error is rethrown only if **every** transport fails. The optional second argument is called
-on each failover so you can log/alert. It mirrors `FailoverMailTransport` — both delegate to the
-core `failover()` helper.
+The last error is rethrown only if **every** provider fails. By default breaker state is per-process;
+pass a distributed [`@dudousxd/nestjs-resilience-store-*`](https://davidecarvalho.github.io/aviary/docs/resilience)
+adapter as `store` to share it fleet-wide. The same `resilientTransport` works for the mail channel —
+it's generic over any `{ send(payload) }` transport.
 
 ## Per-tenant config
 

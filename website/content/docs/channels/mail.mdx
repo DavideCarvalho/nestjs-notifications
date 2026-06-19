@@ -156,24 +156,39 @@ client, your provider SDK).
 
 ### Multi-provider failover
 
-`FailoverMailTransport` wraps an ordered list of transports and tries each until one succeeds — so
-when SES is down, the next provider (say Resend) takes over. Pass it as a pre-built instance via
-`transportInstance`:
+`resilientTransport` (from [`@dudousxd/nestjs-notifications-resilience`](https://davidecarvalho.github.io/aviary/docs/resilience))
+wraps an ordered list of transports and tries each until one succeeds — so when SES is down, the next
+provider (say Resend) takes over. It adds a **per-provider circuit breaker** (a known-dead provider is
+skipped instead of retried every send) and a **per-attempt timeout**. Pass it as a pre-built instance
+via `transportInstance`:
+
+```bash
+pnpm add @dudousxd/nestjs-notifications-resilience @dudousxd/nestjs-resilience
+```
 
 ```ts
-import { FailoverMailTransport, NodemailerTransport } from '@dudousxd/nestjs-notifications-mail';
+import { resilientTransport } from '@dudousxd/nestjs-notifications-resilience';
 
 MailChannelModule.forRoot({
   from: 'no-reply@example.com',
-  transportInstance: new FailoverMailTransport(
-    [sesTransport, resendTransport],
-    (failed, error) => logger.warn(`mail transport failed over: ${error}`),
+  transportInstance: resilientTransport(
+    [
+      { id: 'ses', transport: sesTransport },
+      { id: 'resend', transport: resendTransport },
+    ],
+    {
+      keyPrefix: 'mail',
+      timeoutMs: 10_000,
+      breaker: { threshold: 5, cooldownMs: 30_000 },
+      onFailover: (id, error) => logger.warn(`mail provider ${id} failed over: ${error}`),
+    },
   ),
 });
 ```
 
-The last error is rethrown only if **every** transport fails. The optional second argument is called
-on each failover so you can log/alert.
+The last error is rethrown only if **every** provider fails. Breaker state is per-process by default;
+pass a distributed [`@dudousxd/nestjs-resilience-store-*`](https://davidecarvalho.github.io/aviary/docs/resilience)
+adapter as `store` to share it fleet-wide.
 
 ## Renderers
 
