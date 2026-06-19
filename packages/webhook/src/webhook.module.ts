@@ -1,4 +1,5 @@
-import { type DynamicModule, Module, type Provider } from '@nestjs/common';
+import { defineChannelModule } from '@dudousxd/nestjs-notifications-core';
+import { type DynamicModule, Module } from '@nestjs/common';
 import { WEBHOOK_OPTIONS, WEBHOOK_OPTIONS_RESOLVER } from './tokens';
 import {
   WebhookChannel,
@@ -37,17 +38,13 @@ export class WebhookChannelModule {
       ...(options.headers !== undefined ? { headers: options.headers } : {}),
     };
 
-    const providers: Provider[] = [
-      { provide: WEBHOOK_OPTIONS, useValue: webhookOptions },
-      { provide: WEBHOOK_OPTIONS_RESOLVER, useValue: options.resolveOptions ?? null },
-      WebhookChannel,
-    ];
-
-    return {
+    return defineChannelModule({
       module: WebhookChannelModule,
-      global: options.global ?? true,
-      providers,
-      exports: [WebhookChannel],
-    };
+      channel: WebhookChannel,
+      optionsToken: WEBHOOK_OPTIONS,
+      options: webhookOptions,
+      resolver: { token: WEBHOOK_OPTIONS_RESOLVER, value: options.resolveOptions },
+      ...(options.global !== undefined ? { global: options.global } : {}),
+    });
   }
 }

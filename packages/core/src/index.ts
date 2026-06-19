@@ -13,6 +13,7 @@ export * from './tokens';
 export * from './events';
 export * from './errors';
 export { NotificationsModule } from './notifications.module';
+export { defineChannelModule, type ChannelModuleConfig } from './define-channel-module';
 export {
   NotificationService,
   type ScopedNotifier,
