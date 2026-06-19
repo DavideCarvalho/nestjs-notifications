@@ -1,12 +1,12 @@
 import {
+  BaseChannel,
   type ChannelContext,
-  type ChannelDriver,
   type DeliveryContext,
-  MissingChannelMethodError,
   type Notifiable,
   type Notification,
   createChannel,
-  getHandler,
+  postJson,
+  resolveWebhookUrl,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
@@ -31,65 +31,36 @@ export interface TeamsNotification extends Notification {
   toTeams(ctx: ChannelContext): TeamsMessage | Record<string, unknown>;
 }
 
-function isHttpsUrl(value: unknown): value is string {
-  return typeof value === 'string' && /^https:\/\//i.test(value);
-}
-
 /**
  * Delivers a notification to Microsoft Teams via an incoming webhook. The route from
  * `routeNotificationFor('teams')` may be a webhook URL; otherwise the configured
  * `webhookUrl` is used.
  */
 @Injectable()
-export class TeamsChannel implements ChannelDriver {
+export class TeamsChannel extends BaseChannel {
   readonly channel = 'teams';
 
   constructor(
     @Inject(TEAMS_OPTIONS)
     private readonly options: TeamsChannelOptions,
-  ) {}
+  ) {
+    super();
+  }
 
   async send(
     notifiable: Notifiable,
     notification: Notification,
     context?: DeliveryContext,
   ): Promise<void> {
-    const handler = getHandler(notification, 'teams', 'toTeams');
-    if (!handler) {
-      const name =
-        (notification.constructor as { notificationName?: string }).notificationName ??
-        notification.constructor.name;
-      throw new MissingChannelMethodError('teams', 'toTeams()', name);
-    }
-
-    const result = handler({
+    const result = this.buildPayload<TeamsMessage | Record<string, unknown>>(
+      notification,
       notifiable,
-      localization: context?.localization,
-      tenant: context?.tenant,
-    }) as TeamsMessage | Record<string, unknown>;
+      'toTeams',
+      context,
+    );
     const payload = result instanceof TeamsMessage ? result.toPayload() : result;
     const route = routeFor(notifiable, 'teams', notification);
-
-    const webhookUrl = isHttpsUrl(route) ? route : this.options.webhookUrl;
-    if (!webhookUrl) {
-      throw new Error(
-        'The teams channel needs a webhook URL. Return one from ' +
-          'routeNotificationFor("teams"), or set webhookUrl in forRoot().',
-      );
-    }
-
-    await this.post(webhookUrl, payload);
-  }
-
-  private async post(url: string, body: object): Promise<void> {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Teams request to ${url} failed with status ${response.status}.`);
-    }
+    const webhookUrl = resolveWebhookUrl(route, this.options.webhookUrl, 'teams');
+    await postJson(webhookUrl, payload, { label: 'Teams' });
   }
 }

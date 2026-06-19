@@ -1,16 +1,14 @@
 import {
+  BaseChannel,
   type ChannelContext,
-  type ChannelDriver,
   type DeliveryContext,
-  MissingChannelMethodError,
   type Notifiable,
   type Notification,
   createChannel,
-  getHandler,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { SmsMessage } from './sms-message';
+import type { SmsMessage } from './sms-message';
 import { SMS_OPTIONS, SMS_TRANSPORT, SMS_TRANSPORT_RESOLVER } from './tokens';
 import type { SmsTransport } from './transport';
 
@@ -36,7 +34,7 @@ export interface SmsNotification extends Notification {
  * recipient comes from `routeNotificationFor('sms')`.
  */
 @Injectable()
-export class SmsChannel implements ChannelDriver {
+export class SmsChannel extends BaseChannel {
   readonly channel = 'sms';
 
   constructor(
@@ -47,32 +45,23 @@ export class SmsChannel implements ChannelDriver {
     @Optional()
     @Inject(SMS_TRANSPORT_RESOLVER)
     private readonly resolveTransport?: SmsTransportResolver,
-  ) {}
+  ) {
+    super();
+  }
 
   async send(
     notifiable: Notifiable,
     notification: Notification,
     context?: DeliveryContext,
   ): Promise<void> {
-    const transport =
-      context?.tenant && this.resolveTransport
-        ? this.resolveTransport(context.tenant)
-        : this.transport;
+    const transport = this.forTenant(this.transport, context, this.resolveTransport);
     const recipient = String(routeFor(notifiable, 'sms', notification));
-
-    const handler = getHandler(notification, 'sms', 'toSms');
-    if (!handler) {
-      const name =
-        (notification.constructor as { notificationName?: string }).notificationName ??
-        notification.constructor.name;
-      throw new MissingChannelMethodError('sms', 'toSms()', name);
-    }
-
-    const result = handler({
+    const result = this.buildPayload<SmsMessage | string>(
+      notification,
       notifiable,
-      localization: context?.localization,
-      tenant: context?.tenant,
-    }) as SmsMessage | string;
+      'toSms',
+      context,
+    );
 
     const text = typeof result === 'string' ? result : result.text;
     const msgFrom = typeof result === 'string' ? undefined : result.fromNumber;

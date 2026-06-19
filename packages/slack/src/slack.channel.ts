@@ -1,16 +1,16 @@
 import {
+  BaseChannel,
   type ChannelContext,
-  type ChannelDriver,
   type DeliveryContext,
-  MissingChannelMethodError,
   type Notifiable,
   type Notification,
   createChannel,
-  getHandler,
+  isHttpsUrl,
+  postJson,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import type { SlackMessage, SlackPayload } from './slack-message';
+import type { SlackMessage } from './slack-message';
 import { SLACK_OPTIONS, SLACK_OPTIONS_RESOLVER } from './tokens';
 
 /** Channel handle: use as `@Slack()` on a payload method, or as a token in `via()`. */
@@ -36,17 +36,13 @@ export interface SlackNotification extends Notification {
   toSlack(ctx: ChannelContext): SlackMessage;
 }
 
-function isHttpsUrl(value: unknown): value is string {
-  return typeof value === 'string' && /^https:\/\//i.test(value);
-}
-
 /**
  * Delivers a notification to Slack via an incoming webhook, or the Web API
  * (`chat.postMessage`) when a bot token is configured. The route from
  * `routeNotificationFor('slack')` may be a webhook URL or a channel id.
  */
 @Injectable()
-export class SlackChannel implements ChannelDriver {
+export class SlackChannel extends BaseChannel {
   readonly channel = 'slack';
 
   constructor(
@@ -55,34 +51,28 @@ export class SlackChannel implements ChannelDriver {
     @Optional()
     @Inject(SLACK_OPTIONS_RESOLVER)
     private readonly resolveOptions?: SlackOptionsResolver,
-  ) {}
+  ) {
+    super();
+  }
 
   async send(
     notifiable: Notifiable,
     notification: Notification,
     context?: DeliveryContext,
   ): Promise<void> {
-    const options =
-      context?.tenant && this.resolveOptions ? this.resolveOptions(context.tenant) : this.options;
-
-    const handler = getHandler(notification, 'slack', 'toSlack');
-    if (!handler) {
-      const name =
-        (notification.constructor as { notificationName?: string }).notificationName ??
-        notification.constructor.name;
-      throw new MissingChannelMethodError('slack', 'toSlack()', name);
-    }
-
-    const message = handler({
-      notifiable,
-      localization: context?.localization,
-      tenant: context?.tenant,
-    }) as SlackMessage;
+    const options = this.forTenant(this.options, context, this.resolveOptions);
+    const message = this.buildPayload<SlackMessage>(notification, notifiable, 'toSlack', context);
     const payload = message.toPayload();
     const route = routeFor(notifiable, 'slack', notification);
 
     if (options.token) {
-      await this.postViaWebApi(options, payload, route);
+      const channel =
+        typeof route === 'string' && !isHttpsUrl(route) ? route : options.defaultChannel;
+      await postJson(
+        CHAT_POST_MESSAGE_URL,
+        { ...payload, channel },
+        { label: 'Slack', headers: { Authorization: `Bearer ${options.token}` } },
+      );
       return;
     }
 
@@ -94,37 +84,6 @@ export class SlackChannel implements ChannelDriver {
       );
     }
 
-    await this.post(webhookUrl, payload);
-  }
-
-  private async postViaWebApi(
-    options: SlackChannelOptions,
-    payload: SlackPayload,
-    route: unknown,
-  ): Promise<void> {
-    const channel =
-      typeof route === 'string' && !isHttpsUrl(route) ? route : options.defaultChannel;
-
-    await this.post(
-      CHAT_POST_MESSAGE_URL,
-      { ...payload, channel },
-      { Authorization: `Bearer ${options.token}` },
-    );
-  }
-
-  private async post(
-    url: string,
-    body: object,
-    extraHeaders: Record<string, string> = {},
-  ): Promise<void> {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...extraHeaders },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Slack request to ${url} failed with status ${response.status}.`);
-    }
+    await postJson(webhookUrl, payload, { label: 'Slack' });
   }
 }

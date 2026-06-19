@@ -1,12 +1,11 @@
 import {
+  BaseChannel,
   type ChannelContext,
-  type ChannelDriver,
   type DeliveryContext,
-  MissingChannelMethodError,
   type Notifiable,
   type Notification,
   createChannel,
-  getHandler,
+  postJson,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
@@ -36,32 +35,27 @@ export interface TelegramNotification extends Notification {
  * comes from `routeNotificationFor('telegram')`.
  */
 @Injectable()
-export class TelegramChannel implements ChannelDriver {
+export class TelegramChannel extends BaseChannel {
   readonly channel = 'telegram';
 
   constructor(
     @Inject(TELEGRAM_OPTIONS)
     private readonly options: TelegramChannelOptions,
-  ) {}
+  ) {
+    super();
+  }
 
   async send(
     notifiable: Notifiable,
     notification: Notification,
     context?: DeliveryContext,
   ): Promise<void> {
-    const handler = getHandler(notification, 'telegram', 'toTelegram');
-    if (!handler) {
-      const name =
-        (notification.constructor as { notificationName?: string }).notificationName ??
-        notification.constructor.name;
-      throw new MissingChannelMethodError('telegram', 'toTelegram()', name);
-    }
-
-    const result = handler({
+    const result = this.buildPayload<TelegramMessage | string>(
+      notification,
       notifiable,
-      localization: context?.localization,
-      tenant: context?.tenant,
-    }) as TelegramMessage | string;
+      'toTelegram',
+      context,
+    );
     const message = result instanceof TelegramMessage ? result : new TelegramMessage(result);
     const payload = message.toPayload();
 
@@ -78,18 +72,6 @@ export class TelegramChannel implements ChannelDriver {
     }
 
     const url = `https://api.telegram.org/bot${this.options.botToken}/sendMessage`;
-    await this.post(url, { chat_id: chatId, ...payload });
-  }
-
-  private async post(url: string, body: object): Promise<void> {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Telegram request to ${url} failed with status ${response.status}.`);
-    }
+    await postJson(url, { chat_id: chatId, ...payload }, { label: 'Telegram' });
   }
 }

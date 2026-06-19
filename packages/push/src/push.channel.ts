@@ -1,12 +1,10 @@
 import {
+  BaseChannel,
   type ChannelContext,
-  type ChannelDriver,
   type DeliveryContext,
-  MissingChannelMethodError,
   type Notifiable,
   type Notification,
   createChannel,
-  getHandler,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
@@ -31,7 +29,7 @@ export interface PushNotification extends Notification {
  * a single device token / subscription, or an array of them (each gets the message).
  */
 @Injectable()
-export class PushChannel implements ChannelDriver {
+export class PushChannel extends BaseChannel {
   readonly channel = 'push';
   private readonly logger = new Logger('PushChannel');
 
@@ -44,32 +42,18 @@ export class PushChannel implements ChannelDriver {
     @Optional()
     @Inject(PUSH_INVALID_TOKEN_CALLBACK)
     private readonly onInvalidTokens?: InvalidTokenCallback,
-  ) {}
+  ) {
+    super();
+  }
 
   async send(
     notifiable: Notifiable,
     notification: Notification,
     context?: DeliveryContext,
   ): Promise<void> {
-    const transport =
-      context?.tenant && this.resolveTransport
-        ? this.resolveTransport(context.tenant)
-        : this.transport;
+    const transport = this.forTenant(this.transport, context, this.resolveTransport);
     const target = routeFor(notifiable, 'push', notification);
-
-    const handler = getHandler(notification, 'push', 'toPush');
-    if (!handler) {
-      const name =
-        (notification.constructor as { notificationName?: string }).notificationName ??
-        notification.constructor.name;
-      throw new MissingChannelMethodError('push', 'toPush()', name);
-    }
-
-    const message = handler({
-      notifiable,
-      localization: context?.localization,
-      tenant: context?.tenant,
-    }) as PushMessage;
+    const message = this.buildPayload<PushMessage>(notification, notifiable, 'toPush', context);
 
     if (Array.isArray(target)) {
       // Prefer a single multicast round-trip when the transport supports it, and report any
