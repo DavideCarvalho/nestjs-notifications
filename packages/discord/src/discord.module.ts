@@ -1,4 +1,5 @@
-import { type DynamicModule, Module, type Provider } from '@nestjs/common';
+import { defineChannelModule } from '@dudousxd/nestjs-notifications-core';
+import { type DynamicModule, Module } from '@nestjs/common';
 import { DiscordChannel, type DiscordChannelOptions } from './discord.channel';
 import { DISCORD_OPTIONS } from './tokens';
 
@@ -25,16 +26,12 @@ export class DiscordChannelModule {
       ...(options.webhookUrl !== undefined ? { webhookUrl: options.webhookUrl } : {}),
     };
 
-    const providers: Provider[] = [
-      { provide: DISCORD_OPTIONS, useValue: discordOptions },
-      DiscordChannel,
-    ];
-
-    return {
+    return defineChannelModule({
       module: DiscordChannelModule,
-      global: options.global ?? true,
-      providers,
-      exports: [DiscordChannel],
-    };
+      channel: DiscordChannel,
+      optionsToken: DISCORD_OPTIONS,
+      options: discordOptions,
+      ...(options.global !== undefined ? { global: options.global } : {}),
+    });
   }
 }

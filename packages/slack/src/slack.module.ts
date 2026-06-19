@@ -1,4 +1,5 @@
-import { type DynamicModule, Module, type Provider } from '@nestjs/common';
+import { defineChannelModule } from '@dudousxd/nestjs-notifications-core';
+import { type DynamicModule, Module } from '@nestjs/common';
 import { SlackChannel, type SlackChannelOptions, type SlackOptionsResolver } from './slack.channel';
 import { SLACK_OPTIONS, SLACK_OPTIONS_RESOLVER } from './tokens';
 
@@ -38,17 +39,13 @@ export class SlackChannelModule {
       ...(options.defaultChannel !== undefined ? { defaultChannel: options.defaultChannel } : {}),
     };
 
-    const providers: Provider[] = [
-      { provide: SLACK_OPTIONS, useValue: slackOptions },
-      { provide: SLACK_OPTIONS_RESOLVER, useValue: options.resolveOptions ?? null },
-      SlackChannel,
-    ];
-
-    return {
+    return defineChannelModule({
       module: SlackChannelModule,
-      global: options.global ?? true,
-      providers,
-      exports: [SlackChannel],
-    };
+      channel: SlackChannel,
+      optionsToken: SLACK_OPTIONS,
+      options: slackOptions,
+      resolver: { token: SLACK_OPTIONS_RESOLVER, value: options.resolveOptions },
+      ...(options.global !== undefined ? { global: options.global } : {}),
+    });
   }
 }

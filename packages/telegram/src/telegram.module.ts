@@ -1,4 +1,5 @@
-import { type DynamicModule, Module, type Provider } from '@nestjs/common';
+import { defineChannelModule } from '@dudousxd/nestjs-notifications-core';
+import { type DynamicModule, Module } from '@nestjs/common';
 import { TelegramChannel, type TelegramChannelOptions } from './telegram.channel';
 import { TELEGRAM_OPTIONS } from './tokens';
 
@@ -25,16 +26,12 @@ export class TelegramChannelModule {
       ...(options.botToken !== undefined ? { botToken: options.botToken } : {}),
     };
 
-    const providers: Provider[] = [
-      { provide: TELEGRAM_OPTIONS, useValue: telegramOptions },
-      TelegramChannel,
-    ];
-
-    return {
+    return defineChannelModule({
       module: TelegramChannelModule,
-      global: options.global ?? true,
-      providers,
-      exports: [TelegramChannel],
-    };
+      channel: TelegramChannel,
+      optionsToken: TELEGRAM_OPTIONS,
+      options: telegramOptions,
+      ...(options.global !== undefined ? { global: options.global } : {}),
+    });
   }
 }

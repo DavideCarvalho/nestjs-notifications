@@ -1,4 +1,5 @@
-import { type DynamicModule, Module, type Provider } from '@nestjs/common';
+import { defineChannelModule } from '@dudousxd/nestjs-notifications-core';
+import { type DynamicModule, Module } from '@nestjs/common';
 import { TeamsChannel, type TeamsChannelOptions } from './teams.channel';
 import { TEAMS_OPTIONS } from './tokens';
 
@@ -25,16 +26,12 @@ export class TeamsChannelModule {
       ...(options.webhookUrl !== undefined ? { webhookUrl: options.webhookUrl } : {}),
     };
 
-    const providers: Provider[] = [
-      { provide: TEAMS_OPTIONS, useValue: teamsOptions },
-      TeamsChannel,
-    ];
-
-    return {
+    return defineChannelModule({
       module: TeamsChannelModule,
-      global: options.global ?? true,
-      providers,
-      exports: [TeamsChannel],
-    };
+      channel: TeamsChannel,
+      optionsToken: TEAMS_OPTIONS,
+      options: teamsOptions,
+      ...(options.global !== undefined ? { global: options.global } : {}),
+    });
   }
 }
