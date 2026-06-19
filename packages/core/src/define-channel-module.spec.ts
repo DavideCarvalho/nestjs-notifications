@@ -30,7 +30,7 @@ class FakeChannelModule {
 }
 
 /** Find the `useValue` of a value-provider for `token` in a providers array. */
-function valueOf(providers: Provider[] | undefined, token: symbol): unknown {
+function useValueOf(providers: Provider[] | undefined, token: symbol): unknown {
   const p = (providers ?? []).find(
     (x): x is { provide: symbol; useValue: unknown } =>
       typeof x === 'object' && 'provide' in x && x.provide === token,
@@ -45,7 +45,7 @@ describe('defineChannelModule', () => {
     expect(mod.global).toBe(true);
     expect(mod.exports).toEqual([FakeChannel]);
     expect(mod.providers).toContain(FakeChannel);
-    expect(valueOf(mod.providers, OPTIONS)).toEqual({ url: 'https://x' });
+    expect(useValueOf(mod.providers, OPTIONS)).toEqual({ url: 'https://x' });
   });
 
   it('honors an explicit global:false', () => {
@@ -53,9 +53,11 @@ describe('defineChannelModule', () => {
   });
 
   it('registers the resolver token, defaulting an absent value to null', () => {
-    expect(valueOf(FakeChannelModule.forRoot({}).providers, RESOLVER)).toBeNull();
+    expect(useValueOf(FakeChannelModule.forRoot({}).providers, RESOLVER)).toBeNull();
     const fn = () => ({});
-    expect(valueOf(FakeChannelModule.forRoot({ resolveOptions: fn }).providers, RESOLVER)).toBe(fn);
+    expect(useValueOf(FakeChannelModule.forRoot({ resolveOptions: fn }).providers, RESOLVER)).toBe(
+      fn,
+    );
   });
 
   it('omits the resolver provider entirely when no resolver is configured', () => {
