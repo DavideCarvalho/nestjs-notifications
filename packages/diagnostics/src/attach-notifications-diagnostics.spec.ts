@@ -1,11 +1,11 @@
+import { type DiagnosticEvent, getChannel, resetRegistry } from '@dudousxd/nestjs-diagnostics';
 import {
+  type Notifiable,
+  type Notification,
   NotificationEvents,
   NotificationFailedEvent,
   NotificationSentEvent,
-  type Notifiable,
-  type Notification,
 } from '@dudousxd/nestjs-notifications-core';
-import { type DiagnosticEvent, getChannel, resetRegistry } from '@dudousxd/nestjs-diagnostics';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { afterEach, describe, expect, it } from 'vitest';
 import { attachNotificationsDiagnostics } from './attach-notifications-diagnostics';
@@ -54,7 +54,14 @@ describe('attachNotificationsDiagnostics', () => {
 
     emitter.emit(
       NotificationEvents.failed,
-      new NotificationFailedEvent(notifiable, notification, 'sms', new Error('boom'), 'tenant-1', 5),
+      new NotificationFailedEvent(
+        notifiable,
+        notification,
+        'sms',
+        new Error('boom'),
+        'tenant-1',
+        5,
+      ),
     );
 
     expect(failed.seen.length).toBe(1);

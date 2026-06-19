@@ -1,3 +1,4 @@
+import { emit } from '@dudousxd/nestjs-diagnostics';
 /**
  * Compile-time guard for the ChannelRegistry augmentation in ./channel-registry. The augmentation
  * has no runtime effect, so it cannot be guarded by a runtime (vitest) test — only by the type
@@ -7,7 +8,6 @@
  * compile.
  */
 import type { NotificationSentEvent } from '@dudousxd/nestjs-notifications-core';
-import { emit } from '@dudousxd/nestjs-diagnostics';
 import './channel-registry';
 
 declare const sentEvent: NotificationSentEvent;

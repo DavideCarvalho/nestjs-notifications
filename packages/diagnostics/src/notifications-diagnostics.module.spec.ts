@@ -10,7 +10,9 @@ const { attachSpy, offSpy } = vi.hoisted(() => {
   const offSpy = vi.fn();
   return { offSpy, attachSpy: vi.fn(() => offSpy) };
 });
-vi.mock('./attach-notifications-diagnostics', () => ({ attachNotificationsDiagnostics: attachSpy }));
+vi.mock('./attach-notifications-diagnostics', () => ({
+  attachNotificationsDiagnostics: attachSpy,
+}));
 
 import { NotificationsDiagnosticsModule } from './notifications-diagnostics.module';
 

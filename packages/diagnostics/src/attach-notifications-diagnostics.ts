@@ -1,16 +1,13 @@
+import { emit } from '@dudousxd/nestjs-diagnostics';
 import {
   NotificationEvents,
   type NotificationFailedEvent,
   type NotificationSendingEvent,
   type NotificationSentEvent,
 } from '@dudousxd/nestjs-notifications-core';
-import { emit } from '@dudousxd/nestjs-diagnostics';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 
-type NotificationEvent =
-  | NotificationSendingEvent
-  | NotificationSentEvent
-  | NotificationFailedEvent;
+type NotificationEvent = NotificationSendingEvent | NotificationSentEvent | NotificationFailedEvent;
 
 // (core event name) → (diagnostics channel event segment). The `notification.` prefix is dropped so
 // the channel reads `aviary:notifications:sent`, not `aviary:notifications:notification.sent`.
