@@ -1,19 +1,17 @@
 import { createHmac } from 'node:crypto';
 import {
+  BaseChannel,
   type ChannelContext,
-  type ChannelDriver,
   type DeliveryContext,
-  MissingChannelMethodError,
   type Notifiable,
   type Notification,
   createChannel,
-  getHandler,
+  postJson,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { WEBHOOK_OPTIONS, WEBHOOK_OPTIONS_RESOLVER } from './tokens';
 import { WebhookMessage } from './webhook-message';
-import type { WebhookMethod } from './webhook-message';
 
 const DEFAULT_SIGNATURE_HEADER = 'X-Signature-256';
 
@@ -54,7 +52,7 @@ export type WebhookOptionsResolver = (tenant: string) => WebhookChannelOptions;
  * `routeNotificationFor('webhook')` (a URL string), else from the configured default.
  */
 @Injectable()
-export class WebhookChannel implements ChannelDriver {
+export class WebhookChannel extends BaseChannel {
   readonly channel = 'webhook';
 
   constructor(
@@ -63,29 +61,22 @@ export class WebhookChannel implements ChannelDriver {
     @Optional()
     @Inject(WEBHOOK_OPTIONS_RESOLVER)
     private readonly resolveOptions?: WebhookOptionsResolver,
-  ) {}
+  ) {
+    super();
+  }
 
   async send(
     notifiable: Notifiable,
     notification: Notification,
     context?: DeliveryContext,
   ): Promise<void> {
-    const options =
-      context?.tenant && this.resolveOptions ? this.resolveOptions(context.tenant) : this.options;
-
-    const handler = getHandler(notification, 'webhook', 'toWebhook');
-    if (!handler) {
-      const name =
-        (notification.constructor as { notificationName?: string }).notificationName ??
-        notification.constructor.name;
-      throw new MissingChannelMethodError('webhook', 'toWebhook()', name);
-    }
-
-    const result = handler({
+    const options = this.forTenant(this.options, context, this.resolveOptions);
+    const result = this.buildPayload<WebhookMessage | Record<string, unknown>>(
+      notification,
       notifiable,
-      localization: context?.localization,
-      tenant: context?.tenant,
-    }) as WebhookMessage | Record<string, unknown>;
+      'toWebhook',
+      context,
+    );
     const message =
       result instanceof WebhookMessage ? result : new WebhookMessage().payload(result);
     const request = message.toRequest();
@@ -100,36 +91,14 @@ export class WebhookChannel implements ChannelDriver {
       );
     }
 
-    await this.post(options, url, request.method, request.body, request.headers);
-  }
-
-  private async post(
-    options: WebhookChannelOptions,
-    url: string,
-    method: WebhookMethod,
-    body: Record<string, unknown>,
-    messageHeaders: Record<string, string>,
-  ): Promise<void> {
-    const payload = JSON.stringify(body);
-    const headers: Record<string, string> = {
-      ...options.headers,
-      ...messageHeaders,
-      'Content-Type': 'application/json',
-    };
-
+    const headers: Record<string, string> = { ...options.headers, ...request.headers };
     if (options.secret) {
-      const signature = createHmac('sha256', options.secret).update(payload).digest('hex');
+      const signature = createHmac('sha256', options.secret)
+        .update(JSON.stringify(request.body))
+        .digest('hex');
       headers[options.signatureHeader ?? DEFAULT_SIGNATURE_HEADER] = `sha256=${signature}`;
     }
 
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: payload,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Webhook request to ${url} failed with status ${response.status}.`);
-    }
+    await postJson(url, request.body, { label: 'Webhook', method: request.method, headers });
   }
 }

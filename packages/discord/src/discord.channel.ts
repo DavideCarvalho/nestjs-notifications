@@ -1,12 +1,12 @@
 import {
+  BaseChannel,
   type ChannelContext,
-  type ChannelDriver,
   type DeliveryContext,
-  MissingChannelMethodError,
   type Notifiable,
   type Notification,
   createChannel,
-  getHandler,
+  postJson,
+  resolveWebhookUrl,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable } from '@nestjs/common';
@@ -27,65 +27,35 @@ export interface DiscordNotification extends Notification {
   toDiscord(ctx: ChannelContext): DiscordMessage;
 }
 
-function isHttpsUrl(value: unknown): value is string {
-  return typeof value === 'string' && /^https:\/\//i.test(value);
-}
-
 /**
  * Delivers a notification to Discord via an incoming webhook. The route from
  * `routeNotificationFor('discord')` may be a webhook URL; otherwise the configured
  * `webhookUrl` is used.
  */
 @Injectable()
-export class DiscordChannel implements ChannelDriver {
+export class DiscordChannel extends BaseChannel {
   readonly channel = 'discord';
 
   constructor(
     @Inject(DISCORD_OPTIONS)
     private readonly options: DiscordChannelOptions,
-  ) {}
+  ) {
+    super();
+  }
 
   async send(
     notifiable: Notifiable,
     notification: Notification,
     context?: DeliveryContext,
   ): Promise<void> {
-    const handler = getHandler(notification, 'discord', 'toDiscord');
-    if (!handler) {
-      const name =
-        (notification.constructor as { notificationName?: string }).notificationName ??
-        notification.constructor.name;
-      throw new MissingChannelMethodError('discord', 'toDiscord()', name);
-    }
-
-    const message = handler({
+    const message = this.buildPayload<DiscordMessage>(
+      notification,
       notifiable,
-      localization: context?.localization,
-      tenant: context?.tenant,
-    }) as DiscordMessage;
-    const payload = message.toPayload();
+      'toDiscord',
+      context,
+    );
     const route = routeFor(notifiable, 'discord', notification);
-
-    const webhookUrl = isHttpsUrl(route) ? route : this.options.webhookUrl;
-    if (!webhookUrl) {
-      throw new Error(
-        'The discord channel needs a webhook URL. Return one from ' +
-          'routeNotificationFor("discord"), or set webhookUrl in forRoot().',
-      );
-    }
-
-    await this.post(webhookUrl, payload);
-  }
-
-  private async post(url: string, body: object): Promise<void> {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Discord request to ${url} failed with status ${response.status}.`);
-    }
+    const webhookUrl = resolveWebhookUrl(route, this.options.webhookUrl, 'discord');
+    await postJson(webhookUrl, message.toPayload(), { label: 'Discord' });
   }
 }

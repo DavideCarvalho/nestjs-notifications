@@ -1,12 +1,10 @@
 import {
+  BaseChannel,
   type ChannelContext,
-  type ChannelDriver,
   type DeliveryContext,
-  MissingChannelMethodError,
   type Notifiable,
   type Notification,
   createChannel,
-  getHandler,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable, Optional } from '@nestjs/common';
@@ -39,7 +37,7 @@ export interface MailNotification extends Notification {
  * {@link MailTransport}. The recipient comes from `routeNotificationFor('mail')`.
  */
 @Injectable()
-export class MailChannel implements ChannelDriver {
+export class MailChannel extends BaseChannel {
   readonly channel = 'mail';
 
   constructor(
@@ -52,7 +50,9 @@ export class MailChannel implements ChannelDriver {
     @Optional()
     @Inject(MAIL_TRANSPORT_RESOLVER)
     private readonly resolveTransport?: (tenant: string) => MailTransport,
-  ) {}
+  ) {
+    super();
+  }
 
   async send(
     notifiable: Notifiable,
@@ -60,26 +60,9 @@ export class MailChannel implements ChannelDriver {
     context?: DeliveryContext,
   ): Promise<void> {
     const recipient = String(routeFor(notifiable, 'mail', notification));
-
-    const handler = getHandler(notification, 'mail', 'toMail');
-    if (!handler) {
-      const name =
-        (notification.constructor as { notificationName?: string }).notificationName ??
-        notification.constructor.name;
-      throw new MissingChannelMethodError('mail', 'toMail()', name);
-    }
-
-    const message = handler({
-      notifiable,
-      localization: context?.localization,
-      tenant: context?.tenant,
-    }) as MailMessage;
+    const message = this.buildPayload<MailMessage>(notification, notifiable, 'toMail', context);
     const rendered = await this.renderer.render(message);
-
-    const transport =
-      context?.tenant && this.resolveTransport
-        ? this.resolveTransport(context.tenant)
-        : this.defaultTransport;
+    const transport = this.forTenant(this.defaultTransport, context, this.resolveTransport);
 
     await transport.send({
       to: recipient,

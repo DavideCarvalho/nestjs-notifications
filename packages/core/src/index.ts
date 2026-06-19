@@ -6,6 +6,8 @@ export {
   captureContext,
 } from './context-accessor';
 export * from './decorators';
+export { BaseChannel, notificationName } from './base-channel';
+export { isHttpsUrl, postJson, resolveWebhookUrl, type PostJsonOptions } from './channel-http';
 export * from './options';
 export * from './tokens';
 export * from './events';
