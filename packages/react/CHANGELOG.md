@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-react
 
+## 0.8.1
+
+### Patch Changes
+
+- 94c52f3: Fix "React is not defined" in the built bundle. tsup/esbuild compiled the package's JSX with the classic runtime (`React.createElement`) but never imported React, so consuming it from a modern automatic-runtime app bundle threw `React is not defined` at module load. Inject a React shim at build time so every `React` reference resolves to an import from the (peer) `react`, making the output self-contained.
+
 ## 0.8.0
 
 ### Minor Changes
