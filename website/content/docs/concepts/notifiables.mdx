@@ -115,8 +115,15 @@ The same applies to the async reference: an explicit `toNotifiableRef()` overrid
 Sometimes there's no entity at all — you just want to email an address. You don't need a notifiable
 for that; use [on-demand routing](/docs/recipes/on-demand):
 
-```ts
-await notifications.route('mail', 'ops@example.com').notify(new ServerDown());
+```ts title="alerts.service.ts"
+@Injectable()
+export class AlertsService {
+  constructor(private readonly notifications: NotificationService) {}
+
+  async serverDown() {
+    await this.notifications.route('mail', 'ops@example.com').notify(new ServerDown());
+  }
+}
 ```
 
 Under the hood that builds an anonymous notifiable that routes the given channel to the given value —

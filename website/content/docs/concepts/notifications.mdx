@@ -230,19 +230,38 @@ delivery time per notifiable and is the cleanest way to honour a per-recipient o
 `shouldSend` and `via()` live on the notification. When the **caller** wants to override the channels
 for one specific send, chain `only` (allow-list) or `except` (deny-list) off the service:
 
-```ts
-// Only email, even if the notification's via() also lists database + push.
-await notifications.only(['mail']).send(user, new InvoicePaid(invoiceId));
+```ts title="billing.service.ts"
+@Injectable()
+export class BillingService {
+  constructor(private readonly notifications: NotificationService) {}
 
-// Everything the notification declares, minus SMS — for this send only.
-await notifications.except(['sms']).send(user, new Welcome());
+  async resendEmail(user: User, invoiceId: string) {
+    // Only email, even if the notification's via() also lists database + push.
+    await this.notifications.only(['mail']).send(user, new InvoicePaid(invoiceId));
+  }
+
+  async welcome(user: User) {
+    // Everything the notification declares, minus SMS — for this send only.
+    await this.notifications.except(['sms']).send(user, new Welcome());
+  }
+}
 ```
 
 They compose with [`forTenant`](/docs/concepts/multi-tenancy) and apply to `send`, `notify`,
 `sendNow`, and `sendAsync`:
 
-```ts
-await notifications.forTenant('acme').only(['mail', 'database']).send(user, new InvoicePaid(id));
+```ts title="billing.service.ts"
+@Injectable()
+export class BillingService {
+  constructor(private readonly notifications: NotificationService) {}
+
+  async paidForTenant(user: User, id: string) {
+    await this.notifications
+      .forTenant('acme')
+      .only(['mail', 'database'])
+      .send(user, new InvoicePaid(id));
+  }
+}
 ```
 
 A channel filtered out here never runs and isn't recorded in the `SendResult` — handy for "resend just

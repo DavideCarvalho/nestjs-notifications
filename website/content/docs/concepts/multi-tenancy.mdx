@@ -18,15 +18,29 @@ you opt in.
 `notifications.forTenant(id)` returns the same sending surface (`send`, `sendNow`, `route`, …), with
 every delivery scoped to that tenant:
 
-```ts
-await notifications.forTenant('acme').send(user, new InvoicePaid(invoice));
+```ts title="billing.service.ts"
+@Injectable()
+export class BillingService {
+  constructor(private readonly notifications: NotificationService) {}
+
+  async paid(user: User, invoice: Invoice) {
+    await this.notifications.forTenant('acme').send(user, new InvoicePaid(invoice));
+  }
+}
 ```
 
 To deliver the same notification to a user across several workspaces at once, use `forTenants` — the
 send **fans out**, one delivery (and one storage row) per tenant:
 
-```ts
-await notifications.forTenants(['acme', 'globex']).send(user, new Announcement());
+```ts title="announcements.service.ts"
+@Injectable()
+export class AnnouncementsService {
+  constructor(private readonly notifications: NotificationService) {}
+
+  async broadcast(user: User) {
+    await this.notifications.forTenants(['acme', 'globex']).send(user, new Announcement());
+  }
+}
 ```
 
 ## Or declare the tenant on the notification
@@ -63,9 +77,17 @@ per workspace.
 
 The read side mirrors the send side. Scope the query service to a tenant and the feed is isolated:
 
-```ts
-const acmeInbox = await notificationsQuery.forTenant('acme').unread(user);
-const acmeBadge = await notificationsQuery.forTenant('acme').unreadCount(user);
+```ts title="inbox.service.ts"
+@Injectable()
+export class InboxService {
+  constructor(private readonly notificationsQuery: NotificationsQueryService) {}
+
+  async acmeFeed(user: User) {
+    const inbox = await this.notificationsQuery.forTenant('acme').unread(user);
+    const badge = await this.notificationsQuery.forTenant('acme').unreadCount(user);
+    return { inbox, badge };
+  }
+}
 ```
 
 `NotificationsQueryService.forTenant(id)` filters every read (`all`, `unread`, `unreadCount`, …) to
@@ -98,10 +120,19 @@ additive.
 Every `SendResult` reports the tenant it was scoped to, so a fan-out tells you which workspace each
 delivery belongs to:
 
-```ts
-const results = await notifications.forTenants(['acme', 'globex']).send(user, new Announcement());
+```ts title="announcements.service.ts"
+@Injectable()
+export class AnnouncementsService {
+  constructor(private readonly notifications: NotificationService) {}
 
-results.map((r) => r.tenant); // ['acme', 'globex']
+  async broadcast(user: User) {
+    const results = await this.notifications
+      .forTenants(['acme', 'globex'])
+      .send(user, new Announcement());
+
+    return results.map((r) => r.tenant); // ['acme', 'globex']
+  }
+}
 ```
 
 `tenant` is `undefined` for single-tenant sends. Each entry still carries its per-channel
