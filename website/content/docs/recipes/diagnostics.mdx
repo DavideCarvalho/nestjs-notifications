@@ -1,0 +1,143 @@
+---
+title: Diagnostics integration
+description: Put every notification on the Aviary diagnostics bus with one import. React to send/sent/failed across the ecosystem via @OnDiagnostic or getChannel — typed, no call-site changes.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+`@dudousxd/nestjs-notifications-diagnostics` routes the core lifecycle events onto the
+[Aviary diagnostics bus](https://github.com/DavideCarvalho/nestjs-diagnostics) — the unified event
+backbone the ecosystem shares. Once imported, every notification's `sending` / `sent` / `failed`
+becomes observable on the **`aviary:notifications:<event>`** channel, so any diagnostics subscriber
+(your own services, Telescope, OpenTelemetry, …) can react to it. It works by listening to the
+events the core already emits, so there's nothing to wire at your call sites.
+
+<Steps>
+
+<Step>
+
+### Install
+
+The package needs `@nestjs/event-emitter` (you already have it for `NotificationsModule`):
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @dudousxd/nestjs-notifications-diagnostics
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @dudousxd/nestjs-notifications-diagnostics
+    ```
+  </Tab>
+</Tabs>
+
+</Step>
+
+<Step>
+
+### Import the module
+
+Add `NotificationsDiagnosticsModule.forRoot()` at the app root — import-and-forget, nothing else to
+configure:
+
+```ts title="app.module.ts"
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
+import { NotificationsDiagnosticsModule } from '@dudousxd/nestjs-notifications-diagnostics';
+
+@Module({
+  imports: [
+    EventEmitterModule.forRoot(), // required — the bridge resolves EventEmitter2
+    NotificationsModule.forRoot(),
+    NotificationsDiagnosticsModule.forRoot(), // [!code highlight]
+  ],
+})
+export class AppModule {}
+```
+
+</Step>
+
+</Steps>
+
+<Callout type="warn">
+  The bridge resolves the `EventEmitter2` singleton on module init. You must have
+  `EventEmitterModule.forRoot()` in the app — without it the module logs a one-line warning and
+  no-ops (full back-compat). You already need it for `NotificationsModule` anyway.
+</Callout>
+
+## What gets observed
+
+The core emits three lifecycle events, re-published as diagnostics channels (the `notification.`
+prefix is dropped — so the channel reads `aviary:notifications:sent`, not
+`aviary:notifications:notification.sent`):
+
+| Channel | When | Payload |
+| --- | --- | --- |
+| `aviary:notifications:sending` | Before a channel attempts delivery | `NotificationSendingEvent` |
+| `aviary:notifications:sent` | After a channel delivers successfully | `NotificationSentEvent` |
+| `aviary:notifications:failed` | When a channel throws | `NotificationFailedEvent` |
+
+The whole event instance is the payload — `notifiable`, `notification`, `channel`, `tenant`,
+`durationMs`, and (on `failed`) `error`. When a request carries a trace id (via
+[`@dudousxd/nestjs-context`](https://github.com/DavideCarvalho/nestjs-context)), it's propagated onto
+the diagnostics envelope so observers can correlate the delivery to its originating request.
+
+<Callout type="info">
+  One notification routed to three channels emits three `sent` (or `failed`) events — one per
+  delivery — because the bridge mirrors per-channel events, not per-send.
+</Callout>
+
+## Reacting in-app
+
+To run logic when a notification fails — alert on repeated failures, retry through a fallback
+channel, increment a metric — subscribe to the channel directly. Importing the diagnostics package
+also declaration-merges the three channels into the diagnostics `ChannelRegistry`, so
+`getChannel('notifications', …)` only accepts the valid event names and the payload is typed for
+you:
+
+```ts
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { getChannel, type DiagnosticEvent } from '@dudousxd/nestjs-diagnostics';
+import type { NotificationFailedEvent } from '@dudousxd/nestjs-notifications-core';
+// Side-effect import registers the typed `notifications` channels:
+import '@dudousxd/nestjs-notifications-diagnostics';
+
+@Injectable()
+export class NotificationFailureAlerts implements OnModuleInit {
+  onModuleInit() {
+    getChannel('notifications', 'failed').subscribe((msg) => {
+      const event = (msg as DiagnosticEvent).payload as NotificationFailedEvent;
+      this.alerts.page(`Notification failed on ${event.channel}`, event.error);
+    });
+  }
+}
+```
+
+There's one channel per lifecycle event under `aviary:notifications:<event>` — subscribe to each you
+care about (`sending`, `sent`, `failed`).
+
+## Lower-level: attach to an emitter directly
+
+If you manage the `EventEmitter2` yourself (e.g. outside the standard module wiring), call
+`attachNotificationsDiagnostics(emitter)` — it adds the three listeners and returns an unsubscribe:
+
+```ts
+import { attachNotificationsDiagnostics } from '@dudousxd/nestjs-notifications-diagnostics';
+
+const off = attachNotificationsDiagnostics(emitter);
+// later, to detach:
+off();
+```
+
+`NotificationsDiagnosticsModule.forRoot()` does exactly this on init and calls the returned
+unsubscribe on destroy — reach for the function directly only when you're not using the module.
+
+## See also
+
+- [Telescope integration](/docs/recipes/telescope) — record every delivery in the Telescope dashboard
+- [Delivery tracking](/docs/recipes/delivery-tracking) — persist per-channel delivery outcomes
+- [Reference: configuration](/docs/reference/configuration#events) — the lifecycle events the bridge mirrors
