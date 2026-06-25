@@ -26,7 +26,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "scripts": {
     "build": "tsup",
@@ -53,5 +54,8 @@
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "typescript": "5.9.3"
-  }
+  },
+  "keywords": [
+    "tanstack-intent"
+  ]
 }

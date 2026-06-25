@@ -1,0 +1,40 @@
+# Skill tree — flat, no router. Each skill type `core`.
+structure: flat
+router: false
+
+skills:
+  - name: notifications-core
+    package: "@dudousxd/nestjs-notifications-core"
+    path: packages/core/skills/notifications-core/SKILL.md
+    type: core
+    library_version: 0.8.1
+    summary: >-
+      Module setup, defining a Notification + Notifiable, channel inference vs via(),
+      sending (send/sendNow/route/forTenant/only/except), reading SendResult, lifecycle events.
+
+  - name: notifications-async-dispatch
+    package: "@dudousxd/nestjs-notifications-core"
+    path: packages/core/skills/notifications-async-dispatch/SKILL.md
+    type: core
+    library_version: 0.8.1
+    summary: >-
+      Queue notifications with shouldQueue/delay, choose a dispatch driver (event-emitter, BullMQ),
+      and satisfy the serialization contract (notifications registry + resolveNotifiable + refs).
+
+  - name: notifications-mail
+    package: "@dudousxd/nestjs-notifications-mail"
+    path: packages/mail/skills/notifications-mail/SKILL.md
+    type: core
+    library_version: 0.8.1
+    summary: >-
+      MailChannelModule.forRoot, fluent MailMessage, MailNotification + @Mail(), renderers
+      (Default/Markdown/ReactEmail/Mjml), transports (Nodemailer SMTP / SES), attachments.
+
+  - name: notifications-testing
+    package: "@dudousxd/nestjs-notifications-testing"
+    path: packages/testing/skills/notifications-testing/SKILL.md
+    type: core
+    library_version: 0.6.0
+    summary: >-
+      NotificationFake drop-in + Laravel-style assertions (assertSent/assertSentTo/assertSentOnChannel/
+      assertCount/assertNothingSent), provideNotificationFake, overrideProvider wiring.
