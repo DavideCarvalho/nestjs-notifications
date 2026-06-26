@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-mail
 
+## 0.8.2
+
+### Patch Changes
+
+- f7bf54b: Ship TanStack Intent agent skills (SKILL.md) inside the package.
+
 ## 0.8.1
 
 ### Patch Changes
