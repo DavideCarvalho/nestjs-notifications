@@ -1,0 +1,93 @@
+# Domain map for nestjs-notifications (Aviary "Nightingale")
+# Produced autonomously (no maintainer interview). One map for the whole monorepo;
+# skills scoped to the primary client-facing packages.
+library: nestjs-notifications
+description: >-
+  Laravel-style notifications for NestJS. Define a notification once and fan it out across
+  many channels (mail, database, broadcast, slack, sms, push, ...) synchronously or through a
+  pluggable async dispatcher (in-process events, Redis, BullMQ). Two orthogonal abstractions:
+  channel drivers (HOW it leaves) and dispatch drivers (WHERE/WHEN it is processed).
+
+primary_packages:
+  - name: "@dudousxd/nestjs-notifications-core"
+    dir: packages/core
+    version: 0.8.1
+    role: >-
+      Engine. NotificationsModule.forRoot/forRootAsync, NotificationService (send/sendNow/
+      sendAsync/route/forTenant/only/except), Notification + Notifiable contracts, channel/route
+      decorators, lifecycle events, sync dispatcher, dispatch guards, localization, fallback chain.
+  - name: "@dudousxd/nestjs-notifications-mail"
+    dir: packages/mail
+    version: 0.8.1
+    role: >-
+      Most-used channel. MailChannelModule.forRoot, fluent MailMessage builder, MailNotification
+      interface, @Mail() handle, Default/Markdown/ReactEmail/Mjml renderers, Nodemailer/SES transports.
+  - name: "@dudousxd/nestjs-notifications-testing"
+    dir: packages/testing
+    version: 0.6.0
+    role: >-
+      NotificationFake drop-in for NotificationService + Laravel-style assertions; provideNotificationFake.
+
+# Channel + dispatch packages NOT given their own skills (consumer imports them but the usage
+# pattern is identical to mail/core once those are understood). Listed for coverage honesty.
+secondary_packages:
+  channels:
+    - "@dudousxd/nestjs-notifications-database (+ -typeorm / -mikro-orm / -prisma adapters)"
+    - "@dudousxd/nestjs-notifications-broadcast"
+    - "@dudousxd/nestjs-notifications-sse"
+    - "@dudousxd/nestjs-notifications-push"
+    - "@dudousxd/nestjs-notifications-sms"
+    - "@dudousxd/nestjs-notifications-slack"
+    - "@dudousxd/nestjs-notifications-discord"
+    - "@dudousxd/nestjs-notifications-telegram"
+    - "@dudousxd/nestjs-notifications-teams"
+    - "@dudousxd/nestjs-notifications-webhook"
+  dispatchers:
+    - "@dudousxd/nestjs-notifications-event-emitter"
+    - "@dudousxd/nestjs-notifications-bullmq"
+    - "@dudousxd/nestjs-notifications-redis"
+  cross_cutting:
+    - "@dudousxd/nestjs-notifications-preferences"
+    - "@dudousxd/nestjs-notifications-delivery-tracking"
+    - "@dudousxd/nestjs-notifications-resilience"
+    - "@dudousxd/nestjs-notifications-diagnostics"
+    - "@dudousxd/nestjs-notifications-telescope"
+  client_side:
+    - "@dudousxd/nestjs-notifications-client"
+    - "@dudousxd/nestjs-notifications-react"
+    - "@dudousxd/nestjs-notifications-codegen"
+
+concepts:
+  notification:
+    contract: packages/core/src/interfaces.ts (interface Notification)
+    declares_channels_two_ways:
+      - "decorators: @Mail()/@Database() on toMail/toDatabase methods -> via() inferred"
+      - "explicit via(notifiable): Array<string | ChannelRef> -> overrides inference"
+    optional_hooks: [shouldQueue, queue, delay, shouldSend, afterSending, serialize]
+    class_marker: "@Notification({ name }) pins a stable name for async rehydration"
+  notifiable:
+    contract: packages/core/src/interfaces.ts (interface Notifiable)
+    addresses_two_ways:
+      - "@RouteFor('mail') on a property + @NotifiableId() + @Notifiable({ type })"
+      - "routeNotificationFor(channel, notification) method -> overrides decorators"
+    async_ref: "toNotifiableRef() or @Notifiable()+@NotifiableId() -> { type, id }, only for async"
+  service_api:
+    file: packages/core/src/notification.service.ts
+    methods: [send, notify, sendNow, sendAsync, route, forTenant, forTenants, only, except]
+    result: "SendResult[] -> per (notifiable, tenant) with ChannelResult[] (status sent|failed|skipped|queued|suppressed|throttled|deferred)"
+  dispatch:
+    sync_default: SyncDispatcher (inline)
+    async_drivers: [EventEmitterDispatcher (in-process), bullmqDispatcher() helper, redis]
+    serialization: "{ name, data } for notification; { type, id } ref for notifiable; resolveNotifiable rebuilds it"
+  events:
+    file: packages/core/src/events.ts
+    names: ["notification.sending", "notification.sent", "notification.failed"]
+
+gaps:
+  # What a maintainer interview (domain-discovery Phases 2 & 4) would have surfaced.
+  - "Priority ordering of channels for skills beyond core/mail/testing was inferred from the README package table + example app, not confirmed by the maintainer."
+  - "AI-agent-specific failure modes were mined from source error types (ChannelNotRegisteredError, MissingChannelMethodError, NotificationSerializationError) and the async serializer contract, not from real issue reports (gh issue search not run / no confirmed access)."
+  - "No production telemetry on which renderer (Default/Markdown/React/Mjml) or transport (Nodemailer/SES) is most used; mail skill leads with Default + SMTP because that is the README quick-start."
+  - "Whether @nestjs/event-emitter is effectively mandatory: core lists it as a (non-optional) peer dependency and the example imports EventEmitterModule.forRoot(); treated as required in Setup. A maintainer could confirm if a no-event-emitter path exists."
+  - "Redis dispatcher and preference/digest/quiet-hours gates, localization, and fallback chains are real exports but deliberately left out of the focused skill set; a maintainer might want a dedicated advanced skill."
+  - "Exact minimum NestJS version matrix beyond peer ranges (^10 || ^11) not independently verified at runtime."

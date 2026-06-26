@@ -15,9 +15,7 @@ NotificationsModule.forRoot({
   resolveNotifiable: (ref) => users.findOneByOrFail({ id: Number(ref.id) }),
   errorPolicy: 'continueOnError',
   global: true,
-  dispatcher: BullmqDispatcher,
-  imports: [BullModule.registerQueue({ name: 'notifications' })],
-  providers: [{ provide: BULLMQ_OPTIONS, useValue: { queue: 'notifications' } }],
+  ...bullmqDispatcher(), // from @dudousxd/nestjs-notifications-bullmq — see Dispatchers
 });
 ```
 
