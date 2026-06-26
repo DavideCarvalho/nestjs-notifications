@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-testing",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Testing utilities for nestjs-notifications — a notification fake and recording channel with Laravel-style assertions",
   "license": "MIT",
   "author": "Davide Carvalho",

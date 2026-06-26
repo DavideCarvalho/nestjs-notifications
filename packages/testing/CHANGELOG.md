@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-testing
 
+## 0.6.1
+
+### Patch Changes
+
+- f7bf54b: Ship TanStack Intent agent skills (SKILL.md) inside the package.
+
 ## 0.6.0
 
 ### Minor Changes
