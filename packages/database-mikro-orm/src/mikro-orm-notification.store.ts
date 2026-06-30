@@ -11,6 +11,16 @@ import { EntityManager } from '@mikro-orm/core';
 import { Injectable } from '@nestjs/common';
 import { NotificationEntity } from './notification.entity';
 import { ensureNotificationsTable } from './schema';
+import {
+  acquireSchemaLock,
+  computeExpectedFingerprint,
+  ensureSchemaMetaTable,
+  readStoredFingerprint,
+  writeSchemaFingerprint,
+} from './schema-fingerprint';
+
+/** The table(s) this store owns — used to scope the schema fingerprint to our own metadata. */
+const OWNED_TABLE_NAMES: ReadonlySet<string> = new Set(['notifications']);
 
 /** Maps a {@link NotificationEntity} row to the channel-agnostic {@link StoredNotification}. */
 function toStored(row: NotificationEntity): StoredNotification {
@@ -175,8 +185,34 @@ export class MikroOrmNotificationStore implements NotificationStore {
     });
   }
 
-  /** Create/patch the notifications table if needed (non-destructive). */
+  /**
+   * Create/patch the notifications table if needed (non-destructive), gated by a schema fingerprint
+   * so steady-state boots skip the expensive whole-DB `information_schema` introspection.
+   *
+   * The marker table records the fingerprint of the last-applied schema; when the in-memory expected
+   * fingerprint already matches the stored one, we return without ever calling the schema diff.
+   */
   async ensureSchema(): Promise<void> {
-    await ensureNotificationsTable(this.em);
+    const em = this.em;
+    // 1. Idempotent marker table — no introspection, safe against a completely empty database.
+    await ensureSchemaMetaTable(em);
+    // 2-3. Compare the expected (in-memory) fingerprint with the last-applied one.
+    const expectedFingerprint = computeExpectedFingerprint(em, OWNED_TABLE_NAMES);
+    if ((await readStoredFingerprint(em)) === expectedFingerprint) {
+      // 4. Steady state: schema already matches — skip the whole-DB introspection.
+      return;
+    }
+    // 5. Drift (or first boot): heal under a best-effort advisory lock so concurrent booting
+    //    replicas don't all introspect; re-check after acquiring in case a peer healed first.
+    const lock = await acquireSchemaLock(em);
+    try {
+      if ((await readStoredFingerprint(em)) === expectedFingerprint) {
+        return;
+      }
+      await ensureNotificationsTable(em);
+      await writeSchemaFingerprint(em, expectedFingerprint);
+    } finally {
+      await lock.release();
+    }
   }
 }
