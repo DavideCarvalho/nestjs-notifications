@@ -66,6 +66,42 @@ describe('DatabaseChannel upsert routing', () => {
   });
 });
 
+describe('DatabaseChannel persisted type', () => {
+  class GenericNotification {
+    constructor(private readonly eventName: string) {}
+    notificationType() {
+      return this.eventName;
+    }
+    toArray() {
+      return { name: this.eventName };
+    }
+  }
+
+  it('persists the instance-level notificationType() instead of the class name', async () => {
+    const store = {
+      save: vi.fn().mockResolvedValue({ id: 'x' }),
+    } as unknown as NotificationStore;
+    const channel = new DatabaseChannel(store);
+
+    await channel.send(user, new GenericNotification('FILE_EXPORT_RUNNING'));
+
+    const arg = (store.save as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(arg.type).toBe('FILE_EXPORT_RUNNING');
+  });
+
+  it('still persists the class name when notificationType() is absent', async () => {
+    const store = {
+      save: vi.fn().mockResolvedValue({ id: 'x' }),
+    } as unknown as NotificationStore;
+    const channel = new DatabaseChannel(store);
+
+    await channel.send(user, new PlainNotification());
+
+    const arg = (store.save as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(arg.type).toBe('PlainNotification');
+  });
+});
+
 describe('DatabaseChannel captured context', () => {
   it('persists causer/tenant/trace from the captured delivery context', async () => {
     const store = new InMemoryStore();
