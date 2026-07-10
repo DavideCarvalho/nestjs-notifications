@@ -4,6 +4,7 @@ import {
   NotificationEvents,
   type NotificationFailedEvent,
   type NotificationSentEvent,
+  notificationName,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
@@ -75,7 +76,7 @@ export class DeliveryTrackingListener implements OnModuleInit {
         status === 'sent' ? providerIdFrom((event as NotificationSentEvent).response) : null;
       await this.store.record({
         channel: event.channel,
-        notificationType: nameOf(event.notification),
+        notificationType: notificationName(event.notification),
         notifiableType: ref.type,
         notifiableId: ref.id,
         tenantId: event.tenant ?? null,
@@ -104,11 +105,6 @@ function providerIdFrom(response: unknown): string | null {
     }
   }
   return null;
-}
-
-function nameOf(notification: Notification): string {
-  const ctor = notification.constructor as { notificationName?: string; name: string };
-  return ctor.notificationName ?? ctor.name;
 }
 
 function notifiableRef(notifiable: Notifiable): {

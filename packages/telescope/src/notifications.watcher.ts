@@ -4,6 +4,7 @@ import {
   NotificationEvents,
   type NotificationFailedEvent,
   type NotificationSentEvent,
+  notificationName,
 } from '@dudousxd/nestjs-notifications-core';
 // Type-only imports — erased at compile time, so this CJS package never has to
 // `require()` the ESM-only telescope package at runtime.
@@ -88,7 +89,7 @@ export class NotificationsWatcher implements Watcher {
     status: 'sent' | 'failed',
   ): void {
     try {
-      const notificationClass = nameOf(event.notification);
+      const notificationClass = notificationName(event.notification);
       const tenant = event.tenant ?? null;
       const content: NotificationEntryContent = {
         channel: event.channel,
@@ -118,11 +119,6 @@ export class NotificationsWatcher implements Watcher {
       this.logger.error(`NotificationsWatcher: failed to record entry: ${describe(error)}`);
     }
   }
-}
-
-function nameOf(notification: Notification): string {
-  const ctor = notification.constructor as { notificationName?: string; name: string };
-  return ctor.notificationName ?? ctor.name;
 }
 
 function labelNotifiable(notifiable: Notifiable): string | null {

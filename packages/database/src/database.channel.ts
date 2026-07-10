@@ -7,6 +7,7 @@ import {
   createChannel,
   getHandler,
   notifiableRef,
+  notificationName,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable, Logger } from '@nestjs/common';
@@ -37,9 +38,10 @@ export class DatabaseChannel implements ChannelDriver {
   ): Promise<unknown> {
     const ref = this.referenceFor(notifiable, notification);
     const data = this.payloadFor(notifiable, notification, context);
-    const type =
-      (notification.constructor as { notificationName?: string }).notificationName ??
-      notification.constructor.name;
+    // Instance-aware (notificationType() → @Notification({ name }) → class name) via core's
+    // helper — this is what the inbox `?type=` filter matches against, so a generic class
+    // carrying many event names persists the real per-instance type, not the class constant.
+    const type = notificationName(notification);
 
     // WHO triggered this + the trace, captured from nestjs-context at send() time (present
     // here even for async deliveries — the carrier rides through the dispatcher). The delivery
