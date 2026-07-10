@@ -1,10 +1,19 @@
-import { PENDING_DIGEST_STORE } from '@dudousxd/nestjs-notifications-preferences';
 import { type DynamicModule, Module } from '@nestjs/common';
 import {
   PRISMA_PENDING_DIGEST_CLIENT,
   type PrismaPendingDigestClientLike,
 } from './prisma-pending-digest-client';
 import { PrismaPendingDigestStore } from './prisma-pending-digest.store';
+
+/**
+ * `@dudousxd/nestjs-notifications-preferences`'s PENDING_DIGEST_STORE token, inlined via the
+ * global Symbol registry instead of imported: preferences is an OPTIONAL peer of this package,
+ * and a value import would make `require`-ing this package crash at boot for every consumer
+ * that doesn't install it (type imports above are erased and safe). `Symbol.for` with the same
+ * key yields the identical token, so DI binding still matches — a drift test pins the key to
+ * the preferences export.
+ */
+const PENDING_DIGEST_STORE = Symbol.for('nestjs-notifications:pending-digest-store');
 
 /** Options for {@link PrismaPendingDigestStoreModule.forRoot}. */
 export interface PrismaPendingDigestStoreOptions {
