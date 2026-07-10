@@ -32,8 +32,14 @@ jobs:
       # Trusted publishing (OIDC) needs npm >= 11.5. With a Trusted Publisher configured on
       # npmjs.com for this repo + workflow, publishes are tokenless; NPM_TOKEN stays as a
       # fallback until then. Either way, --provenance attaches a signed SLSA statement.
+      # PINNED, not @latest: npm 12.0.x returns empty stdout for `npm info --json` and
+      # changed the E403 error shape, which makes changesets 2.31.0 think every package is
+      # unpublished, attempt to republish all of them, and crash in isAlreadyPublishedError
+      # ("Cannot read properties of undefined (reading 'includes')") before reaching the
+      # packages that actually need publishing. 11.6.2 supports trusted publishing and the
+      # formats changesets expects.
       - name: Upgrade npm (trusted publishing support)
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.6.2
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
