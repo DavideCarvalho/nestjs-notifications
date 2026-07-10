@@ -1,5 +1,12 @@
 # @dudousxd/nestjs-notifications-react
 
+## 0.8.2
+
+### Patch Changes
+
+- Updated dependencies [6546884]
+  - @dudousxd/nestjs-notifications-client@0.8.0
+
 ## 0.8.1
 
 ### Patch Changes
