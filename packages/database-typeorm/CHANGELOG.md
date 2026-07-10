@@ -1,5 +1,17 @@
 # @dudousxd/nestjs-notifications-database-typeorm
 
+## 0.9.1
+
+### Patch Changes
+
+- 94a7e57: `PENDING_DIGEST_STORE` is now a `Symbol.for` global-registry token, and the database adapters
+  inline it instead of value-importing it from `@dudousxd/nestjs-notifications-preferences`.
+  Preferences is declared an optional peer of the adapters, but the value import made
+  `require`-ing any adapter crash at boot (`Cannot find module`) for consumers that don't install
+  preferences — the digest store module rode along the package index. DI identity is unchanged
+  (same registry key on both sides, pinned by a drift test); consumers importing the token from
+  preferences are unaffected.
+
 ## 0.9.0
 
 ### Minor Changes
