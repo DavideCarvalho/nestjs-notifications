@@ -62,6 +62,30 @@ describe('NotificationsClient', () => {
     expect(await client.unreadCount()).toBe(7);
   });
 
+  it('sends the types filter as a comma-separated `type` query param', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          jsonResponse({ items: [], meta: { page: 1, perPage: 20, total: 0, lastPage: 1 } }),
+        ),
+      );
+    const client = createNotificationsClient({ baseUrl: 'https://api.test', fetch: fetchMock });
+
+    await client.list({ types: ['A', 'B'] });
+    await client.unread({ types: ['A', 'B'] });
+    await client.unreadCount({ types: ['A', 'B'] });
+    // An empty array omits the param entirely (no filter).
+    await client.unread({ types: [] });
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.test/notifications?type=A%2CB');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api.test/notifications/unread?type=A%2CB');
+    expect(fetchMock.mock.calls[2]?.[0]).toBe(
+      'https://api.test/notifications/unread/count?type=A%2CB',
+    );
+    expect(fetchMock.mock.calls[3]?.[0]).toBe('https://api.test/notifications/unread');
+  });
+
   it('posts mark-as-read for an id', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(null, 204));
     const client = createNotificationsClient({ baseUrl: '/', fetch: fetchMock });

@@ -43,17 +43,19 @@ function inboxRoutes(base: string, path: string, ns: string): RouteDescriptor[] 
   const root = `${base}/${path}`;
   return [
     route('GET', root, `${ns}.list`, {
-      query: '{ page?: number; perPage?: number }',
+      // `type` is a comma-separated list of notification types (e.g. `?type=A,B`); the backend
+      // splits/trims and treats absent/empty as "no filter".
+      query: '{ page?: number; perPage?: number; type?: string }',
       body: null,
       response: PAGINATED,
     }),
     route('GET', `${root}/unread`, `${ns}.unread`, {
-      query: null,
+      query: '{ type?: string }',
       body: null,
       response: `${NOTIFICATION}[]`,
     }),
     route('GET', `${root}/unread/count`, `${ns}.unreadCount`, {
-      query: null,
+      query: '{ type?: string }',
       body: null,
       response: '{ count: number }',
     }),

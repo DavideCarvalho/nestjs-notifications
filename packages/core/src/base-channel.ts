@@ -2,9 +2,18 @@ import { getHandler } from './decorators';
 import { MissingChannelMethodError } from './errors';
 import type { ChannelDriver, DeliveryContext, Notifiable, Notification } from './interfaces';
 
-/** The name used in errors: the explicit static `notificationName`, else the class name. */
+/**
+ * The name used for display/persistence surfaces (errors, channel logging, diagnostics):
+ * the instance's `notificationType()` override when implemented, else the explicit static
+ * `notificationName`, else the class name.
+ *
+ * Deliberately NOT used by the serializer's rehydration registry — that key must stay
+ * class-level so a generic class with an instance-level `notificationType()` can still be
+ * looked up by its class name on deserialize. See `serializer.ts`.
+ */
 export function notificationName(notification: Notification): string {
   return (
+    notification.notificationType?.() ??
     (notification.constructor as { notificationName?: string }).notificationName ??
     notification.constructor.name
   );

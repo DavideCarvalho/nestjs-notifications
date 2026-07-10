@@ -183,6 +183,45 @@ export function runNotificationStoreContract(
       });
     });
 
+    describe('types filter', () => {
+      it('getForNotifiable()/getUnread() restrict to the listed types; absent/empty = no filter', async () => {
+        const a = await store().save(make('A', 'User', 'ty'));
+        await ms();
+        const b = await store().save(make('B', 'User', 'ty'));
+        await ms();
+        await store().save(make('C', 'User', 'ty'));
+        await store().markAsRead(a.id);
+
+        expect(
+          (await store().getForNotifiable('User', 'ty', undefined, ['B'])).map((r) => r.type),
+        ).toEqual(['B']);
+        expect(
+          (await store().getForNotifiable('User', 'ty', undefined, ['A', 'C'])).map((r) => r.type),
+        ).toEqual(['C', 'A']);
+        expect(
+          (await store().getForNotifiable('User', 'ty', undefined, ['nope'])).map((r) => r.type),
+        ).toEqual([]);
+
+        // absent filter returns all
+        expect((await store().getForNotifiable('User', 'ty')).map((r) => r.type).sort()).toEqual([
+          'A',
+          'B',
+          'C',
+        ]);
+        // empty array behaves like absent — no filter
+        expect(
+          (await store().getForNotifiable('User', 'ty', undefined, [])).map((r) => r.type).sort(),
+        ).toEqual(['A', 'B', 'C']);
+
+        expect(
+          (await store().getUnread('User', 'ty', undefined, ['B'])).map((r) => r.type),
+        ).toEqual(['B']);
+        expect(
+          (await store().getUnread('User', 'ty', undefined, [])).map((r) => r.type).sort(),
+        ).toEqual(['B', 'C']);
+      });
+    });
+
     describe('paginateForNotifiable()', () => {
       it('pushes limit/offset down and returns the total, newest-first', async () => {
         for (let i = 0; i < 5; i++) {
@@ -232,6 +271,28 @@ export function runNotificationStoreContract(
         });
         expect(page?.total).toBe(2);
         expect(page?.items.map((r) => r.type).sort()).toEqual(['A', 'B']);
+      });
+
+      it('scopes the paginated total + items by types; empty array is no filter', async () => {
+        await store().save(make('P1', 'User', 'paged-types'));
+        await store().save(make('P2', 'User', 'paged-types'));
+        await store().save(make('P3', 'User', 'paged-types'));
+
+        const filtered = await store().paginateForNotifiable?.('User', 'paged-types', {
+          limit: 10,
+          offset: 0,
+          types: ['P1', 'P3'],
+        });
+        expect(filtered?.total).toBe(2);
+        expect(filtered?.items.map((r) => r.type).sort()).toEqual(['P1', 'P3']);
+
+        const unfiltered = await store().paginateForNotifiable?.('User', 'paged-types', {
+          limit: 10,
+          offset: 0,
+          types: [],
+        });
+        expect(unfiltered?.total).toBe(3);
+        expect(unfiltered?.items.map((r) => r.type).sort()).toEqual(['P1', 'P2', 'P3']);
       });
     });
 

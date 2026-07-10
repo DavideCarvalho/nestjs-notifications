@@ -51,6 +51,12 @@ export class NotificationSerializer {
 
   serializeNotification(notification: Notification): SerializedNotification {
     const ctor = notification.constructor as NotificationClass;
+    // Deliberately class-level (NOT the `notification.notificationType?.()` instance override
+    // from base-channel.ts's `notificationName()` helper): this name is the rehydration-registry
+    // key `deserializeNotification` looks up to pick WHICH CLASS to reconstruct. An instance-level
+    // type is data carried alongside the payload, not a class identity — using it here would mean
+    // a generic notification class can no longer be found in the registry once dequeued, because
+    // the registry is keyed by class name/`@Notification({ name })`, not by arbitrary instance data.
     const name = ctor.notificationName ?? ctor.name;
     const data =
       typeof notification.serialize === 'function'

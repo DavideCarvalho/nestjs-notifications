@@ -2,6 +2,7 @@ import type {
   ListParams,
   NotificationItem,
   NotificationsClientOptions,
+  NotificationsFilterParams,
   PaginatedNotifications,
 } from './types';
 
@@ -57,19 +58,29 @@ export class NotificationsClient {
     const query = new URLSearchParams();
     if (params.page != null) query.set('page', String(params.page));
     if (params.perPage != null) query.set('perPage', String(params.perPage));
+    setTypeParam(query, params.types);
     const qs = query.toString();
     const raw = await this.request<RawPaginated>('GET', `${this.path}${qs ? `?${qs}` : ''}`);
     return normalizePaginated(raw, params);
   }
 
   /** Unread notifications for the current notifiable. */
-  unread(): Promise<NotificationItem[]> {
-    return this.request<NotificationItem[]>('GET', `${this.path}/unread`);
+  unread(params: NotificationsFilterParams = {}): Promise<NotificationItem[]> {
+    const query = new URLSearchParams();
+    setTypeParam(query, params.types);
+    const qs = query.toString();
+    return this.request<NotificationItem[]>('GET', `${this.path}/unread${qs ? `?${qs}` : ''}`);
   }
 
   /** Number of unread notifications for the current notifiable. */
-  async unreadCount(): Promise<number> {
-    const res = await this.request<{ count: number }>('GET', `${this.path}/unread/count`);
+  async unreadCount(params: NotificationsFilterParams = {}): Promise<number> {
+    const query = new URLSearchParams();
+    setTypeParam(query, params.types);
+    const qs = query.toString();
+    const res = await this.request<{ count: number }>(
+      'GET',
+      `${this.path}/unread/count${qs ? `?${qs}` : ''}`,
+    );
     return res.count;
   }
 
@@ -185,6 +196,11 @@ function normalizePaginated(raw: RawPaginated, params: ListParams): PaginatedNot
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+}
+
+/** Sends `types` as the comma-separated `?type=` param the backend splits/trims; empty = omitted. */
+function setTypeParam(query: URLSearchParams, types: string[] | undefined): void {
+  if (types && types.length > 0) query.set('type', types.join(','));
 }
 
 async function parseBody<T>(response: Response): Promise<T> {

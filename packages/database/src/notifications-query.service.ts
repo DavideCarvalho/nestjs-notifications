@@ -11,12 +11,23 @@ import { NOTIFICATION_STORE } from './tokens';
 /** A notifiable, or just a stable reference to one. Accepted by every query method. */
 export type NotifiableTarget = Notifiable | NotifiableRef;
 
+/**
+ * Filter options shared by {@link ScopedNotificationsQuery.all}, {@link
+ * ScopedNotificationsQuery.unread}, and {@link ScopedNotificationsQuery.unreadCount}.
+ */
+export interface NotificationsFilterOptions {
+  /** Only include notifications whose `type` is one of these; absent/empty = no filter. */
+  types?: string[] | undefined;
+}
+
 /** Pagination options for {@link NotificationsQueryService.paginate}. */
 export interface PaginateOptions {
   /** 1-based page number. Default 1. */
   page?: number | undefined;
   /** Page size. Default 20. */
   perPage?: number | undefined;
+  /** Only include notifications whose `type` is one of these; absent/empty = no filter. */
+  types?: string[] | undefined;
 }
 
 /** Pagination metadata for a {@link PaginatedNotifications} page. */
@@ -38,10 +49,16 @@ export interface PaginatedNotifications {
 
 /** Tenant-scoped read API — same methods as {@link NotificationsQueryService}. */
 export interface ScopedNotificationsQuery {
-  all(target: NotifiableTarget): Promise<StoredNotification[]>;
-  unread(target: NotifiableTarget): Promise<StoredNotification[]>;
+  all(
+    target: NotifiableTarget,
+    options?: NotificationsFilterOptions,
+  ): Promise<StoredNotification[]>;
+  unread(
+    target: NotifiableTarget,
+    options?: NotificationsFilterOptions,
+  ): Promise<StoredNotification[]>;
   paginate(target: NotifiableTarget, options?: PaginateOptions): Promise<PaginatedNotifications>;
-  unreadCount(target: NotifiableTarget): Promise<number>;
+  unreadCount(target: NotifiableTarget, options?: NotificationsFilterOptions): Promise<number>;
   /**
    * Mark one notification read. Pass the owning `target` to also broadcast a cross-device read
    * event (so the user's other devices update); omit it to just persist (unchanged behavior).
@@ -72,12 +89,18 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
     private readonly readSync?: ReadSyncPublisher,
   ) {}
 
-  all(target: NotifiableTarget): Promise<StoredNotification[]> {
-    return this.allScoped(target, undefined);
+  all(
+    target: NotifiableTarget,
+    options: NotificationsFilterOptions = {},
+  ): Promise<StoredNotification[]> {
+    return this.allScoped(target, undefined, options.types);
   }
 
-  unread(target: NotifiableTarget): Promise<StoredNotification[]> {
-    return this.unreadScoped(target, undefined);
+  unread(
+    target: NotifiableTarget,
+    options: NotificationsFilterOptions = {},
+  ): Promise<StoredNotification[]> {
+    return this.unreadScoped(target, undefined, options.types);
   }
 
   paginate(
@@ -87,8 +110,8 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
     return this.paginateScoped(target, options, undefined);
   }
 
-  unreadCount(target: NotifiableTarget): Promise<number> {
-    return this.unreadCountScoped(target, undefined);
+  unreadCount(target: NotifiableTarget, options: NotificationsFilterOptions = {}): Promise<number> {
+    return this.unreadCountScoped(target, undefined, options.types);
   }
 
   async markAsRead(id: string, target?: NotifiableTarget): Promise<void> {
@@ -107,10 +130,10 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
   /** Scope every read/mutation to a tenant (workspace). */
   forTenant(tenant: string): ScopedNotificationsQuery {
     return {
-      all: (target) => this.allScoped(target, tenant),
-      unread: (target) => this.unreadScoped(target, tenant),
+      all: (target, options) => this.allScoped(target, tenant, options?.types),
+      unread: (target, options) => this.unreadScoped(target, tenant, options?.types),
       paginate: (target, options) => this.paginateScoped(target, options ?? {}, tenant),
-      unreadCount: (target) => this.unreadCountScoped(target, tenant),
+      unreadCount: (target, options) => this.unreadCountScoped(target, tenant, options?.types),
       markAsRead: async (id, target) => {
         await this.store.markAsRead(id);
         if (target) this.publishRead(this.refOf(target), id, tenant);
@@ -123,22 +146,24 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
   private async allScoped(
     target: NotifiableTarget,
     tenant?: string,
+    types?: string[],
   ): Promise<StoredNotification[]> {
     const ref = this.refOf(target);
-    return this.store.getForNotifiable(ref.type, String(ref.id), tenant);
+    return this.store.getForNotifiable(ref.type, String(ref.id), tenant, types);
   }
 
   private async unreadScoped(
     target: NotifiableTarget,
     tenant?: string,
+    types?: string[],
   ): Promise<StoredNotification[]> {
     const ref = this.refOf(target);
-    return this.store.getUnread(ref.type, String(ref.id), tenant);
+    return this.store.getUnread(ref.type, String(ref.id), tenant, types);
   }
 
   private async paginateScoped(
     target: NotifiableTarget,
-    { page = 1, perPage = 20 }: PaginateOptions,
+    { page = 1, perPage = 20, types }: PaginateOptions,
     tenant?: string,
   ): Promise<PaginatedNotifications> {
     const safePage = Math.max(1, Math.floor(page));
@@ -158,20 +183,25 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
         limit: safePerPage,
         offset,
         tenantId: tenant,
+        types,
       });
       return { items, meta: meta(total) };
     }
 
     // Fallback for stores without pushdown: fetch all rows and slice (correct, not scalable).
-    const all = await this.allScoped(target, tenant);
+    const all = await this.allScoped(target, tenant, types);
     return {
       items: all.slice(offset, offset + safePerPage),
       meta: meta(all.length),
     };
   }
 
-  private async unreadCountScoped(target: NotifiableTarget, tenant?: string): Promise<number> {
-    return (await this.unreadScoped(target, tenant)).length;
+  private async unreadCountScoped(
+    target: NotifiableTarget,
+    tenant?: string,
+    types?: string[],
+  ): Promise<number> {
+    return (await this.unreadScoped(target, tenant, types)).length;
   }
 
   private async markAllAsReadScoped(target: NotifiableTarget, tenant?: string): Promise<void> {

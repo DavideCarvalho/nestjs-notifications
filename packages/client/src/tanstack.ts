@@ -1,12 +1,14 @@
 import type { NotificationsClient } from './client';
-import type { ListParams } from './types';
+import type { ListParams, NotificationsFilterParams } from './types';
 
 /** Stable query keys for cache management/invalidation. */
 export const notificationKeys = {
   all: ['notifications'] as const,
   list: (params?: ListParams) => ['notifications', 'list', params ?? {}] as const,
-  unread: () => ['notifications', 'unread'] as const,
-  unreadCount: () => ['notifications', 'unread', 'count'] as const,
+  unread: (params?: NotificationsFilterParams) =>
+    ['notifications', 'unread', params ?? {}] as const,
+  unreadCount: (params?: NotificationsFilterParams) =>
+    ['notifications', 'unread', 'count', params ?? {}] as const,
 };
 
 /** queryOptions-shaped factories: spread into useQuery({ ...notificationQueries.list(client) }). */
@@ -15,13 +17,13 @@ export const notificationQueries = {
     queryKey: notificationKeys.list(params),
     queryFn: () => client.list(params),
   }),
-  unread: (client: NotificationsClient) => ({
-    queryKey: notificationKeys.unread(),
-    queryFn: () => client.unread(),
+  unread: (client: NotificationsClient, params?: NotificationsFilterParams) => ({
+    queryKey: notificationKeys.unread(params),
+    queryFn: () => client.unread(params),
   }),
-  unreadCount: (client: NotificationsClient) => ({
-    queryKey: notificationKeys.unreadCount(),
-    queryFn: () => client.unreadCount(),
+  unreadCount: (client: NotificationsClient, params?: NotificationsFilterParams) => ({
+    queryKey: notificationKeys.unreadCount(params),
+    queryFn: () => client.unreadCount(params),
   }),
 };
 

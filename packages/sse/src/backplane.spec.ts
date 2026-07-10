@@ -2,7 +2,7 @@ import type { MessageEvent } from '@nestjs/common';
 import { firstValueFrom, take } from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import type { SseBackplane, SseBackplaneMessage } from './backplane';
-import { type RedisPubSubClient, RedisSseBackplane } from './redis.backplane';
+import { type RedisPubSubClient, RedisSseBackplane, redisSseBackplane } from './redis.backplane';
 import { SseHub } from './sse.hub';
 
 /** A fake in-test backplane that loops published messages straight back to the handler. */
@@ -90,5 +90,64 @@ describe('RedisSseBackplane', () => {
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenCalledWith('user.9', { data: { y: 2 } });
+  });
+});
+
+describe('redisSseBackplane factory', () => {
+  function fakeClient(): RedisPubSubClient & {
+    emit: (channel: string, raw: string) => void;
+    published: Array<[string, string]>;
+    subscribedChannels: string[];
+  } {
+    let listener: ((channel: string, message: string) => void) | undefined;
+    return {
+      published: [],
+      subscribedChannels: [],
+      publish(channel, message) {
+        this.published.push([channel, message]);
+      },
+      subscribe(channel) {
+        this.subscribedChannels.push(channel);
+      },
+      on(_event, cb) {
+        listener = cb;
+      },
+      emit(channel, raw) {
+        listener?.(channel, raw);
+      },
+    };
+  }
+
+  it('calls createClient exactly twice and produces a working backplane', () => {
+    const clients = [fakeClient(), fakeClient()];
+    const createClient = vi.fn(() => clients.shift() as ReturnType<typeof fakeClient>);
+
+    const bp = redisSseBackplane(createClient, { channel: 'ch' });
+
+    expect(createClient).toHaveBeenCalledTimes(2);
+    expect(bp).toBeInstanceOf(RedisSseBackplane);
+  });
+
+  it('uses the FIRST created client for publish and the SECOND for subscribe', () => {
+    const publisherClient = fakeClient();
+    const subscriberClient = fakeClient();
+    const createClient = vi
+      .fn()
+      .mockReturnValueOnce(publisherClient)
+      .mockReturnValueOnce(subscriberClient);
+
+    const bp = redisSseBackplane(createClient, { channel: 'ch' });
+
+    bp.publish('user.1', { data: { x: 1 } });
+    expect(publisherClient.published).toHaveLength(1);
+    expect(subscriberClient.published).toHaveLength(0);
+
+    const handler = vi.fn();
+    bp.subscribe(handler);
+    expect(subscriberClient.subscribedChannels).toEqual(['ch']);
+    expect(publisherClient.subscribedChannels).toEqual([]);
+
+    subscriberClient.emit('ch', JSON.stringify({ key: 'user.1', message: { data: { x: 1 } } }));
+    expect(handler).toHaveBeenCalledWith('user.1', { data: { x: 1 } });
   });
 });

@@ -58,6 +58,18 @@ export interface NotificationsModuleOptions {
    * exactly as before.
    */
   localization?: LocalizationOptions;
+  /**
+   * Register `EventEmitterModule.forRoot()` alongside this module. Core's {@link ChannelRunner}
+   * injects `EventEmitter2` for lifecycle events (`notification.sending`/`sent`/`failed`)
+   * regardless of this flag — something must call `EventEmitterModule.forRoot()` once for that
+   * injection to resolve. Default `false`/undefined (today's behavior): the consumer is expected
+   * to register it themselves, because an app that already calls `EventEmitterModule.forRoot()`
+   * elsewhere (e.g. for its own domain events) must not register it twice — NestJS's dynamic
+   * module dedup mostly tolerates this, but two independent `forRoot()` calls with different
+   * options would silently pick whichever wins the merge. Set `true` only when this module owns
+   * the app's only `EventEmitterModule` registration.
+   */
+  emitter?: boolean;
 }
 
 /** Async configuration for {@link NotificationsModule.forRootAsync}. */
@@ -69,4 +81,11 @@ export interface NotificationsModuleAsyncOptions extends Pick<ModuleMetadata, 'i
   /** Extra providers (e.g. a dispatcher and its config) registered alongside the options. */
   providers?: Provider[];
   global?: boolean;
+  /**
+   * Register `EventEmitterModule.forRoot()` alongside this module. See
+   * {@link NotificationsModuleOptions.emitter} for the tradeoff — kept as a synchronous top-level
+   * flag (not inside `useFactory`'s result) because `imports` is resolved at `forRootAsync()` call
+   * time, before the factory runs.
+   */
+  emitter?: boolean;
 }

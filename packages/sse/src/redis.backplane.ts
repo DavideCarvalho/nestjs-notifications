@@ -39,6 +39,13 @@ const DEFAULT_CHANNEL = 'nestjs-notifications:sse';
  *   backplane: new RedisSseBackplane({ publisher: new Redis(url), subscriber: new Redis(url) }),
  * });
  * ```
+ *
+ * `subscribe()` is called once, at construction of whoever owns this backplane (see
+ * {@link import('./sse.hub').SseHub.onModuleInit}) — with `ioredis` that's enough for the lifetime
+ * of the connection: `ioredis` auto-resubscribes its subscribed channels after a reconnect, so this
+ * one-shot subscription survives connection drops. A structurally-compatible client without that
+ * behavior (a hand-rolled `RedisPubSubClient`, or another library) needs its own reconnect/re-subscribe
+ * handling — this class does not re-issue `subscribe()` itself.
  */
 export class RedisSseBackplane implements SseBackplane {
   private readonly publisher: RedisPubSubClient;
@@ -72,4 +79,33 @@ export class RedisSseBackplane implements SseBackplane {
     this.publisher.quit?.();
     this.subscriber.quit?.();
   }
+}
+
+/**
+ * Builds a {@link RedisSseBackplane} from a client factory instead of two pre-built clients. Owns
+ * the "publisher and subscriber must be separate connections" rule (documented on
+ * {@link RedisPubSubClient}) so a consumer can't accidentally pass the same client twice: a client
+ * that has entered subscribe mode rejects regular commands — `ioredis` fails with
+ * `"Connection in subscriber mode, only subscriber commands may be used"` — which is exactly the
+ * footgun this factory prevents by calling `createClient()` twice.
+ *
+ * The consumer stays in charge of client construction/config (BYO style) — this package adds no
+ * `ioredis` dependency; `createClient` returns anything satisfying {@link RedisPubSubClient}.
+ *
+ * ```ts
+ * import Redis from 'ioredis';
+ * SseChannelModule.forRoot({
+ *   backplane: redisSseBackplane(() => new Redis(url)),
+ * });
+ * ```
+ */
+export function redisSseBackplane(
+  createClient: () => RedisPubSubClient,
+  options?: { channel?: string },
+): RedisSseBackplane {
+  return new RedisSseBackplane({
+    publisher: createClient(),
+    subscriber: createClient(),
+    ...(options?.channel !== undefined ? { channel: options.channel } : {}),
+  });
 }

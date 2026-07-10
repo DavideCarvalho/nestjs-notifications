@@ -5,7 +5,18 @@ import { notificationKeys, notificationMutations, notificationQueries } from './
 describe('tanstack factories', () => {
   it('builds stable query keys', () => {
     expect(notificationKeys.list({ page: 1 })).toEqual(['notifications', 'list', { page: 1 }]);
-    expect(notificationKeys.unreadCount()).toEqual(['notifications', 'unread', 'count']);
+    expect(notificationKeys.unreadCount()).toEqual(['notifications', 'unread', 'count', {}]);
+    expect(notificationKeys.unreadCount({ types: ['A'] })).toEqual([
+      'notifications',
+      'unread',
+      'count',
+      { types: ['A'] },
+    ]);
+    expect(notificationKeys.unread({ types: ['A'] })).toEqual([
+      'notifications',
+      'unread',
+      { types: ['A'] },
+    ]);
   });
 
   it('queryFn delegates to the client', async () => {
