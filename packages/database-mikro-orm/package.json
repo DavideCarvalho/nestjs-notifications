@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-database-mikro-orm",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "MikroORM adapter for the nestjs-notifications database channel",
   "license": "MIT",
   "author": "Davide Carvalho",

@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-database-prisma
 
+## 0.7.0
+
+### Minor Changes
+
+- 6546884: Implement the new `types` filter (`{ type: { in: [...] } }`) across `getForNotifiable`/`getUnread`/`paginateForNotifiable`. No `notificationsManagedTables()` here: the adapter is schema-first and consumer-owned (no owned-table constant, `ensureSchema()` is a deliberate no-op) — there's no equivalent "tables this store creates" list to expose.
+
 ## 0.6.0
 
 ### Minor Changes

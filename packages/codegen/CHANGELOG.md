@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-codegen
 
+## 0.5.1
+
+### Patch Changes
+
+- 6546884: Document the new `?type=` query param (comma-separated notification types) on the generated `list`/`unread`/`unreadCount` inbox routes' query contracts.
+
 ## 0.5.0
 
 ### Minor Changes
