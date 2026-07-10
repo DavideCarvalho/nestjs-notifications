@@ -13,6 +13,7 @@ export { SchemaInitializer } from './schema-initializer';
 export {
   NotificationsQueryService,
   type NotifiableTarget,
+  type NotificationsFilterOptions,
   type PaginateOptions,
   type PaginatedNotifications,
   type PaginationMeta,

@@ -20,6 +20,7 @@ export {
 export type { SseBackplane, SseBackplaneMessage } from './backplane';
 export {
   RedisSseBackplane,
+  redisSseBackplane,
   type RedisSseBackplaneOptions,
   type RedisPubSubClient,
 } from './redis.backplane';

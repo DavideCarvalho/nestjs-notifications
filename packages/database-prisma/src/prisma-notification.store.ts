@@ -10,6 +10,11 @@ import type {
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PRISMA_CLIENT, type PrismaNotificationClientLike } from './prisma-client';
 
+/** `types` absent or empty applies no filter; otherwise an IN clause on `type`. */
+function typeFilter(types?: string[]): { type?: { in: string[] } } {
+  return types !== undefined && types.length > 0 ? { type: { in: types } } : {};
+}
+
 /** Maps a Prisma `Notification` row to the channel-agnostic {@link StoredNotification}. */
 function toStored(row: any): StoredNotification {
   return {
@@ -98,9 +103,15 @@ export class PrismaNotificationStore implements NotificationStore {
     notifiableType: string,
     notifiableId: string,
     tenantId?: string,
+    types?: string[],
   ): Promise<StoredNotification[]> {
     const rows = await this.client.notification.findMany({
-      where: { notifiableType, notifiableId, ...(tenantId !== undefined ? { tenantId } : {}) },
+      where: {
+        notifiableType,
+        notifiableId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
+        ...typeFilter(types),
+      },
       orderBy: { createdAt: 'desc' },
     });
     return rows.map(toStored);
@@ -110,12 +121,14 @@ export class PrismaNotificationStore implements NotificationStore {
     notifiableType: string,
     notifiableId: string,
     tenantId?: string,
+    types?: string[],
   ): Promise<StoredNotification[]> {
     const rows = await this.client.notification.findMany({
       where: {
         notifiableType,
         notifiableId,
         ...(tenantId !== undefined ? { tenantId } : {}),
+        ...typeFilter(types),
         readAt: null,
       },
       orderBy: { createdAt: 'desc' },
@@ -136,6 +149,7 @@ export class PrismaNotificationStore implements NotificationStore {
       notifiableType,
       notifiableId,
       ...(options.tenantId !== undefined ? { tenantId: options.tenantId } : {}),
+      ...typeFilter(options.types),
     };
     const [rows, total] = await Promise.all([
       this.client.notification.findMany({

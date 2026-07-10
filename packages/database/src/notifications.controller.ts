@@ -32,12 +32,16 @@ export interface NotificationsControllerOptions {
 /**
  * Builds a `@Controller('notifications')` exposing the in-app inbox endpoints:
  *
- * - `GET /notifications` — list (`?page&perPage` paginates)
- * - `GET /notifications/unread`
- * - `GET /notifications/unread/count`
+ * - `GET /notifications` — list (`?page&perPage` paginates, `?type=` filters)
+ * - `GET /notifications/unread` (`?type=` filters)
+ * - `GET /notifications/unread/count` (`?type=` filters)
  * - `POST /notifications/:id/read`
  * - `POST /notifications/read-all`
  * - `DELETE /notifications/:id`
+ *
+ * `?type=` accepts a comma-separated list of notification types (e.g.
+ * `?type=FILE_EXPORT_RUNNING,PRIBUY_FILE_EXPORT_RUNNING`); entries are trimmed and blanks are
+ * dropped. Absent or empty after parsing = no type filter (matches every type).
  *
  * Mount it by adding the returned class to a module's `controllers`, alongside
  * `DatabaseChannelModule` (which provides {@link NotificationsQueryService}):
@@ -66,24 +70,26 @@ export function createNotificationsController(
       @Req() req: any,
       @Query('page') page?: string,
       @Query('perPage') perPage?: string,
+      @Query('type') type?: string,
     ): Promise<PaginatedNotifications> {
       const ref = await options.resolveRef(req);
       return this.notifications.paginate(ref, {
         page: page ? Number(page) : undefined,
         perPage: perPage ? Number(perPage) : undefined,
+        types: parseTypesParam(type),
       });
     }
 
     @Get('unread')
-    async unread(@Req() req: any) {
+    async unread(@Req() req: any, @Query('type') type?: string) {
       const ref = await options.resolveRef(req);
-      return this.notifications.unread(ref);
+      return this.notifications.unread(ref, { types: parseTypesParam(type) });
     }
 
     @Get('unread/count')
-    async unreadCount(@Req() req: any): Promise<{ count: number }> {
+    async unreadCount(@Req() req: any, @Query('type') type?: string): Promise<{ count: number }> {
       const ref = await options.resolveRef(req);
-      return { count: await this.notifications.unreadCount(ref) };
+      return { count: await this.notifications.unreadCount(ref, { types: parseTypesParam(type) }) };
     }
 
     @Post(':id/read')
@@ -110,4 +116,18 @@ export function createNotificationsController(
   }
 
   return NotificationsController;
+}
+
+/**
+ * Parses a `?type=A,B` query param into a trimmed, non-empty list of types. Splits on commas,
+ * trims whitespace, and drops empty entries. Returns `undefined` when `raw` is absent or resolves
+ * to no entries — callers treat that as "no filter" (matches every type).
+ */
+function parseTypesParam(raw?: string): string[] | undefined {
+  if (!raw) return undefined;
+  const types = raw
+    .split(',')
+    .map((type) => type.trim())
+    .filter((type) => type.length > 0);
+  return types.length > 0 ? types : undefined;
 }

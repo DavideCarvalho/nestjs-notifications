@@ -9,9 +9,14 @@ import type {
 } from '@dudousxd/nestjs-notifications-database';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, LessThanOrEqual, Not, type Repository } from 'typeorm';
+import { type FindOperator, In, IsNull, LessThanOrEqual, Not, type Repository } from 'typeorm';
 import { NotificationEntity } from './notification.entity';
 import { ensureNotificationsTable } from './schema';
+
+/** `types` absent or empty applies no filter; otherwise an IN clause on `type`. */
+function typeFilter(types?: string[]): { type?: FindOperator<string> } {
+  return types !== undefined && types.length > 0 ? { type: In(types) } : {};
+}
 
 /** Maps a {@link NotificationEntity} row to the channel-agnostic {@link StoredNotification}. */
 function toStored(row: NotificationEntity): StoredNotification {
@@ -85,9 +90,15 @@ export class TypeOrmNotificationStore implements NotificationStore {
     notifiableType: string,
     notifiableId: string,
     tenantId?: string,
+    types?: string[],
   ): Promise<StoredNotification[]> {
     const rows = await this.repo.find({
-      where: { notifiableType, notifiableId, ...(tenantId !== undefined ? { tenantId } : {}) },
+      where: {
+        notifiableType,
+        notifiableId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
+        ...typeFilter(types),
+      },
       order: { createdAt: 'DESC' },
     });
     return rows.map(toStored);
@@ -97,12 +108,14 @@ export class TypeOrmNotificationStore implements NotificationStore {
     notifiableType: string,
     notifiableId: string,
     tenantId?: string,
+    types?: string[],
   ): Promise<StoredNotification[]> {
     const rows = await this.repo.find({
       where: {
         notifiableType,
         notifiableId,
         ...(tenantId !== undefined ? { tenantId } : {}),
+        ...typeFilter(types),
         readAt: IsNull(),
       },
       order: { createdAt: 'DESC' },
@@ -124,6 +137,7 @@ export class TypeOrmNotificationStore implements NotificationStore {
         notifiableType,
         notifiableId,
         ...(options.tenantId !== undefined ? { tenantId: options.tenantId } : {}),
+        ...typeFilter(options.types),
       },
       order: { createdAt: 'DESC' },
       skip: options.offset,

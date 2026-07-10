@@ -64,12 +64,14 @@ export class InMemoryStore implements NotificationStore {
     notifiableType: string,
     notifiableId: string,
     tenantId?: string,
+    types?: string[],
   ): Promise<StoredNotification[]> {
     return this.all().filter(
       (r) =>
         r.notifiableType === notifiableType &&
         r.notifiableId === notifiableId &&
-        (tenantId === undefined || r.tenantId === tenantId),
+        (tenantId === undefined || r.tenantId === tenantId) &&
+        matchesTypes(r.type, types),
     );
   }
 
@@ -77,8 +79,9 @@ export class InMemoryStore implements NotificationStore {
     notifiableType: string,
     notifiableId: string,
     tenantId?: string,
+    types?: string[],
   ): Promise<StoredNotification[]> {
-    return (await this.getForNotifiable(notifiableType, notifiableId, tenantId)).filter(
+    return (await this.getForNotifiable(notifiableType, notifiableId, tenantId, types)).filter(
       (r) => !r.readAt,
     );
   }
@@ -92,7 +95,12 @@ export class InMemoryStore implements NotificationStore {
     notifiableId: string,
     options: PaginateForNotifiableOptions,
   ): Promise<PaginatedStoredNotifications> {
-    const matching = await this.getForNotifiable(notifiableType, notifiableId, options.tenantId);
+    const matching = await this.getForNotifiable(
+      notifiableType,
+      notifiableId,
+      options.tenantId,
+      options.types,
+    );
     return {
       items: matching.slice(options.offset, options.offset + options.limit),
       total: matching.length,
@@ -136,4 +144,9 @@ export class InMemoryStore implements NotificationStore {
   private all(): StoredNotification[] {
     return [...this.rows.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
+}
+
+/** `types` absent or empty matches every type; otherwise `type` must be one of the listed values. */
+function matchesTypes(type: string, types?: string[]): boolean {
+  return types === undefined || types.length === 0 || types.includes(type);
 }

@@ -108,6 +108,19 @@ export interface Notification {
    * instance's own enumerable properties.
    */
   serialize?(): Record<string, unknown>;
+  /**
+   * Per-INSTANCE type override for display/persistence surfaces (channel logging, lifecycle
+   * events, diagnostics payloads). Takes precedence over the class-level `@Notification({ name })`
+   * (see {@link notificationName} in `base-channel.ts`). Meant for the "one generic notification
+   * class carrying many event names in its data" shape, where a single `@Notification` name would
+   * otherwise be a useless constant everywhere the type is displayed or stored.
+   *
+   * NOT used for queue rehydration: the async dispatch registry keys off the class-level name
+   * (`@Notification({ name })` / class name), because that name identifies WHICH CLASS to
+   * reconstruct — an instance-level value is data, not a class identity, and isn't available
+   * before the instance exists. See `serializer.ts` for the deliberate split.
+   */
+  notificationType?(): string;
 }
 
 /**

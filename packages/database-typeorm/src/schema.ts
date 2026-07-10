@@ -2,7 +2,19 @@ import { type DataSource, type QueryRunner, Table, TableColumn } from 'typeorm';
 import { TableUtils } from 'typeorm/schema-builder/util/TableUtils.js';
 import { NotificationEntity } from './notification.entity';
 
-const TABLE = 'notifications';
+export const TABLE = 'notifications';
+
+/**
+ * Tables this store creates and manages at boot (`ensureNotificationsTable`). Feed to your
+ * migration tooling's exclude/skip list so it never tries to touch them outside this library's
+ * own non-destructive schema sync.
+ *
+ * Derived from the same {@link TABLE} constant `ensureNotificationsTable` targets — one name, so
+ * a consumer's denylist can never drift from what this store actually owns.
+ */
+export function notificationsManagedTables(): string[] {
+  return [TABLE];
+}
 
 /**
  * Create the notifications table if it doesn't exist (non-destructive, driver-portable —

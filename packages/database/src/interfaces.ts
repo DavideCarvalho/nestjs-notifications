@@ -35,6 +35,8 @@ export interface PaginateForNotifiableOptions {
   offset: number;
   /** Tenant scope; `undefined` matches all tenants (single-tenant behavior). */
   tenantId?: string | undefined;
+  /** Only include rows whose `type` is in this list; absent/empty array matches all types. */
+  types?: string[] | undefined;
 }
 
 /** A single page of stored notifications plus the total matching count, returned by the store. */
@@ -75,15 +77,22 @@ export interface NotificationStore {
   save(notification: NewStoredNotification): Promise<StoredNotification>;
   markAsRead(id: string): Promise<void>;
   markAllAsRead(notifiableType: string, notifiableId: string, tenantId?: string): Promise<void>;
+  /**
+   * `types`, when present and non-empty, restricts results to rows whose `type` is in the list;
+   * absent or an empty array applies no type filter (matches every type).
+   */
   getForNotifiable(
     notifiableType: string,
     notifiableId: string,
     tenantId?: string,
+    types?: string[],
   ): Promise<StoredNotification[]>;
+  /** See {@link NotificationStore.getForNotifiable} for `types` semantics. */
   getUnread(
     notifiableType: string,
     notifiableId: string,
     tenantId?: string,
+    types?: string[],
   ): Promise<StoredNotification[]>;
   delete(id: string): Promise<void>;
   /**

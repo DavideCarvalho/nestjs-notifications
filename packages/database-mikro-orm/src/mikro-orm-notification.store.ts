@@ -22,6 +22,29 @@ import {
 /** The table(s) this store owns — used to scope the schema fingerprint to our own metadata. */
 const OWNED_TABLE_NAMES: ReadonlySet<string> = new Set(['notifications']);
 
+/**
+ * Tables this store creates and manages at boot (autoSchema). Feed to your ORM's migration differ
+ * exclude/skipTables so it never tries to drop them.
+ *
+ * ```ts
+ * await MikroORM.init({
+ *   // ...your entities/driver config
+ *   schemaGenerator: { skipTables: notificationsManagedTables() },
+ * });
+ * ```
+ *
+ * Derived from the same {@link OWNED_TABLE_NAMES} set `ensureSchema()` scopes its own fingerprint
+ * to — one list, so a consumer's denylist can never drift from what this store actually owns.
+ */
+export function notificationsManagedTables(): string[] {
+  return [...OWNED_TABLE_NAMES];
+}
+
+/** `types` absent or empty applies no filter; otherwise an IN clause on `type`. */
+function typeFilter(types?: string[]): { type?: { $in: string[] } } {
+  return types !== undefined && types.length > 0 ? { type: { $in: types } } : {};
+}
+
 /** Maps a {@link NotificationEntity} row to the channel-agnostic {@link StoredNotification}. */
 function toStored(row: NotificationEntity): StoredNotification {
   return {
@@ -92,21 +115,7 @@ export class MikroOrmNotificationStore implements NotificationStore {
     notifiableType: string,
     notifiableId: string,
     tenantId?: string,
-  ): Promise<StoredNotification[]> {
-    const rows = await this.em
-      .fork()
-      .find(
-        NotificationEntity,
-        { notifiableType, notifiableId, ...(tenantId !== undefined ? { tenantId } : {}) },
-        { orderBy: { createdAt: 'DESC' } },
-      );
-    return rows.map(toStored);
-  }
-
-  async getUnread(
-    notifiableType: string,
-    notifiableId: string,
-    tenantId?: string,
+    types?: string[],
   ): Promise<StoredNotification[]> {
     const rows = await this.em.fork().find(
       NotificationEntity,
@@ -114,6 +123,26 @@ export class MikroOrmNotificationStore implements NotificationStore {
         notifiableType,
         notifiableId,
         ...(tenantId !== undefined ? { tenantId } : {}),
+        ...typeFilter(types),
+      },
+      { orderBy: { createdAt: 'DESC' } },
+    );
+    return rows.map(toStored);
+  }
+
+  async getUnread(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+    types?: string[],
+  ): Promise<StoredNotification[]> {
+    const rows = await this.em.fork().find(
+      NotificationEntity,
+      {
+        notifiableType,
+        notifiableId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
+        ...typeFilter(types),
         readAt: null,
       },
       { orderBy: { createdAt: 'DESC' } },
@@ -136,6 +165,7 @@ export class MikroOrmNotificationStore implements NotificationStore {
         notifiableType,
         notifiableId,
         ...(options.tenantId !== undefined ? { tenantId: options.tenantId } : {}),
+        ...typeFilter(options.types),
       },
       { orderBy: { createdAt: 'DESC' }, limit: options.limit, offset: options.offset },
     );

@@ -1,5 +1,6 @@
 import { type DynamicModule, Module, type Provider } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ChannelRegistry } from './channel-registry';
 import { ChannelRunner } from './channel-runner';
 import { DispatchGuards } from './dispatch-guard.service';
@@ -50,7 +51,7 @@ export class NotificationsModule {
       // Spread `global` only when set: NestJS's `DynamicModule.global` is `?: boolean`, and under
       // exactOptionalPropertyTypes an explicit `undefined` is rejected.
       ...(resolved.global !== undefined ? { global: resolved.global } : {}),
-      imports: [DiscoveryModule, ...(options.imports ?? [])],
+      imports: [DiscoveryModule, ...emitterImports(resolved.emitter), ...(options.imports ?? [])],
       providers,
       exports: EXPORTS,
     };
@@ -74,11 +75,19 @@ export class NotificationsModule {
     return {
       module: NotificationsModule,
       global: options.global ?? true,
-      imports: [DiscoveryModule, ...(options.imports ?? [])],
+      imports: [DiscoveryModule, ...emitterImports(options.emitter), ...(options.imports ?? [])],
       providers,
       exports: EXPORTS,
     };
   }
+}
+
+/**
+ * `EventEmitterModule.forRoot()` only when explicitly opted in — see
+ * {@link NotificationsModuleOptions.emitter} for why this isn't the default.
+ */
+function emitterImports(emitter?: boolean): DynamicModule[] {
+  return emitter ? [EventEmitterModule.forRoot()] : [];
 }
 
 function dispatcherProviders(dispatcher?: NotificationsModuleOptions['dispatcher']): Provider[] {

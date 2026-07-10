@@ -69,8 +69,17 @@ export interface NotificationsClientOptions {
   sseUrl?: string;
 }
 
+/**
+ * Filter params shared by `list()`, `unread()`, and `unreadCount()`. `types`, when present and
+ * non-empty, is sent as the comma-separated `?type=` query param the backend splits/trims;
+ * absent/empty = no filter (matches every type).
+ */
+export interface NotificationsFilterParams {
+  types?: string[];
+}
+
 /** Query params for listing notifications. */
-export interface ListParams {
+export interface ListParams extends NotificationsFilterParams {
   /** 1-based page number. Default 1. */
   page?: number;
   /** Page size. Default 20. */
