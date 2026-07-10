@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-delivery-tracking",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Delivery tracking for nestjs-notifications — persists per-channel delivery status and ingests provider status webhooks (Twilio, AWS SES)",
   "license": "MIT",
   "author": "Davide Carvalho",
