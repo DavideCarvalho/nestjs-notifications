@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-telescope",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "nestjs-telescope watcher for nestjs-notifications — records every notification send in the Telescope dashboard",
   "license": "MIT",
   "author": "Davide Carvalho",
