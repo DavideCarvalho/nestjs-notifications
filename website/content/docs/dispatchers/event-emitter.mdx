@@ -56,6 +56,13 @@ handler is discovered and wired by `@nestjs/event-emitter` automatically.
 
 Now any notification with `shouldQueue = true` is delivered on a later tick instead of inline.
 
+<Callout type="info">
+  Already importing `EventEmitterModule.forRoot()` just for this? Pass `emitter: true` to
+  `NotificationsModule.forRoot()` instead and drop the explicit import — see
+  [Configuration → emitter](/docs/reference/configuration#emitter). Skip it if your app registers
+  `EventEmitterModule.forRoot()` elsewhere already; registering it twice is unsafe.
+</Callout>
+
 ## No serialization, no rehydration
 
 Because delivery stays in the **same process**, the live `Notifiable` and `Notification`

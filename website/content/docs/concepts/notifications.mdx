@@ -155,6 +155,42 @@ Channel inference works with or without it — the decorator reads the `@Mail()`
 metadata regardless. Add a `name` once a notification can be dispatched asynchronously, then you're
 free to rename the class. Without it, the class name is used.
 
+## Per-instance display name: notificationType()
+
+`@Notification({ name })` is a **class**-level name. Implement `notificationType()` on the instance
+when one generic notification class carries many different event names in its data — otherwise
+that class-level name would be a useless constant everywhere the type is displayed or stored
+(channel logging, lifecycle events, the [database channel](/docs/channels/database)'s persisted
+`type` column, [Telescope](/docs/recipes/telescope)):
+
+```ts
+@Notification()
+export class GenericEvent {
+  constructor(private readonly eventName: string, private readonly payload: unknown) {}
+
+  notificationType(): string {
+    return this.eventName; // e.g. "invoice.paid", "invoice.overdue"
+  }
+
+  @Database()
+  toDatabase() {
+    return this.payload;
+  }
+}
+```
+
+Precedence for display/persistence surfaces is `notificationType()` > class-level
+`@Notification({ name })` > class name.
+
+<Callout type="warn">
+  `notificationType()` is **not** used for queue rehydration. The async dispatch registry
+  (`NotificationsModule.forRoot({ notifications: [...] })`) always keys off the class-level name —
+  it identifies WHICH CLASS to reconstruct on the worker, and an instance-level type is data, not a
+  class identity, so it isn't even available before the instance exists. A generic class with a
+  `notificationType()` override is still looked up by its class name when dequeued. See
+  [Async dispatch](/docs/concepts/async-dispatch).
+</Callout>
+
 ## shouldQueue
 
 Set `shouldQueue = true` to route the notification through the configured async

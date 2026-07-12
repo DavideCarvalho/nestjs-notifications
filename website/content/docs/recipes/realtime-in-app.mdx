@@ -57,7 +57,7 @@ Both push server → browser in real time. Pick by how you want the transport to
 | Transport | Native NestJS `@Sse()` over plain HTTP | socket.io (`@nestjs/websockets`) |
 | Direction | One-way (server → client) | Bidirectional |
 | Infra | None — it's just an HTTP response; `EventSource` auto-reconnects | A socket.io server + namespace |
-| Multi-instance | Redis backplane built in | socket.io adapter (e.g. Redis) |
+| Multi-instance | [Redis backplane built in](/docs/channels/sse#scaling-across-instances) | socket.io adapter (e.g. Redis) |
 | React hooks consume it | ✅ directly (`sseUrl`) | via your own client |
 
 <Callout type="info">

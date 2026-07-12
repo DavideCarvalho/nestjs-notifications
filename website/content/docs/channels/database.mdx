@@ -119,8 +119,12 @@ interface StoredNotification {
 }
 ```
 
-The stored `type` uses the notification class's static `notificationName` if set, otherwise its
-class name.
+The stored `type` is the notification's `notificationName(notification)` — an instance-level
+`notificationType()` override when implemented, else the class-level `@Notification({ name })`,
+else the class name. See [notificationType()](/docs/concepts/notifications#per-instance-display-name-notificationtype)
+for when to reach for the instance override (e.g. one generic notification class carrying many
+event names). This is also the value the [`?type=` inbox filter](/docs/recipes/in-app-notifications)
+matches against.
 
 ## The store
 
@@ -132,9 +136,15 @@ feed:
 | `save(notification)` | `Promise<StoredNotification>` | Persist a new row (the channel calls this). |
 | `markAsRead(id)` | `Promise<void>` | Mark one notification read. |
 | `markAllAsRead(notifiableType, notifiableId)` | `Promise<void>` | Mark every unread row for a notifiable read. |
-| `getForNotifiable(notifiableType, notifiableId)` | `Promise<StoredNotification[]>` | All notifications for a notifiable, newest first. |
-| `getUnread(notifiableType, notifiableId)` | `Promise<StoredNotification[]>` | Unread notifications for a notifiable. |
+| `getForNotifiable(notifiableType, notifiableId, types?)` | `Promise<StoredNotification[]>` | All notifications for a notifiable, newest first. Optional `types: string[]` restricts to matching `type` values. |
+| `getUnread(notifiableType, notifiableId, types?)` | `Promise<StoredNotification[]>` | Unread notifications for a notifiable. Same optional `types` filter. |
 | `delete(id)` | `Promise<void>` | Remove one notification. |
+
+`types` is absent or an empty array by default, matching every type (unchanged behavior) — it's
+purely additive. `PaginateForNotifiableOptions` carries the same `types?: string[]` for the
+paginated read path. Every bundled adapter (in-memory, TypeORM, MikroORM, Prisma) implements the
+filter; see [In-app notifications](/docs/recipes/in-app-notifications) for the higher-level
+`NotificationsQueryService` and REST `?type=` query param this powers.
 
 The store is bound to the `NOTIFICATION_STORE` token, so inject it to build your feed endpoints:
 
@@ -377,3 +387,18 @@ DatabaseChannelModule.forFeature({ autoCreateSchema: false }),
 
   </Tab>
 </Tabs>
+
+<Callout type="info" title="Managed tables (schema-diff tooling)">
+  The MikroORM and TypeORM adapters export `notificationsManagedTables()` — the table name(s) this
+  store creates/manages (`['notifications']`), derived from the same set `ensureSchema()` scopes its
+  fingerprint to. Feed it to your ORM's schema-diff exclude list (e.g. MikroORM's
+  `schemaGenerator.skipTables`) so a consumer never hand-maintains this table name separately —
+  mirroring `durableManagedTables()` / `telescopeManagedTables()` from the sibling `@dudousxd`
+  ecosystem libs.
+
+  ```ts
+  import { notificationsManagedTables } from '@dudousxd/nestjs-notifications-database-mikro-orm';
+
+  schemaGenerator: { skipTables: notificationsManagedTables() },
+  ```
+</Callout>

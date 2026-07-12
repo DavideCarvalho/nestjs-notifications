@@ -36,13 +36,23 @@ Every method that reads "whose notifications" accepts a **target**: either a not
 
 | Method | Returns | Description |
 | --- | --- | --- |
-| `all(target)` | `StoredNotification[]` | Every notification for the target, newest first. |
-| `unread(target)` | `StoredNotification[]` | Unread notifications for the target. |
-| `unreadCount(target)` | `number` | How many are unread. |
-| `paginate(target, { page?, perPage? })` | `{ items, meta: { page, perPage, total, lastPage } }` | One page over `all` (defaults: page 1, 20 per page). |
+| `all(target, { types? })` | `StoredNotification[]` | Every notification for the target, newest first. |
+| `unread(target, { types? })` | `StoredNotification[]` | Unread notifications for the target. |
+| `unreadCount(target, { types? })` | `number` | How many are unread. |
+| `paginate(target, { page?, perPage?, types? })` | `{ items, meta: { page, perPage, total, lastPage } }` | One page over `all` (defaults: page 1, 20 per page). |
 | `markAsRead(id)` | `void` | Mark one notification read, by its id. |
 | `markAllAsRead(target)` | `void` | Mark every notification for the target read. |
 | `delete(id)` | `void` | Remove one notification, by its id. |
+
+`types` is an optional `string[]` that restricts results to matching `type` values (the same value
+[`notificationName()`](/docs/channels/database#the-notification-side) persisted — a
+`notificationType()` override, `@Notification({ name })`, or the class name). Omit it, or pass an
+empty array, and every type matches — purely additive, existing calls are unaffected:
+
+```ts
+// Only the two file-export notification types for this user's feed.
+await this.notifications.unread(user, { types: ['FILE_EXPORT_RUNNING', 'FILE_EXPORT_DONE'] });
+```
 
 <Callout type="info">
   `markAsRead(id)` and `delete(id)` take a notification **id** (a string), not a target — they act on
@@ -114,12 +124,16 @@ whatever your auth layer puts on `req.user`. The controller exposes:
 
 | Route | Action |
 | --- | --- |
-| `GET /notifications` | Paginated list (`?page` & `?perPage`). |
-| `GET /notifications/unread` | Unread notifications. |
-| `GET /notifications/unread/count` | `{ count }` of unread. |
+| `GET /notifications` | Paginated list (`?page` & `?perPage`, `?type=` filters). |
+| `GET /notifications/unread` | Unread notifications (`?type=` filters). |
+| `GET /notifications/unread/count` | `{ count }` of unread (`?type=` filters). |
 | `POST /notifications/:id/read` | Mark one read. |
 | `POST /notifications/read-all` | Mark all read for the current user. |
 | `DELETE /notifications/:id` | Delete one. |
+
+`?type=` accepts a comma-separated list of types (e.g.
+`?type=FILE_EXPORT_RUNNING,FILE_EXPORT_DONE`); entries are trimmed and blank entries dropped.
+Absent, or empty after parsing, means no filter — every type matches.
 
 <Callout type="info">
   The controller relies on `resolveRef` to scope reads and "mark all" / "unread" to the current user.

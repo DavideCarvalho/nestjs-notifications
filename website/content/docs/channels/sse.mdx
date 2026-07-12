@@ -45,6 +45,7 @@ export class AppModule {}
 | --- | --- | --- | --- |
 | `event` | `string` | `'notification'` | SSE event name (`type`) emitted to clients. |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+| `backplane` | `SseBackplane` | none (single-process fan-out) | Cross-pod pub/sub so a stream connected to one pod receives notifications published on another. See [Scaling across instances](#scaling-across-instances). |
 
 The module provides two things: the `SseChannel` (which the core discovers and pushes into) and the
 `SseHub` (an in-memory fan-out you read from in your controller).
@@ -132,6 +133,52 @@ right stream.
 <Callout type="info">
   SSE is fire-and-forget: publishing to a key with no live subscriber is a no-op. To persist
   notifications for an inbox, also route to the [database channel](/docs/channels/database).
+</Callout>
+
+## Scaling across instances
+
+By default the `SseHub` fans a notification out **in-process only** — a stream connected to pod A
+never sees a notification published on pod B. Pass a `backplane` and every publish fans out over it
+to every pod, so a user's stream stays live no matter which pod is running the send:
+
+```ts title="app.module.ts"
+import Redis from 'ioredis';
+import { SseChannelModule, redisSseBackplane } from '@dudousxd/nestjs-notifications-sse';
+
+@Module({
+  imports: [
+    SseChannelModule.forRoot({
+      event: 'notification',
+      backplane: redisSseBackplane(() => new Redis(process.env.REDIS_URL)),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+`redisSseBackplane(createClient, options?)` builds a `RedisSseBackplane` by calling `createClient()`
+**twice** — one publisher, one subscriber. That's not incidental: a client that has entered
+subscribe mode rejects regular commands (`ioredis` fails with `"Connection in subscriber mode, only
+subscriber commands may be used"`), so sharing one connection for both roles is a footgun the
+factory exists to prevent. The package stays BYO — it doesn't depend on `ioredis` itself, so you
+control the client version/config; `createClient` just needs to return something satisfying the
+`RedisPubSubClient` interface (`publish`, `subscribe`, `on('message', ...)`, optional `quit`).
+
+Prefer building the two clients yourself (e.g. from a DI-injected Redis config)? Construct
+`RedisSseBackplane` directly instead of the factory:
+
+```ts
+import { RedisSseBackplane } from '@dudousxd/nestjs-notifications-sse';
+
+new RedisSseBackplane({ publisher: new Redis(url), subscriber: new Redis(url) });
+```
+
+<Callout type="info">
+  `options?.channel` overrides the pub/sub channel name (default
+  `'nestjs-notifications:sse'`) — set it when running more than one isolated app on the same Redis.
+  `RedisSseBackplane` subscribes once, at hub startup; `ioredis` auto-resubscribes after a
+  reconnect, so this survives connection drops without extra wiring. A hand-rolled
+  `RedisPubSubClient` without that behavior needs its own reconnect handling.
 </Callout>
 
 ## Cross-device read sync

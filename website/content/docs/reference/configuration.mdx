@@ -74,6 +74,25 @@ argument only when it's configured. See [Localization](/docs/concepts/localizati
 
 `Provider[]` — extra providers, e.g. the dispatcher's config token.
 
+### emitter
+
+`boolean` — register `EventEmitterModule.forRoot()` for you. **Defaults to `false`.** Core's
+`ChannelRunner` injects `EventEmitter2` regardless of this flag (it's what emits the
+`notification.sending`/`sent`/`failed` [lifecycle events](#events)), so *something* has to call
+`EventEmitterModule.forRoot()` once. Set `emitter: true` only when this module owns the app's only
+`EventEmitterModule` registration:
+
+```ts
+NotificationsModule.forRoot({ emitter: true });
+```
+
+<Callout type="warn">
+  Leave this `false` (the default) if your app already calls `EventEmitterModule.forRoot()`
+  elsewhere — e.g. for its own domain events. Two independent `forRoot()` calls with different
+  options would silently pick whichever wins Nest's dynamic-module merge, so don't register it
+  twice.
+</Callout>
+
 ## forRootAsync
 
 When `resolveNotifiable` (or a dispatcher's config) depends on other providers, use
@@ -89,8 +108,10 @@ NotificationsModule.forRootAsync({
 });
 ```
 
-The async options accept `useFactory`, `inject`, `imports`, `providers`, `dispatcher`, and `global`.
-`errorPolicy` still defaults to `'continueOnError'` if your factory doesn't set it.
+The async options accept `useFactory`, `inject`, `imports`, `providers`, `dispatcher`, `global`, and
+`emitter`. `errorPolicy` still defaults to `'continueOnError'` if your factory doesn't set it.
+`emitter` stays a synchronous top-level flag (not inside the factory's returned options) because
+`imports` is resolved at `forRootAsync()` call time, before the factory runs.
 
 ## Events
 

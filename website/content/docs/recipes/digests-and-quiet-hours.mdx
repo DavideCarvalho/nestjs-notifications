@@ -126,6 +126,17 @@ export class AppModule {}
 The TypeORM adapter needs its `PendingDigestEntity` / `DigestWindowEntity` registered on the
 `DataSource`, exactly like the notification entities.
 
+<Callout type="info">
+  Neither adapter fits your schema? Implement `PendingDigestStore` yourself and bind it to the
+  `PENDING_DIGEST_STORE` token (exported from `@dudousxd/nestjs-notifications-preferences`) instead
+  of passing `store` to `forDigest()`. The bundled adapter modules re-declare this token via
+  `Symbol.for('nestjs-notifications:pending-digest-store')` rather than importing it from
+  `preferences` directly — `preferences` is an **optional peer** of the ORM adapter packages, and a
+  value import would make `require`-ing an adapter crash at boot for every consumer that doesn't
+  install `preferences`. `Symbol.for` with the same key resolves to the identical token across the
+  package boundary, so DI binding still matches without the hard dependency.
+</Callout>
+
 ## See also
 
 - [Channel preferences](/docs/recipes/preferences) — the preference center that sets a category's
