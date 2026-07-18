@@ -1,5 +1,6 @@
 ---
 title: Server-Sent Events
+icon: Radio
 description: Push notifications to the browser over native NestJS Server-Sent Events. This channel feeds an SseHub; you mount the stream with Nest's own @Sse() decorator — tenant-aware.
 ---
 
@@ -107,6 +108,51 @@ export class NotificationsController {
 The browser opens an `EventSource('/notifications/stream')`; every notification routed to the SSE
 channel for that user lands as a `MessageEvent` on the stream. The hub keeps one subject per key and
 tears it down when the last subscriber disconnects, so multiple tabs share a stream cleanly.
+
+## Or let the library mount it: `createNotificationsStreamController`
+
+If you'd rather not hand-write that controller, the package ships a factory that builds it for you —
+`createNotificationsStreamController`. You supply how to resolve the route (and optionally the tenant)
+from the request; it mounts a native `@Sse()` endpoint that subscribes to the `SseHub` under the same
+key the channel publishes to, and adds a keep-alive heartbeat:
+
+```ts title="inbox.module.ts"
+import { Module } from '@nestjs/common';
+import { createNotificationsStreamController } from '@dudousxd/nestjs-notifications-sse';
+import { AuthGuard } from './auth.guard';
+
+const NotificationsStreamController = createNotificationsStreamController({
+  resolveRoute: (req) => String(req.user.id),          // must match routeNotificationFor('sse')
+  resolveTenant: (req) => req.tenantId,                // optional; match the send's tenant scope
+  guards: [AuthGuard],                                 // the stream is per-user — protect it
+});
+
+@Module({ controllers: [NotificationsStreamController] })
+export class InboxModule {}
+```
+
+That mounts `GET notifications/stream`. `NotificationsStreamControllerOptions`:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `resolveRoute` | `(req) => string \| Promise<string>` | — | Resolve the SSE route value from the request. Must equal what the notifiable returns from `routeNotificationFor('sse')` (typically the user id). |
+| `resolveTenant` | `(req) => string \| undefined \| Promise<…>` | — | Resolve the tenant so the stream key lines up with the send's tenant scope. Omit in single-tenant apps. |
+| `path` | `string` | `'notifications'` | Controller base path. |
+| `streamPath` | `string` | `'stream'` | Sub-path for the `@Sse()` endpoint → `GET {path}/{streamPath}`. |
+| `guards` | `Array<Type<CanActivate> \| CanActivate>` | — | Guards applied via `@UseGuards` — almost always your auth guard. |
+| `heartbeatMs` | `number` | `25000` | Interval for a `{ type: 'heartbeat' }` keep-alive frame so idle connections survive proxy/load-balancer timeouts. Set `0` to disable. |
+
+Under the hood it does exactly what the hand-written controller does — builds `sseKey(tenant, route)`
+and subscribes to `this.hub.stream(key)` — plus merges in the heartbeat. Requires `SseChannelModule`
+(which provides `SseHub`) in scope, and pairs with a cross-pod [`backplane`](#scaling-across-instances)
+so a publish on any node reaches connections held by another.
+
+<Callout type="info">
+  The `heartbeat` frame is the practical reason to prefer the factory: many proxies close an idle SSE
+  connection after ~30–60s, and the periodic comment keeps it warm without you wiring an
+  `interval()` yourself. Drop `heartbeatMs` to `0` only if something upstream already keeps the socket
+  alive.
+</Callout>
 
 ## Routing and tenant-awareness
 

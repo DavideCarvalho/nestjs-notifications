@@ -1,1 +1,8 @@
-{ "title": "Reference", "pages": ["configuration", "testing"] }
+{
+  "title": "Reference",
+  "icon": "ScrollText",
+  "pages": [
+    "configuration",
+    "testing"
+  ]
+}

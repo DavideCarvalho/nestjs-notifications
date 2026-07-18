@@ -1,1 +1,10 @@
-{ "title": "Dispatchers", "pages": ["index", "event-emitter", "bullmq", "redis"] }
+{
+  "title": "Dispatchers",
+  "icon": "Waypoints",
+  "pages": [
+    "index",
+    "event-emitter",
+    "bullmq",
+    "redis"
+  ]
+}

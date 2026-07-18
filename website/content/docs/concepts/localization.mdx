@@ -1,5 +1,6 @@
 ---
 title: Localization (i18n)
+icon: Languages
 description: Translate each notification per recipient. Resolve a locale off the notifiable, look strings up in a catalog (or your own translator), and render channel payloads in the recipient's language with localization.t().
 ---
 
@@ -108,3 +109,54 @@ NotificationsModule.forRoot({
   DI under `NOTIFICATION_LOCALE_RESOLVER` / `NOTIFICATION_TRANSLATOR` if you'd rather wire them as
   providers than inline options.
 </Callout>
+
+## The moving parts
+
+Everything above is driven by a few concrete exports you can also use directly — in a test, a custom
+resolver, or your own rendering code.
+
+**`InMemoryTranslator`** is the zero-dependency default translator. It looks up `catalog[locale][key]`,
+falling back to the base locale (`pt-BR` → `pt`), then the default locale, then the raw key, and
+interpolates `{placeholder}` tokens. It's what backs the `catalog` option, but you can construct one
+yourself:
+
+```ts
+import { InMemoryTranslator } from '@dudousxd/nestjs-notifications-core';
+
+const t = new InMemoryTranslator(
+  { en: { hi: 'Hi {name}' }, 'pt-BR': { hi: 'Olá {name}' } },
+  'en', // default locale
+);
+t.translate('hi', 'pt-BR', { name: 'Ana' }); // "Olá Ana"
+t.translate('hi', 'fr', { name: 'Ana' });    // "Hi Ana"  (falls back to the default locale)
+```
+
+**`makeLocalization(translator, locale)`** binds a translator to a resolved locale, producing the
+`Localization` object (`{ locale, t }`) your payload methods receive — the shorthand `t(key, params)`
+is just `translator.translate(key, locale, params)`. Reach for it when you render a message outside a
+channel (a preview, a digest email) and want the same `.t()` ergonomics:
+
+```ts
+import { makeLocalization } from '@dudousxd/nestjs-notifications-core';
+
+const l10n = makeLocalization(t, 'pt-BR');
+l10n.t('hi', { name: 'Ana' }); // "Olá Ana"
+```
+
+**`LocalizationService`** is the injectable that the [`ChannelRunner`](/docs/concepts/channels-and-dispatchers)
+uses to resolve a `Localization` per delivery — `forNotifiable(notifiable)` runs the bound
+`LocaleResolver` (default: `PropertyLocaleResolver`) and wraps the resolved locale with the bound
+`Translator` via `makeLocalization`. It's provided by `NotificationsModule`, so you can inject it if
+you need the same resolution the channels get:
+
+```ts
+@Injectable()
+export class DigestBuilder {
+  constructor(private readonly l10n: LocalizationService) {}
+
+  async subjectFor(user: User) {
+    const localization = await this.l10n.forNotifiable(user);
+    return localization.t('digest.subject', { count: 3 });
+  }
+}
+```

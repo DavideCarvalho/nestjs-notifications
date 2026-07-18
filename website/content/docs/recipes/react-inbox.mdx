@@ -1,5 +1,6 @@
 ---
 title: React inbox widget
+icon: Bell
 description: Drop a notification inbox into a React app with one component. The @dudousxd/nestjs-notifications-react package ships <Inbox/>, a NotificationsProvider, and the useNotifications / useUnreadCount hooks — all consuming the read API and SSE stream you already expose.
 ---
 
@@ -104,6 +105,50 @@ useNotificationsStream({ url: '/notifications/stream', onRead: applyReadEvent })
 read). `<Inbox/>` and `NotificationsProvider` already wire this when an `sseUrl` is set — you only
 need it when you compose the hooks yourself. The server side (binding the SSE read publisher) is in
 the [Real-time & in-app guide](/docs/recipes/realtime-in-app#cross-device-read-sync-optional).
+
+## The bell on its own: `NotificationBell`
+
+`<Inbox/>` renders a bell-with-badge that toggles the panel. When you're building your own panel (a
+slide-over, a route, a full-page inbox), you often want *just the bell* — the button and its unread
+badge — wired to your own open/close state. That's `NotificationBell`: a small, **state-free**
+component you drive with a `count` and an `onClick`.
+
+```tsx title="HeaderBell.tsx"
+import { useState } from 'react';
+import { NotificationBell, useUnreadCount } from '@dudousxd/nestjs-notifications-react';
+
+export function HeaderBell() {
+  const { count } = useUnreadCount();     // live off the SSE stream (or polling)
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <NotificationBell count={count} expanded={open} onClick={() => setOpen((o) => !o)} />
+      {open && <MyNotificationPanel onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+```
+
+Because it takes `count` as a prop, it isn't tied to the hooks at all — feed it a number from
+anywhere (a WebSocket, your own store, a server-rendered value). Pairing it with
+[`useUnreadCount()`](#the-hooks) is the common case, but not required.
+
+`NotificationBellProps`:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `count` | `number` | — | Unread count shown in the badge; the badge is hidden when `0`. |
+| `onClick` | `() => void` | — | Click handler — typically toggles your panel. |
+| `max` | `number` | `99` | Caps the displayed number: `count > max` renders as `${max}+` (e.g. `99+`). |
+| `expanded` | `boolean` | — | Reflected as `aria-expanded` so the button announces your panel's open state. |
+| `ariaLabel` | `string` | auto | Accessible label. Defaults to describing the unread count (`"Notifications, 3 unread"`). |
+| `icon` | `React.ReactNode` | bell glyph | Override the default bell SVG with your own icon. |
+| `className` / `style` | — | — | Style hooks; the component ships minimal inline styles you can extend or replace. |
+
+The button carries `aria-haspopup="true"` and the `aria-expanded` you pass, so it's accessible as a
+disclosure control out of the box. It's the same bell `<Inbox/>` uses internally — reach for
+`NotificationBell` when you want the bell without the bundled dropdown.
 
 ## Customizing the row
 

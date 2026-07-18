@@ -1,5 +1,6 @@
 ---
 title: Dispatch guards
+icon: ShieldCheck
 description: Dedup (idempotency) and throttle (rate-limit) a notification before any channel runs. Opt in per notification with idempotencyKey() and throttle(); back them with an in-memory or Redis store.
 ---
 
@@ -127,3 +128,46 @@ NotificationsModule.forRoot({
   },
 });
 ```
+
+## The `DispatchGuards` service
+
+The two checks live in an injectable service, `DispatchGuards`, that the core consults in the dispatch
+path **before** either the sync or async send runs — so the guarantees hold no matter which dispatcher
+delivers. It's provided by `NotificationsModule`; you rarely call it yourself, but it's injectable when
+you want to apply the same dedup/throttle policy to a non-notification code path.
+
+Its one method, `check(notifiable, notification, tenant)`, returns a `GuardDecision`:
+
+```ts
+type GuardDecision =
+  | { proceed: true }
+  | { proceed: false; reason: 'duplicate' | 'throttled'; overflow?: ThrottleOverflow };
+```
+
+```ts
+@Injectable()
+export class SomeService {
+  constructor(private readonly guards: DispatchGuards) {}
+
+  async maybeSend(user: User, notification: PriceAlert, tenant?: string) {
+    const decision = await this.guards.check(user, notification, tenant);
+    if (!decision.proceed) {
+      // decision.reason === 'duplicate' | 'throttled'
+      // decision.overflow (on 'throttled') tells you whether to drop or defer
+      return;
+    }
+    // …proceed
+  }
+}
+```
+
+It checks throttle first (cheap and frequent), then idempotency — and deliberately reserves the
+idempotency key **only after** the throttle passes, so a throttled send doesn't burn its dedup slot.
+A notification that declares neither hook always resolves to `{ proceed: true }` and the stores are
+never touched.
+
+<Callout type="info">
+  The `overflow` on a `'throttled'` decision resolves the notification's own `throttle().overflow`
+  first, falling back to the module-level `throttle.overflow` default — so the caller sees the same
+  `'drop'` / `'defer'` intent the core would act on.
+</Callout>

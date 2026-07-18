@@ -1,11 +1,13 @@
 {
   "title": "Concepts",
+  "icon": "Layers",
   "pages": [
     "notifiables",
     "notifications",
     "channels-and-dispatchers",
     "async-dispatch",
     "multi-tenancy",
+    "context-capture",
     "dispatch-guards",
     "fallback-chains",
     "localization"

@@ -1,5 +1,6 @@
 ---
 title: Writing a custom channel
+icon: Puzzle
 description: Implement a ChannelDriver and the library discovers it automatically. Build an SMS channel end to end — the driver, a type-safe notification interface, and a global module.
 ---
 
@@ -145,6 +146,91 @@ export class AppModule {}
   Discovery is structural, not nominal. `ChannelRegistry` scans every provider in the container and
   keeps any whose instance has a string `channel` and a `send()` method — keyed by `channel`. If two
   drivers claim the same name, the last one discovered wins, so keep channel names unique.
+</Callout>
+
+## Less boilerplate: `BaseChannel`
+
+The driver above spells out the delivery preamble every channel repeats — resolve the payload method,
+raise `MissingChannelMethodError` when it's missing, read the localization/tenant off the context.
+`BaseChannel` owns that preamble so your driver only writes the transport-specific tail. Extend it,
+declare the `channel` name, and call `buildPayload()`:
+
+```ts title="sms.channel.ts"
+import { BaseChannel, type DeliveryContext, type Notifiable, type Notification } from '@dudousxd/nestjs-notifications-core';
+import { Injectable } from '@nestjs/common';
+import type { SmsMessage } from './sms-notification';
+import { SmsClient } from './sms-client';
+
+@Injectable()
+export class SmsChannel extends BaseChannel {
+  readonly channel = 'sms';
+
+  constructor(private readonly client: SmsClient) {
+    super();
+  }
+
+  async send(notifiable: Notifiable, notification: Notification, context?: DeliveryContext) {
+    const to = notifiable.routeNotificationFor(this.channel, notification) as string | undefined;
+    if (!to) return;
+
+    // resolves @Sms() or the `toSms` convention; throws MissingChannelMethodError if neither exists
+    const message = this.buildPayload<SmsMessage>(notification, notifiable, 'toSms', context);
+    await this.client.send({ to, body: message.body });
+  }
+}
+```
+
+`buildPayload<T>(notification, notifiable, fallbackMethodName, context)` finds the handler (decorated
+method first, then the convention name), invokes it with `{ notifiable, localization, tenant }` from
+the context, and throws the uniform `MissingChannelMethodError` when the notification implements
+neither — so localization and tenant reach the payload method for free. `BaseChannel` also exposes a
+`forTenant(fallback, context, resolver?)` helper that picks a per-tenant value when both a tenant and
+a resolver are present, for channels with per-tenant transports or credentials.
+
+## Less boilerplate: `defineChannelModule`
+
+The built-in *simple* channels (slack, discord, teams, telegram, webhook) all wire the same shape of
+`forRoot()`: an options provider, an optional per-tenant resolver, then the channel — registered
+globally and exported. `defineChannelModule()` single-sources that skeleton so your module only shapes
+its own options:
+
+```ts title="sms-channel.module.ts"
+import { type DynamicModule, Module } from '@nestjs/common';
+import { defineChannelModule } from '@dudousxd/nestjs-notifications-core';
+import { SmsChannel } from './sms.channel';
+import { SMS_OPTIONS } from './tokens';
+
+export interface SmsChannelOptions {
+  apiKey: string;
+  from?: string;
+  global?: boolean;
+}
+
+@Module({})
+export class SmsChannelModule {
+  static forRoot(options: SmsChannelOptions): DynamicModule {
+    return defineChannelModule({
+      module: SmsChannelModule,
+      channel: SmsChannel,
+      optionsToken: SMS_OPTIONS,   // the channel injects its options from here
+      options,
+      global: options.global ?? true,
+    });
+  }
+}
+```
+
+`ChannelModuleConfig` is `{ module, channel, optionsToken, options, resolver?, global? }`. Pass
+`resolver: { token, value }` to register a per-tenant/per-notifiable options resolver (it defaults to
+`null` when the value is absent), exactly as the mail channel's `resolveTransport` does. Under the
+hood it builds `{ module, global, providers: [optionsProvider, resolverProvider?, channel], exports:
+[channel] }` — the same module the hand-written version produced, minus the repetition.
+
+<Callout type="info">
+  Reach for `defineChannelModule` when your channel's wiring fits the *options + optional resolver +
+  channel* shape (most simple HTTP/webhook channels do). Channels with bespoke transport or renderer
+  providers (mail, sms with a client, push) build their `DynamicModule` by hand — the skeleton would
+  just get in the way.
 </Callout>
 
 ## Use it in a notification

@@ -1,5 +1,6 @@
 ---
 title: Fallback chains
+icon: GitFork
 description: Deliver a notification down an ordered chain of channels — push first, escalate to SMS, then email — stopping at the first that reaches the recipient. Opt in per notification with fallback().
 ---
 
@@ -78,6 +79,51 @@ NotificationsModule.forRoot({
   Fallback chains apply to **synchronous** delivery (the inline `send`/`sendNow` path), where the
   chain can wait and escalate. They also honor ad-hoc channel scoping — `only()` / `except()` narrow
   the channels the chain considers.
+</Callout>
+
+## The primitives underneath
+
+The `fallback()` hook is the declarative front door, but the escalation logic is a small set of pure,
+exported functions you can reach for directly — to build a bespoke chain, unit-test one, or drive an
+escalation from outside a notification.
+
+**`readFallback(notification)`** duck-types the fallback hook off any notification instance — it just
+returns the object typed as `FallbackAware`, so you can inspect `notification.fallback?.(notifiable)`
+without a compile-time `implements`:
+
+```ts
+import { readFallback } from '@dudousxd/nestjs-notifications-core';
+
+const policy = readFallback(notification).fallback?.(user); // FallbackPolicy | undefined
+```
+
+**`runFallbackChain(channels, deliver, isDelivered)`** is the engine: it attempts each channel in
+order via your `deliver` callback, asks `isDelivered` after each attempt, and stops at the first that
+reached the recipient — returning every attempt's result plus the winning channel. It's
+transport-agnostic; you supply how a channel is delivered and how "delivered" is judged:
+
+```ts
+import { runFallbackChain, deliveredFromResult } from '@dudousxd/nestjs-notifications-core';
+
+const outcome = await runFallbackChain(
+  ['push', 'sms', 'mail'],
+  (channel) => runner.deliver(channel, user, notification),   // Promise<ChannelResult>
+  (result) => deliveredFromResult(result),                    // sent? stop : escalate
+);
+
+outcome.deliveredVia; // 'push' | 'sms' | 'mail' | undefined (all failed)
+outcome.results;      // ChannelResult[] — one per channel actually attempted, in order
+```
+
+**`deliveredFromResult(result)`** is the default decision the library uses when no
+`DeliveryConfirmation` probe is bound: a channel counts as delivered only when its immediate result
+is `sent` — anything else (`failed`, `skipped`, `deferred`, …) escalates. Pass your own predicate to
+`runFallbackChain` (e.g. one that awaits a delivery-receipt poll) to override it.
+
+<Callout type="info">
+  These are the exact pieces the core wires together for `fallback()`. You rarely need them directly —
+  reach for them when you're composing escalation into your own orchestration, or writing a focused
+  test around the ordering without booting the module.
 </Callout>
 
 ## Fallback vs. the other reliability tools

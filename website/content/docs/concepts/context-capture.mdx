@@ -1,0 +1,239 @@
+---
+title: Context capture (causer attribution)
+icon: UserCheck
+description: Capture who triggered a notification — the causer, tenant, and trace id — at send() time and thread it through lifecycle events, the async carrier, and the database row. Integrates @dudousxd/nestjs-context; degrades to a no-op when it's absent.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+A notification always knows *who it is going to* (the notifiable). Context capture adds *who it came
+from* — the **causer** (the acting user), the **tenant** the action happened in, and the request's
+**trace id** — snapshotted at `send()` time and carried the whole way to delivery. So a persisted
+row can answer "**Bob** archived Alice's document" instead of just "a document was archived", and an
+async-delivered notification still records the actor even though the worker runs long after the
+request ended.
+
+It's built on [`@dudousxd/nestjs-context`](https://www.npmjs.com/package/@dudousxd/nestjs-context) — an
+**optional peer**. When it isn't installed (or no accessor is bound), capture is `undefined` and every
+channel behaves exactly as before. Nothing to opt out of; nothing changes until you wire an accessor.
+
+## What gets captured
+
+At the moment you call `notifications.send(...)`, the core reads the current request context into a
+plain, JSON-safe `CapturedContext`:
+
+```ts
+interface CapturedContext {
+  /** Who triggered the notification (the current user/actor), if known. */
+  causer?: { type: string; id: string | number };
+  /** The tenant the trigger happened in, if a multi-tenant context is populated. */
+  tenantId?: string;
+  /** Correlation/trace id of the triggering request, for end-to-end tracing. */
+  traceId?: string;
+}
+```
+
+Every field is optional — an absent accessor, or one that returns `undefined` for a field, simply
+omits it. When nothing is captured, the whole object is left off (`captured` stays `undefined`).
+
+This capture then rides along three surfaces:
+
+- **Lifecycle events** — `NotificationSendingEvent`, `NotificationSentEvent`, and
+  `NotificationFailedEvent` each carry a `captured` field.
+- **The `DeliveryContext`** handed to every channel's `send()` — as `context.captured`.
+- **The async carrier** — cross-process dispatchers (BullMQ, Redis) serialize `captured` into the
+  job and re-establish it on the worker, so a background delivery still knows the actor.
+
+The [database channel](/docs/channels/database) reads it off the `DeliveryContext` and persists
+`causerType` / `causerId` / `traceId` columns on the notification row — attribution that survives
+long after the request is gone.
+
+## Wire the accessor
+
+<Steps>
+
+<Step>
+
+### Install and register `@dudousxd/nestjs-context`
+
+```bash
+pnpm add @dudousxd/nestjs-context
+```
+
+Register its module so an accessor is populated per request (see the
+[nestjs-context docs](https://www.npmjs.com/package/@dudousxd/nestjs-context) for its middleware /
+interceptor wiring — typically it reads the authenticated user, tenant, and a request id off the
+incoming request):
+
+```ts title="app.module.ts"
+import { ContextModule } from '@dudousxd/nestjs-context';
+
+@Module({
+  imports: [
+    ContextModule.forRoot({ global: true }),
+    NotificationsModule.forRoot({ notifications: [DocumentArchived] }),
+    DatabaseChannelModule.forRoot(),
+  ],
+})
+export class AppModule {}
+```
+
+</Step>
+
+<Step>
+
+### Bind the accessor under `CONTEXT_ACCESSOR`
+
+The notifications core looks up its accessor under the shared symbol
+`CONTEXT_ACCESSOR` (`Symbol.for('@dudousxd/nestjs-context:accessor')`), injected **`@Optional()`**. If
+your `ContextModule` already provides that symbol app-wide, you're done — the core resolves it through
+a non-strict `ModuleRef` lookup, so an accessor provided by *any* module (a global `ContextModule`, or
+the app root) is found.
+
+If you expose the accessor under a different provider, alias it to the shared token so notifications
+can see it:
+
+```ts title="app.module.ts"
+import { CONTEXT_ACCESSOR } from '@dudousxd/nestjs-notifications-core';
+import { ContextAccessor as NestjsContextAccessor } from '@dudousxd/nestjs-context';
+
+@Module({
+  providers: [
+    { provide: CONTEXT_ACCESSOR, useExisting: NestjsContextAccessor },
+  ],
+})
+export class AppModule {}
+```
+
+<Callout type="info">
+  The core never imports `@dudousxd/nestjs-context` — it declares a **structural** `ContextAccessor`
+  interface (`traceId()`, `tenantId()`, `userRef()`, `get()`) and injects *any* object that satisfies
+  it. That keeps the dependency optional and lets you bind a hand-rolled accessor (or a test double)
+  under the same token.
+</Callout>
+
+</Step>
+
+</Steps>
+
+## Bring your own accessor
+
+You don't need `@dudousxd/nestjs-context` at all — any provider that structurally matches
+`ContextAccessor` works. For example, an accessor backed by your own `AsyncLocalStorage`:
+
+```ts title="request-context.accessor.ts"
+import { Injectable } from '@nestjs/common';
+import { CONTEXT_ACCESSOR, type ContextAccessor, type UserRef } from '@dudousxd/nestjs-notifications-core';
+import { requestStore } from './request-store'; // your AsyncLocalStorage<{ user, tenant, traceId }>
+
+@Injectable()
+export class RequestContextAccessor implements ContextAccessor {
+  traceId(): string | undefined {
+    return requestStore.getStore()?.traceId;
+  }
+  tenantId(): string | undefined {
+    return requestStore.getStore()?.tenant;
+  }
+  userRef(): UserRef | undefined {
+    const user = requestStore.getStore()?.user;
+    return user ? { type: 'User', id: user.id } : undefined;
+  }
+  get() {
+    return requestStore.getStore();
+  }
+}
+```
+
+```ts title="app.module.ts"
+@Module({
+  providers: [
+    RequestContextAccessor,
+    { provide: CONTEXT_ACCESSOR, useExisting: RequestContextAccessor },
+  ],
+})
+export class AppModule {}
+```
+
+The core's `captureContext(accessor?)` helper is defensive: it swallows any throw from the accessor
+and returns `undefined`, so a broken context provider can never break a notification send.
+
+## Read the captured causer
+
+### On the persisted row
+
+Once the database channel is in play, the causer and trace are columns on every stored notification:
+
+```ts title="audit.service.ts"
+const rows = await this.store.paginateForNotifiable('User', String(user.id), { limit: 20, offset: 0 });
+
+for (const row of rows) {
+  // row.causerType / row.causerId — WHO triggered it (null on rows sent without a context)
+  // row.traceId               — correlate back to the request logs
+  console.log(`${row.causerType}#${row.causerId} → ${row.type} (trace ${row.traceId})`);
+}
+```
+
+`StoredNotification` gains `causerType: string | null`, `causerId: string | null`, and
+`traceId: string | null`. They're `null` on rows written before you wired an accessor, or on sends
+with no active context (a cron job, a startup task), so existing rows and schema-first stores are
+unaffected.
+
+<Callout type="info">
+  The delivery **tenant** wins for the row's `tenantId`; when a send is unscoped, the *captured*
+  tenant is used as a fallback so the row is still attributable to the right workspace. See
+  [Multi-tenancy](/docs/concepts/multi-tenancy).
+</Callout>
+
+### On lifecycle events
+
+Every notification lifecycle event carries the same capture — handy for audit logging or tracing
+without touching the database channel:
+
+```ts title="notification-audit.listener.ts"
+import { OnEvent } from '@nestjs/event-emitter';
+import { NotificationSentEvent, NotificationEvents } from '@dudousxd/nestjs-notifications-core';
+
+@Injectable()
+export class NotificationAuditListener {
+  @OnEvent(NotificationEvents.sent)
+  onSent(event: NotificationSentEvent) {
+    const c = event.captured;
+    if (!c) return; // no context was active for this send
+    this.audit.record({
+      causer: c.causer,        // { type, id } | undefined
+      tenantId: c.tenantId,
+      traceId: c.traceId,      // stitch into your tracing backend
+      notification: event.notification.constructor.name,
+    });
+  }
+}
+```
+
+### Inside a channel
+
+Custom channels receive the capture on the `DeliveryContext` third argument of `send()` — so a
+[custom channel](/docs/recipes/custom-channel) can attach the actor to an outbound payload:
+
+```ts
+async send(notifiable: Notifiable, notification: Notification, context?: DeliveryContext) {
+  const causer = context?.captured?.causer;      // { type, id } | undefined
+  const traceId = context?.captured?.traceId;    // for provider-side correlation
+  // …forward causer/traceId to your transport
+}
+```
+
+## Survives async dispatch
+
+The whole point of capturing *at send time* is that the actor outlives the request. When you dispatch
+[asynchronously](/docs/concepts/async-dispatch), the `captured` object is serialized into the job
+payload and re-established on the worker, so a notification delivered minutes later by a
+[BullMQ](/docs/dispatchers/bullmq) or [Redis](/docs/dispatchers/redis) worker still records who
+triggered it — no request context on the worker required. Because `CapturedContext` is a plain,
+JSON-safe object by construction, nothing special is needed to round-trip it.
+
+## See also
+
+- [Multi-tenancy](/docs/concepts/multi-tenancy) — how the tenant scope and the captured tenant relate
+- [Database channel](/docs/channels/database) — where the causer/trace columns live
+- [Async dispatch](/docs/concepts/async-dispatch) — how the carrier crosses the process boundary

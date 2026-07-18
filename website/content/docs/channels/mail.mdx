@@ -1,5 +1,6 @@
 ---
 title: Mail
+icon: Mail
 description: Send email notifications. A fluent MailMessage builder, an HTML + text renderer, and a swappable transport — nodemailer SMTP out of the box.
 ---
 
@@ -47,7 +48,8 @@ export class AppModule {}
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `from` | `string` | — | Default sender used when a message doesn't set its own `from`. |
-| `transport` | `Type<MailTransport>` | `NodemailerTransport` | Transport class that delivers the rendered mail. |
+| `transport` | `Type<MailTransport>` | `NodemailerTransport` | Transport **class** that delivers the rendered mail (resolved from DI). |
+| `transportInstance` | `MailTransport` | — | A pre-built transport **instance** — use for transports you construct yourself (e.g. [`SesTransport`](#aws-ses) or a [failover](#multi-provider-failover) wrapper). Takes precedence over `transport`. |
 | `renderer` | `Type<MailRenderer>` | `DefaultMailRenderer` | Renderer that produces the HTML + text bodies. |
 | `smtp` | `SMTPOptions` | `{}` | SMTP options forwarded to the default nodemailer transport. |
 | `resolveTransport` | `(tenant: string) => MailTransport` | — | Per-tenant transport resolver. See [Per-tenant transport](#per-tenant-transport). |
@@ -153,6 +155,44 @@ MailChannelModule.forRoot({ from: 'no-reply@example.com', transport: ResendTrans
 
 The transport class is registered in DI, so it can inject its own dependencies (config, an HTTP
 client, your provider SDK).
+
+### AWS SES
+
+The mail package ships a first-class **AWS SES v2** transport, `SesTransport`. Unlike SES "Simple"
+content (subject/html/text only), it builds a full MIME message with nodemailer's `MailComposer` and
+sends it as `Content.Raw` — so **attachments are supported**. It's a ready-made `MailTransport` you
+construct with a configured SES client and pass via `transportInstance`:
+
+```bash
+pnpm add @dudousxd/nestjs-notifications-mail @aws-sdk/client-sesv2
+```
+
+```ts title="app.module.ts"
+import { SESv2Client } from '@aws-sdk/client-sesv2';
+import { MailChannelModule, SesTransport } from '@dudousxd/nestjs-notifications-mail';
+
+MailChannelModule.forRoot({
+  from: 'no-reply@example.com',
+  transportInstance: new SesTransport({
+    client: new SESv2Client({ region: 'us-east-1' }),
+    from: 'no-reply@example.com', // fallback sender when a message sets no `from`
+  }),
+});
+```
+
+`SesTransportOptions` is `{ client: SesV2Client; from?: string }`. `client` is anything with a
+`send(command)` method — in practice `@aws-sdk/client-sesv2`'s `SESv2Client`, but the transport only
+depends on the structural `SesV2Client` interface, so a test double or a custom-configured client
+works too. The `@aws-sdk/client-sesv2` package is an **optional peer** imported lazily (only when a
+mail actually sends), so it isn't resolved at compile time and stays out of your bundle until you use
+this transport.
+
+<Callout type="info">
+  Because `SesTransport` sends raw MIME, you can attach files to a `MailMessage` and they ride through
+  to SES intact — SES's Simple content type can't do that. Need the raw bytes yourself (to sign, log,
+  or hand to another SDK call)? `composeRawEmail(payload, defaultFrom?)` is exported too — it returns
+  the composed MIME `Buffer` for a rendered `MailTransportPayload`.
+</Callout>
 
 ### Multi-provider failover
 

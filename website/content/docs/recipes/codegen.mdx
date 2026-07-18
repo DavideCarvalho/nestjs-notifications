@@ -1,5 +1,6 @@
 ---
 title: Typed client with codegen
+icon: Code
 description: Generate a fully typed HTTP client for the inbox API from your NestJS controllers using nestjs-codegen — no hand-written fetch calls, no drift between server and client.
 ---
 
@@ -8,17 +9,97 @@ import { Callout } from 'fumadocs-ui/components/callout';
 The [React widget](/docs/recipes/react-inbox) ships a hand-written `NotificationsClient`. If you'd
 rather **generate** the client — and keep it in lockstep with your routes — point
 [`@dudousxd/nestjs-codegen`](https://www.npmjs.com/package/@dudousxd/nestjs-codegen) at your inbox
-controller. It reads your controllers by static analysis and emits a typed `api.ts` + `routes.ts`.
+routes. It emits a typed `api.ts` + `routes.ts` (and, wired to
+[`@dudousxd/nestjs-client`](https://www.npmjs.com/package/@dudousxd/nestjs-client)'s TanStack helpers,
+ready-made query/mutation factories).
+
+There are two ways to feed it the inbox routes:
+
+- **The codegen extension** (`nestjsNotificationsCodegen()`) — the recommended path. It **injects**
+  the library's routes into your generated `api.ts`, so it works even when you mount the inbox with
+  the `createNotificationsController` **factory** (which static discovery can't see). Jump to
+  [The extension](#the-extension-nestjsnotificationscodegen).
+- **A hand-written static controller** — if you already expose your own decorated notification
+  controller, codegen discovers it by AST like any other. See
+  [A static, decorated controller](#alternative-a-static-decorated-controller).
 
 The runnable [`examples/basic`](https://github.com/DavideCarvalho/nestjs-notifications/tree/main/examples/basic)
-app has the whole setup wired; this recipe walks through it.
+app has the whole setup wired; this recipe walks through both.
 
-## 1. A static, decorated controller
+## The extension: `nestjsNotificationsCodegen()`
+
+The library mounts its inbox (and preference center) with **factories** —
+[`createNotificationsController`](/docs/recipes/in-app-notifications#mount-the-rest-controller) and the
+preference-center controller — that build their `@Controller` at runtime. Codegen's static AST pass
+can't see a runtime-built class, so those routes are invisible to plain discovery.
+
+`@dudousxd/nestjs-notifications-codegen` closes that gap. It's a codegen **extension** that appends the
+library's exact routes to whatever your controllers already produced:
+
+```bash
+pnpm add -D @dudousxd/nestjs-notifications-codegen
+```
+
+```ts title="nestjs-codegen.config.ts"
+import { defineConfig } from '@dudousxd/nestjs-codegen';
+import { nestjsNotificationsCodegen } from '@dudousxd/nestjs-notifications-codegen';
+
+export default defineConfig({
+  validation: noopAdapter,               // see below
+  contracts: { glob: 'src/**/*.controller.ts' },
+  codegen: { outDir: 'src/generated' },
+  forms: { enabled: false },
+  extensions: [
+    nestjsNotificationsCodegen({ basePath: '/api', preferences: true }),
+  ],
+});
+```
+
+Run codegen and the inbox is now a typed client:
+
+```ts
+const page = await api.notifications.list({ query: { page: 1, perPage: 20 } });
+//    ^? { items: StoredNotification[]; meta: { page, perPage, total, lastPage } }
+const { count } = await api.notifications.unreadCount();
+await api.notifications.markAsRead({ params: { id } });
+```
+
+### Options
+
+`nestjsNotificationsCodegen(options?)` takes:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `basePath` | `string` | `''` | Path prefix the controllers are mounted under. `'/api'` → `/api/notifications`. Match whatever your app prefixes routes with (e.g. `app.setGlobalPrefix('api')`). |
+| `path` | `string` | `'notifications'` | URL segment the inbox controller sits at (after `basePath`). Set this when you passed `createNotificationsController({ path })` a non-default path. Leading/trailing slashes are trimmed. |
+| `name` | `string` | `'notifications'` | Route-name namespace for the generated client — `api.<name>.list`, `api.<name>.unreadCount`, … . Independent of `path`. |
+| `inbox` | `boolean` | `true` | Emit the in-app inbox routes (`list` / `unread` / `unreadCount` / `markAsRead` / `markAllAsRead` / `remove`). |
+| `preferences` | `boolean` | `false` | Also emit the [preference-center](/docs/recipes/preferences) routes (`preferences.categories` / `preferences.matrix` / `preferences.setChannel` / `preferences.setDigest`). |
+
+`basePath` and `path` describe **where you mounted** the controllers; `name` decides **what the client
+namespace is called**. Keep them consistent with your actual routing — the extension emits routes, it
+doesn't discover them, so a mismatch produces a client that calls the wrong URL.
+
+<Callout type="info">
+  The injected inbox routes mirror `createNotificationsController` exactly: `GET {path}`,
+  `GET {path}/unread`, `GET {path}/unread/count`, `POST {path}/:id/read`, `POST {path}/read-all`,
+  `DELETE {path}/:id`. The `list` query accepts `page` / `perPage` / `type` (a comma-separated type
+  filter) and returns the paginated `{ items, meta }` shape, so the generated infinite-query factory
+  can page through the inbox out of the box.
+</Callout>
+
+<Callout type="warn">
+  Use the extension **or** a static controller for the same routes — not both. If you expose your own
+  decorated notification controller (so codegen already discovers it), don't also add the extension;
+  it would emit the routes a second time and collide.
+</Callout>
+
+## Alternative: a static, decorated controller
 
 Codegen discovers routes by **static AST** — it reads top-level `@Controller` classes with their
 `@Get`/`@Post`/… methods, the `@Query()`/`@Param()`/`@Body()` param types, and each method's return
-type. (The library's `createNotificationsController` factory builds its controller at runtime, so it
-isn't statically visible — write a plain decorated controller for codegen to read.)
+type. If you don't use the factory and instead write a plain decorated controller (delegating to
+`NotificationsQueryService`), codegen reads it directly — no extension needed.
 
 ```ts title="inbox.controller.ts"
 @Controller('notifications')
@@ -59,7 +140,7 @@ export class AckDto { ok!: boolean; }
 export class ListNotificationsQueryDto { page?: number; perPage?: number; }
 ```
 
-## 2. Configure codegen
+### Configure codegen
 
 ```ts title="nestjs-codegen.config.ts"
 import { defineConfig, type ValidationAdapter } from '@dudousxd/nestjs-codegen';
@@ -104,7 +185,7 @@ pnpm codegen
   to load the TypeScript config file.
 </Callout>
 
-## 3. The generated client
+### The generated client
 
 `src/generated/api.ts` gives you a typed client keyed by controller and method:
 

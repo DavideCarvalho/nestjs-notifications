@@ -1,1 +1,25 @@
-{ "title": "Recipes", "pages": ["index", "on-demand", "queued-notifications", "realtime-in-app", "in-app-notifications", "react-inbox", "headless-sdk", "live-badge", "progress-notifications", "delivery-tracking", "codegen", "preferences", "digests-and-quiet-hours", "pruning", "adopting-existing-app", "injecting-services", "custom-channel", "telescope", "diagnostics"] }
+{
+  "title": "Recipes",
+  "icon": "BookOpen",
+  "pages": [
+    "index",
+    "on-demand",
+    "queued-notifications",
+    "realtime-in-app",
+    "in-app-notifications",
+    "react-inbox",
+    "headless-sdk",
+    "live-badge",
+    "progress-notifications",
+    "delivery-tracking",
+    "codegen",
+    "preferences",
+    "digests-and-quiet-hours",
+    "pruning",
+    "adopting-existing-app",
+    "injecting-services",
+    "custom-channel",
+    "telescope",
+    "diagnostics"
+  ]
+}
