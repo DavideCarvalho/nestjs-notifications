@@ -14,9 +14,12 @@ function makeClient() {
     findMany: vi.fn(async () => [] as any[]),
     count: vi.fn(async () => 0),
     delete: vi.fn(async () => ({})),
+    deleteMany: vi.fn(async () => ({ count: 0 })),
   };
   return { client: { notification }, notification };
 }
+
+const owner = { notifiableType: 'User', notifiableId: '42' };
 
 describe('PrismaNotificationStore', () => {
   it('save() returns a full StoredNotification', async () => {
@@ -154,5 +157,99 @@ describe('PrismaNotificationStore', () => {
     await store.delete('abc');
 
     expect(notification.delete).toHaveBeenCalledWith({ where: { id: 'abc' } });
+  });
+});
+
+/**
+ * The ownership-scoped mutations. The Prisma adapter is outside the cross-store contract (see
+ * `prisma-notification.store.contract.spec.ts`), so the query shape is asserted here instead —
+ * what matters is that the notifiable is part of the `where`, not just the id.
+ */
+describe('PrismaNotificationStore ownership-scoped mutations', () => {
+  it('deleteOwned() scopes the where clause to the owner and reports a hit', async () => {
+    const { client, notification } = makeClient();
+    notification.deleteMany.mockResolvedValueOnce({ count: 1 });
+    const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);
+
+    const deleted = await store.deleteOwned('n1', owner);
+
+    expect(deleted).toBe(true);
+    expect(notification.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'n1', notifiableType: 'User', notifiableId: '42' },
+    });
+  });
+
+  it('deleteOwned() reports false when nothing matched', async () => {
+    const { client, notification } = makeClient();
+    notification.deleteMany.mockResolvedValueOnce({ count: 0 });
+    const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);
+
+    expect(await store.deleteOwned('someone-elses-id', owner)).toBe(false);
+  });
+
+  it('deleteOwned() includes the tenant in the where clause when scoped', async () => {
+    const { client, notification } = makeClient();
+    const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);
+
+    await store.deleteOwned('n1', { ...owner, tenantId: 'acme' });
+
+    expect(notification.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'n1', notifiableType: 'User', notifiableId: '42', tenantId: 'acme' },
+    });
+  });
+
+  it('markAsReadOwned() scopes the where clause to the owner and reports a hit', async () => {
+    const { client, notification } = makeClient();
+    notification.updateMany.mockResolvedValueOnce({ count: 1 });
+    const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);
+
+    const marked = await store.markAsReadOwned('n1', owner);
+
+    expect(marked).toBe(true);
+    expect(notification.updateMany).toHaveBeenCalledWith({
+      where: { id: 'n1', notifiableType: 'User', notifiableId: '42' },
+      data: expect.objectContaining({ readAt: expect.any(Date) }),
+    });
+  });
+
+  it('markAsReadOwned() does not filter on readAt, so re-reading an already-read row succeeds', async () => {
+    const { client, notification } = makeClient();
+    notification.updateMany.mockResolvedValueOnce({ count: 1 });
+    const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);
+
+    await store.markAsReadOwned('n1', owner);
+
+    expect(notification.updateMany.mock.calls[0]?.[0].where).not.toHaveProperty('readAt');
+  });
+
+  it('markAsReadOwned() reports false when nothing matched', async () => {
+    const { client, notification } = makeClient();
+    notification.updateMany.mockResolvedValueOnce({ count: 0 });
+    const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);
+
+    expect(await store.markAsReadOwned('someone-elses-id', owner)).toBe(false);
+  });
+
+  it('findById() returns the mapped row, or null when absent', async () => {
+    const { client, notification } = makeClient();
+    notification.findMany.mockResolvedValueOnce([
+      {
+        id: 'n1',
+        type: 'InvoicePaid',
+        notifiableType: 'User',
+        notifiableId: '42',
+        data: {},
+        readAt: null,
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]);
+    const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);
+
+    const found = await store.findById('n1');
+
+    expect(found?.id).toBe('n1');
+    expect(notification.findMany).toHaveBeenCalledWith({ where: { id: 'n1' }, take: 1 });
+    expect(await store.findById('missing')).toBeNull();
   });
 });

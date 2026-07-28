@@ -11,6 +11,7 @@ import {
   type Type,
   UseGuards,
 } from '@nestjs/common';
+import { type InboxMountOrigin, recordInboxMount } from './inbox-registry';
 import type { PaginatedNotifications } from './notifications-query.service';
 import { NotificationsQueryService } from './notifications-query.service';
 
@@ -43,6 +44,10 @@ export interface NotificationsControllerOptions {
  * `?type=FILE_EXPORT_RUNNING,PRIBUY_FILE_EXPORT_RUNNING`); entries are trimmed and blanks are
  * dropped. Absent or empty after parsing = no type filter (matches every type).
  *
+ * The two per-id mutations (`:id/read` and `DELETE /:id`) are scoped to the notifiable `resolveRef`
+ * returns — a notification belonging to someone else responds `404`, not `403`, so the endpoint
+ * can't be used to probe which ids exist.
+ *
  * Mount it by adding the returned class to a module's `controllers`, alongside
  * `DatabaseChannelModule` (which provides {@link NotificationsQueryService}):
  *
@@ -52,16 +57,38 @@ export interface NotificationsControllerOptions {
  * });
  *
  * @Module({
- *   imports: [DatabaseChannelModule.forFeature()],
+ *   imports: [DatabaseChannelModule.forFeature({ controller: false })],
  *   controllers: [NotificationsController],
  * })
  * export class InboxModule {}
  * ```
+ *
+ * **Pass `controller: false`** when you mount it yourself, as above. The module's `controller`
+ * option defaults to `true`, so building your own controller does not replace the auto-mounted
+ * one — without `controller: false` you get both, and the auto-mounted one carries the module's
+ * `resolveRef` and guards rather than the ones passed here.
  */
 export function createNotificationsController(
   options: NotificationsControllerOptions,
 ): Type<unknown> {
-  @Controller(options.path ?? 'notifications')
+  return buildNotificationsController(options, 'manual');
+}
+
+/**
+ * Builds the inbox controller and records the mount so {@link import('./inbox-mount-audit')
+ * .InboxMountAudit} can detect an app that both auto-mounts and hand-mounts the inbox.
+ *
+ * @internal Not exported from the package entry point — `origin` is how `DatabaseChannelModule`
+ * distinguishes its auto-mount from an application's own `createNotificationsController()` call.
+ */
+export function buildNotificationsController(
+  options: NotificationsControllerOptions,
+  origin: InboxMountOrigin,
+): Type<unknown> {
+  const path = options.path ?? 'notifications';
+  recordInboxMount({ path, origin });
+
+  @Controller(path)
   class NotificationsController {
     constructor(private readonly notifications: NotificationsQueryService) {}
 
@@ -106,8 +133,11 @@ export function createNotificationsController(
     }
 
     @Delete(':id')
-    async remove(@Param('id') id: string): Promise<void> {
-      await this.notifications.delete(id);
+    async remove(@Req() req: any, @Param('id') id: string): Promise<void> {
+      // Pass the resolved ref so the delete is scoped to the caller's own notifications —
+      // without it any id could be deleted by anyone able to reach the endpoint.
+      const ref = await options.resolveRef(req);
+      await this.notifications.delete(id, ref);
     }
   }
 

@@ -8,10 +8,11 @@ import {
 } from '@nestjs/common';
 import { DatabaseChannel } from './database.channel';
 import { InMemoryStore } from './in-memory.store';
+import { InboxMountAudit } from './inbox-mount-audit';
 import type { NotificationStore } from './interfaces';
 import { NotificationPruner, type PruneOptions } from './notification-pruner';
 import { NotificationsQueryService } from './notifications-query.service';
-import { createNotificationsController } from './notifications.controller';
+import { buildNotificationsController } from './notifications.controller';
 import { SchemaInitializer } from './schema-initializer';
 import { AUTO_CREATE_SCHEMA, NOTIFICATION_STORE, PRUNE_OPTIONS } from './tokens';
 
@@ -51,9 +52,14 @@ export interface DatabaseChannelOptions {
   autoCreateSchema?: boolean;
   /**
    * Auto-mount the inbox REST controller (`GET/POST/DELETE /notifications`). **Default true.**
-   * Pass `false` to mount it yourself with {@link createNotificationsController}, or an object to
-   * customize how the current notifiable is resolved from the request (defaults to
-   * `{ type: 'User', id: req.user?.id }`).
+   * Pass an object to customize how the current notifiable is resolved from the request (defaults
+   * to `{ type: 'User', id: req.user?.id }`) or to add guards and change the path.
+   *
+   * **Pass `false` if you mount the controller yourself** with
+   * {@link createNotificationsController}. Building your own does not replace this one — the
+   * default is `true`, so you end up with both, and the auto-mounted one lands on `notifications`
+   * with this module's `resolveRef` and guards. That duplicate will shadow an unrelated route your
+   * app serves at the same path. Nest logs a warning at bootstrap when it detects both.
    */
   controller?: boolean | InboxControllerOptions;
   /**
@@ -75,12 +81,24 @@ export interface DatabaseChannelFeatureOptions {
   prune?: PruneOptions;
 }
 
-/** Build the controllers array for the inbox endpoints based on the `controller` option. */
+/**
+ * Build the controllers array for the inbox endpoints based on the `controller` option.
+ *
+ * Note `undefined` mounts — the option defaults to true, so this also runs for apps that never
+ * mention `controller` and for apps that mount their own controller believing that replaces the
+ * default. {@link InboxMountAudit} warns about the latter at bootstrap.
+ */
 function inboxControllers(option: boolean | InboxControllerOptions | undefined): Type<unknown>[] {
   if (option === false) return [];
   const opts = option && option !== true ? option : undefined;
   const resolveRef = opts?.resolveRef ?? defaultResolveRef;
-  return [createNotificationsController({ resolveRef, path: opts?.path, guards: opts?.guards })];
+  return [
+    buildNotificationsController(
+      { resolveRef, path: opts?.path, guards: opts?.guards },
+      // Tagged 'auto' so the bootstrap audit can tell this apart from the app's own mount.
+      'auto',
+    ),
+  ];
 }
 
 /**
@@ -104,6 +122,7 @@ export class DatabaseChannelModule {
       NotificationsQueryService,
       SchemaInitializer,
       NotificationPruner,
+      InboxMountAudit,
     ];
     return {
       module: DatabaseChannelModule,
@@ -127,6 +146,7 @@ export class DatabaseChannelModule {
         NotificationsQueryService,
         SchemaInitializer,
         NotificationPruner,
+        InboxMountAudit,
       ],
       exports: [DatabaseChannel, NotificationsQueryService],
     };

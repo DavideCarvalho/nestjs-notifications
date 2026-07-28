@@ -1,4 +1,5 @@
 import type { Notifiable, NotifiableRef } from '@dudousxd/nestjs-notifications-core';
+import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryStore } from './in-memory.store';
 import type { NotificationStore } from './interfaces';
@@ -241,6 +242,221 @@ describe('NotificationsQueryService cross-device read sync', () => {
     expect(publishRead.mock.calls[0]?.[0]).toMatchObject({
       tenantId: 'acme',
       notificationId: null,
+    });
+  });
+});
+
+/**
+ * Ownership enforcement on the two per-id mutations. Without it, `DELETE /notifications/:id` acts
+ * on any id the caller can name — the controller passes the resolved ref precisely so it can't.
+ */
+describe('NotificationsQueryService ownership enforcement', () => {
+  const other: NotifiableRef = { type: 'User', id: '99' };
+
+  beforeEach(() => {
+    NotificationsQueryService.resetOwnershipWarning();
+  });
+
+  describe('with a store implementing the scoped mutations (deleteOwned/markAsReadOwned)', () => {
+    it('delete() removes the caller’s own notification', async () => {
+      const store = new InMemoryStore();
+      const svc = new NotificationsQueryService(store);
+      const { a } = await seed(store);
+
+      await svc.delete(a.id, ref);
+
+      expect(await store.findById(a.id)).toBeNull();
+    });
+
+    it('delete() throws NotFoundException for another notifiable’s row and leaves it intact', async () => {
+      const store = new InMemoryStore();
+      const svc = new NotificationsQueryService(store);
+      const { a } = await seed(store);
+
+      await expect(svc.delete(a.id, other)).rejects.toMatchObject({ status: 404 });
+      expect(await store.findById(a.id)).not.toBeNull();
+    });
+
+    it('delete() prefers the scoped store method over a read-then-write', async () => {
+      const store = new InMemoryStore();
+      const deleteOwned = vi.spyOn(store, 'deleteOwned');
+      const findById = vi.spyOn(store, 'findById');
+      const svc = new NotificationsQueryService(store);
+      const { a } = await seed(store);
+
+      await svc.delete(a.id, ref);
+
+      expect(deleteOwned).toHaveBeenCalledWith(a.id, {
+        notifiableType: 'User',
+        notifiableId: '42',
+        tenantId: undefined,
+      });
+      expect(findById).not.toHaveBeenCalled();
+    });
+
+    it('markAsRead() throws NotFoundException for another notifiable’s row and leaves it unread', async () => {
+      const store = new InMemoryStore();
+      const svc = new NotificationsQueryService(store);
+      const { a } = await seed(store);
+
+      await expect(svc.markAsRead(a.id, other)).rejects.toMatchObject({ status: 404 });
+      expect((await store.findById(a.id))?.readAt).toBeNull();
+    });
+
+    it('markAsRead() does not broadcast a read event when ownership fails', async () => {
+      const store = new InMemoryStore();
+      const publishRead = vi.fn();
+      const svc = new NotificationsQueryService(store, { publishRead });
+      const { a } = await seed(store);
+
+      await expect(svc.markAsRead(a.id, other)).rejects.toMatchObject({ status: 404 });
+      expect(publishRead).not.toHaveBeenCalled();
+    });
+
+    it('markAsRead() still broadcasts for the rightful owner', async () => {
+      const store = new InMemoryStore();
+      const publishRead = vi.fn();
+      const svc = new NotificationsQueryService(store, { publishRead });
+      const { a } = await seed(store);
+
+      await svc.markAsRead(a.id, ref);
+
+      expect((await store.findById(a.id))?.readAt).not.toBeNull();
+      expect(publishRead).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('without a target (programmatic callers)', () => {
+    it('delete() stays unscoped, preserving the existing contract', async () => {
+      const store = new InMemoryStore();
+      const deleteOwned = vi.spyOn(store, 'deleteOwned');
+      const svc = new NotificationsQueryService(store);
+      const { a } = await seed(store);
+
+      await svc.delete(a.id);
+
+      expect(await store.findById(a.id)).toBeNull();
+      expect(deleteOwned).not.toHaveBeenCalled();
+    });
+
+    it('markAsRead() stays unscoped', async () => {
+      const store = new InMemoryStore();
+      const svc = new NotificationsQueryService(store);
+      const { a } = await seed(store);
+
+      await svc.markAsRead(a.id);
+
+      expect((await store.findById(a.id))?.readAt).not.toBeNull();
+    });
+  });
+
+  describe('with a store implementing only findById', () => {
+    /** A store with the required methods plus findById, but no scoped mutations. */
+    function findByIdOnlyStore() {
+      const backing = new InMemoryStore();
+      const store: NotificationStore = {
+        save: (n) => backing.save(n),
+        markAsRead: (id) => backing.markAsRead(id),
+        markAllAsRead: (t, i, tid) => backing.markAllAsRead(t, i, tid),
+        getForNotifiable: (t, i, tid, types) => backing.getForNotifiable(t, i, tid, types),
+        getUnread: (t, i, tid, types) => backing.getUnread(t, i, tid, types),
+        delete: (id) => backing.delete(id),
+        findById: (id) => backing.findById(id),
+      };
+      return { store, backing };
+    }
+
+    it('delete() falls back to a read-then-write and allows the owner', async () => {
+      const { store, backing } = findByIdOnlyStore();
+      const svc = new NotificationsQueryService(store);
+      const { a } = await seed(backing);
+
+      await svc.delete(a.id, ref);
+
+      expect(await backing.findById(a.id)).toBeNull();
+    });
+
+    it('delete() throws NotFoundException for another notifiable’s row', async () => {
+      const { store, backing } = findByIdOnlyStore();
+      const svc = new NotificationsQueryService(store);
+      const { a } = await seed(backing);
+
+      await expect(svc.delete(a.id, other)).rejects.toMatchObject({ status: 404 });
+      expect(await backing.findById(a.id)).not.toBeNull();
+    });
+
+    it('delete() throws NotFoundException for an id that does not exist', async () => {
+      const { store } = findByIdOnlyStore();
+      const svc = new NotificationsQueryService(store);
+
+      await expect(svc.delete('missing', ref)).rejects.toMatchObject({ status: 404 });
+    });
+
+    it('markAsRead() throws NotFoundException for another notifiable’s row', async () => {
+      const { store, backing } = findByIdOnlyStore();
+      const svc = new NotificationsQueryService(store);
+      const { a } = await seed(backing);
+
+      await expect(svc.markAsRead(a.id, other)).rejects.toMatchObject({ status: 404 });
+      expect((await backing.findById(a.id))?.readAt).toBeNull();
+    });
+
+    it('rejects a row owned by the same notifiable in another tenant', async () => {
+      const { store, backing } = findByIdOnlyStore();
+      const svc = new NotificationsQueryService(store);
+      const row = await backing.save({
+        type: 'Scoped',
+        notifiableType: 'User',
+        notifiableId: '42',
+        tenantId: 'acme',
+        data: {},
+      });
+
+      await expect(svc.forTenant('other-tenant').delete(row.id, ref)).rejects.toMatchObject({
+        status: 404,
+      });
+      expect(await backing.findById(row.id)).not.toBeNull();
+    });
+  });
+
+  describe('with a store that can enforce nothing', () => {
+    /** The bare minimum NotificationStore — no scoped mutations, no findById. */
+    function minimalStore() {
+      const backing = new InMemoryStore();
+      const store: NotificationStore = {
+        save: (n) => backing.save(n),
+        markAsRead: (id) => backing.markAsRead(id),
+        markAllAsRead: (t, i, tid) => backing.markAllAsRead(t, i, tid),
+        getForNotifiable: (t, i, tid, types) => backing.getForNotifiable(t, i, tid, types),
+        getUnread: (t, i, tid, types) => backing.getUnread(t, i, tid, types),
+        delete: (id) => backing.delete(id),
+      };
+      return { store, backing };
+    }
+
+    it('degrades to the unchecked mutation but warns about it', async () => {
+      const { store, backing } = minimalStore();
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const svc = new NotificationsQueryService(store);
+      const { a } = await seed(backing);
+
+      await svc.delete(a.id, other);
+
+      expect(await backing.findById(a.id)).toBeNull();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain('ownership cannot be verified');
+    });
+
+    it('warns only once per process, not per request', async () => {
+      const { store, backing } = minimalStore();
+      const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const svc = new NotificationsQueryService(store);
+      const { a, b } = await seed(backing);
+
+      await svc.delete(a.id, ref);
+      await svc.delete(b.id, ref);
+
+      expect(warn).toHaveBeenCalledTimes(1);
     });
   });
 });

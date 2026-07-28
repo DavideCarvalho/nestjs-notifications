@@ -18,6 +18,7 @@ export {
   type PaginatedNotifications,
   type PaginationMeta,
 } from './notifications-query.service';
+export { InboxMountAudit } from './inbox-mount-audit';
 export {
   createNotificationsController,
   type NotificationsControllerOptions,

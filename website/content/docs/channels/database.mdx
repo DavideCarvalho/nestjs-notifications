@@ -140,6 +140,9 @@ feed:
 | `getForNotifiable(notifiableType, notifiableId, types?)` | `Promise<StoredNotification[]>` | All notifications for a notifiable, newest first. Optional `types: string[]` restricts to matching `type` values. |
 | `getUnread(notifiableType, notifiableId, types?)` | `Promise<StoredNotification[]>` | Unread notifications for a notifiable. Same optional `types` filter. |
 | `delete(id)` | `Promise<void>` | Remove one notification. |
+| `deleteOwned(id, owner)` | `Promise<boolean>` | Optional. Remove one notification only when it belongs to `owner` (`{ notifiableType, notifiableId, tenantId? }`); `true` when a row matched. |
+| `markAsReadOwned(id, owner)` | `Promise<boolean>` | Optional. Mark one read only when it belongs to `owner`; `true` when a row matched, including an already-read one. |
+| `findById(id)` | `Promise<StoredNotification \| null>` | Optional. Fetch one row — the ownership fallback when the two scoped mutations are absent. |
 
 `types` is absent or an empty array by default, matching every type (unchanged behavior) — it's
 purely additive. `PaginateForNotifiableOptions` carries the same `types?: string[]` for the
