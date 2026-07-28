@@ -96,6 +96,15 @@ DatabaseChannelModule.forRoot({
 DatabaseChannelModule.forRoot({ controller: false });
 ```
 
+<Callout type="warn">
+  **Mounting your own controller does not turn this one off.** `controller` defaults to `true`, so
+  `forRoot()` auto-mounts the inbox whether or not you also call `createNotificationsController()`
+  — you end up with two, and the auto-mounted one sits on the default `notifications` path with the
+  module's `resolveRef` and guards rather than yours. That duplicate will shadow a page route your
+  app serves at `/notifications`. Pass `controller: false` whenever you mount the controller
+  yourself; the library logs a warning at bootstrap when it detects both.
+</Callout>
+
 ### Mounting it yourself
 
 When you pass `controller: false` (or want it in a specific module), `createNotificationsController()`
@@ -114,7 +123,8 @@ const NotificationsController = createNotificationsController({
 });
 
 @Module({
-  imports: [DatabaseChannelModule.forFeature()],
+  // `controller: false` — without it you get this controller AND the auto-mounted one.
+  imports: [DatabaseChannelModule.forFeature({ controller: false })],
   controllers: [NotificationsController],
 })
 export class InboxModule {}
@@ -128,18 +138,39 @@ whatever your auth layer puts on `req.user`. The controller exposes:
 | `GET /notifications` | Paginated list (`?page` & `?perPage`, `?type=` filters). |
 | `GET /notifications/unread` | Unread notifications (`?type=` filters). |
 | `GET /notifications/unread/count` | `{ count }` of unread (`?type=` filters). |
-| `POST /notifications/:id/read` | Mark one read. |
+| `POST /notifications/:id/read` | Mark one read (only the caller's own). |
 | `POST /notifications/read-all` | Mark all read for the current user. |
-| `DELETE /notifications/:id` | Delete one. |
+| `DELETE /notifications/:id` | Delete one (only the caller's own). |
 
 `?type=` accepts a comma-separated list of types (e.g.
 `?type=FILE_EXPORT_RUNNING,FILE_EXPORT_DONE`); entries are trimmed and blank entries dropped.
 Absent, or empty after parsing, means no filter — every type matches.
 
 <Callout type="info">
-  The controller relies on `resolveRef` to scope reads and "mark all" / "unread" to the current user.
-  The per-id routes (`:id/read`, `DELETE :id`) act on a notification id directly, so guard them so a
-  user can only touch their own rows — pass your auth guard via the `guards` option (on either
-  `controller: { guards }` or `createNotificationsController({ guards })`) so the current user comes
-  from the same `req.user` your guard populates.
+  The controller relies on `resolveRef` to scope every route to the current user. The per-id routes
+  (`:id/read`, `DELETE :id`) are ownership-checked: a notification belonging to someone else
+  responds `404` rather than `403`, so the endpoint can't be used to probe which ids exist. Still
+  pass your auth guard via the `guards` option (on either `controller: { guards }` or
+  `createNotificationsController({ guards })`) — ownership scoping is only as good as the identity
+  `resolveRef` reads off the request.
 </Callout>
+
+### Ownership scoping and custom stores
+
+The ownership check runs in the store. Every bundled adapter (in-memory, TypeORM, MikroORM, Prisma)
+implements it, pushing the notifiable into the `WHERE` clause so there's no read-then-write window.
+
+If you wrote your own `NotificationStore`, implement either the scoped mutations or `findById`:
+
+| Method | Role |
+| --- | --- |
+| `deleteOwned(id, owner)` | Delete only when the row belongs to `owner`. Resolves `true` on a hit. Preferred. |
+| `markAsReadOwned(id, owner)` | Mark read only when the row belongs to `owner`. Resolves `true` on a hit, including an already-read row. Preferred. |
+| `findById(id)` | Fallback — the query service reads the row, compares the notifiable (and tenant), then mutates. |
+
+`owner` is a `{ notifiableType, notifiableId, tenantId? }` ref; an absent `tenantId` matches any
+tenant. All three are optional, so existing stores keep compiling — but a store implementing none of
+them cannot verify ownership, and the library logs a warning saying so rather than failing quietly.
+
+Calling `notifications.delete(id)` or `markAsRead(id)` **without** a target stays unscoped, so
+programmatic callers acting outside a request are unaffected.

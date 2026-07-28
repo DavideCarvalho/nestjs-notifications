@@ -329,6 +329,104 @@ export function runNotificationStoreContract(
       });
     });
 
+    /**
+     * Ownership-scoped mutations. These are what stop the inbox controller's `DELETE /:id` and
+     * `POST /:id/read` from acting on any id handed to them — every adapter must refuse a row that
+     * belongs to a different notifiable, and must report the refusal as `false` rather than
+     * throwing, so the caller can turn it into a 404.
+     */
+    describe('ownership-scoped mutations', () => {
+      it('deleteOwned() deletes a row owned by the given notifiable', async () => {
+        const a = await store().save(make('A', 'User', 'owner'));
+
+        const deleted = await store().deleteOwned?.(a.id, {
+          notifiableType: 'User',
+          notifiableId: 'owner',
+        });
+
+        expect(deleted).toBe(true);
+        expect(await store().getForNotifiable('User', 'owner')).toHaveLength(0);
+      });
+
+      it('deleteOwned() refuses a row belonging to another notifiable and leaves it intact', async () => {
+        const victim = await store().save(make('Victim', 'User', 'owner'));
+
+        const deleted = await store().deleteOwned?.(victim.id, {
+          notifiableType: 'User',
+          notifiableId: 'attacker',
+        });
+
+        expect(deleted).toBe(false);
+        expect((await store().getForNotifiable('User', 'owner')).map((r) => r.id)).toEqual([
+          victim.id,
+        ]);
+      });
+
+      it('deleteOwned() returns false for an id that does not exist', async () => {
+        const deleted = await store().deleteOwned?.('missing-id', {
+          notifiableType: 'User',
+          notifiableId: 'owner',
+        });
+        expect(deleted).toBe(false);
+      });
+
+      it('deleteOwned() refuses a row owned by the same notifiable in another tenant', async () => {
+        const row = await store().save(makeTenant('Scoped', 'tenant-a'));
+
+        const deleted = await store().deleteOwned?.(row.id, {
+          notifiableType: 'User',
+          notifiableId: 'tu',
+          tenantId: 'tenant-b',
+        });
+
+        expect(deleted).toBe(false);
+        expect(await store().getForNotifiable('User', 'tu', 'tenant-a')).toHaveLength(1);
+      });
+
+      it('markAsReadOwned() marks a row owned by the given notifiable', async () => {
+        const a = await store().save(make('A', 'User', 'owner'));
+
+        const marked = await store().markAsReadOwned?.(a.id, {
+          notifiableType: 'User',
+          notifiableId: 'owner',
+        });
+
+        expect(marked).toBe(true);
+        expect(await store().getUnread('User', 'owner')).toHaveLength(0);
+      });
+
+      it('markAsReadOwned() refuses a row belonging to another notifiable and leaves it unread', async () => {
+        const victim = await store().save(make('Victim', 'User', 'owner'));
+
+        const marked = await store().markAsReadOwned?.(victim.id, {
+          notifiableType: 'User',
+          notifiableId: 'attacker',
+        });
+
+        expect(marked).toBe(false);
+        expect(await store().getUnread('User', 'owner')).toHaveLength(1);
+      });
+
+      it('markAsReadOwned() is idempotent — an already-read row still reports true', async () => {
+        const a = await store().save(make('A', 'User', 'owner'));
+        const owner = { notifiableType: 'User', notifiableId: 'owner' };
+
+        expect(await store().markAsReadOwned?.(a.id, owner)).toBe(true);
+        expect(await store().markAsReadOwned?.(a.id, owner)).toBe(true);
+        expect(await store().getUnread('User', 'owner')).toHaveLength(0);
+      });
+
+      it('findById() returns the row, or null when absent', async () => {
+        const a = await store().save(make('A', 'User', 'owner'));
+
+        const found = await store().findById?.(a.id);
+        expect(found?.id).toBe(a.id);
+        expect(found?.notifiableId).toBe('owner');
+
+        expect(await store().findById?.('missing-id')).toBeNull();
+      });
+    });
+
     describe('prune()', () => {
       it('deletes rows at/before the cutoff and returns the count', async () => {
         const old = await store().save(make('Old', 'User', 'p'));

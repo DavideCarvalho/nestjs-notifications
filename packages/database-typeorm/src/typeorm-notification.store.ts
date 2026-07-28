@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   NewStoredNotification,
+  NotificationOwnerRef,
   NotificationStore,
   PaginateForNotifiableOptions,
   PaginatedStoredNotifications,
@@ -16,6 +17,19 @@ import { ensureNotificationsTable } from './schema';
 /** `types` absent or empty applies no filter; otherwise an IN clause on `type`. */
 function typeFilter(types?: string[]): { type?: FindOperator<string> } {
   return types !== undefined && types.length > 0 ? { type: In(types) } : {};
+}
+
+/** Ownership predicate for the scoped mutations; an absent `tenantId` matches any tenant. */
+function ownerFilter(owner: NotificationOwnerRef): {
+  notifiableType: string;
+  notifiableId: string;
+  tenantId?: string;
+} {
+  return {
+    notifiableType: owner.notifiableType,
+    notifiableId: owner.notifiableId,
+    ...(owner.tenantId !== undefined ? { tenantId: owner.tenantId } : {}),
+  };
 }
 
 /** Maps a {@link NotificationEntity} row to the channel-agnostic {@link StoredNotification}. */
@@ -125,6 +139,26 @@ export class TypeOrmNotificationStore implements NotificationStore {
 
   async delete(id: string): Promise<void> {
     await this.repo.delete(id);
+  }
+
+  async deleteOwned(id: string, owner: NotificationOwnerRef): Promise<boolean> {
+    const result = await this.repo.delete({ id, ...ownerFilter(owner) });
+    return (result.affected ?? 0) > 0;
+  }
+
+  async markAsReadOwned(id: string, owner: NotificationOwnerRef): Promise<boolean> {
+    // Match on ownership alone, not on readAt — an already-read row still belongs to the owner,
+    // so re-reading it is a success, matching markAsRead's idempotence.
+    const result = await this.repo.update(
+      { id, ...ownerFilter(owner) },
+      { readAt: new Date(), updatedAt: new Date() },
+    );
+    return (result.affected ?? 0) > 0;
+  }
+
+  async findById(id: string): Promise<StoredNotification | null> {
+    const row = await this.repo.findOne({ where: { id } });
+    return row ? toStored(row) : null;
   }
 
   async paginateForNotifiable(

@@ -69,6 +69,18 @@ export interface UpsertStoredNotification extends NewStoredNotification {
 }
 
 /**
+ * Who a notification must belong to for an ownership-checked mutation to apply. Passed to the
+ * optional {@link NotificationStore.deleteOwned} / {@link NotificationStore.markAsReadOwned} so the
+ * ownership predicate runs inside the query instead of as a read-then-write.
+ */
+export interface NotificationOwnerRef {
+  notifiableType: string;
+  notifiableId: string;
+  /** Tenant scope; `undefined` matches all tenants (single-tenant behavior). */
+  tenantId?: string | undefined;
+}
+
+/**
  * Persistence abstraction. Implemented by the in-memory store and ORM adapter packages. The
  * `tenantId` filter on the read methods scopes results to a tenant; `undefined` matches all
  * tenants (single-tenant behavior).
@@ -95,6 +107,28 @@ export interface NotificationStore {
     types?: string[],
   ): Promise<StoredNotification[]>;
   delete(id: string): Promise<void>;
+  /**
+   * Optionally delete a notification only when it belongs to `owner`, pushing the ownership
+   * predicate into the query (no read-then-write window). Resolves `true` when a row matched and
+   * was deleted, `false` when no row matched — including when the row exists but belongs to someone
+   * else. Preferred by {@link NotificationsQueryService.delete} whenever a target is supplied; see
+   * {@link findById} for the fallback when this is absent.
+   */
+  deleteOwned?(id: string, owner: NotificationOwnerRef): Promise<boolean>;
+  /**
+   * Optionally mark a notification read only when it belongs to `owner`. Resolves `true` when a row
+   * matched the owner — including an already-read row, mirroring the idempotent {@link markAsRead}
+   * — and `false` when no row matched. See {@link deleteOwned}.
+   */
+  markAsReadOwned?(id: string, owner: NotificationOwnerRef): Promise<boolean>;
+  /**
+   * Optionally fetch one row by id, or `null` when it doesn't exist. Used as the ownership fallback
+   * by {@link NotificationsQueryService} when {@link deleteOwned}/{@link markAsReadOwned} are not
+   * implemented: it reads the row, compares the notifiable (and tenant, when scoped), then mutates.
+   * A store implementing neither cannot enforce ownership — the query service logs a warning and
+   * falls back to the unchecked mutation.
+   */
+  findById?(id: string): Promise<StoredNotification | null>;
   /**
    * Optionally fetch a single page of a notifiable's notifications, pushing `limit`/`offset` down
    * into the data store (instead of fetching every row and slicing in memory). Returns the page

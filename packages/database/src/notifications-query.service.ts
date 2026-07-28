@@ -3,8 +3,8 @@ import {
   type NotifiableRef,
   notifiableRef,
 } from '@dudousxd/nestjs-notifications-core';
-import { Inject, Injectable, Optional } from '@nestjs/common';
-import type { NotificationStore, StoredNotification } from './interfaces';
+import { Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import type { NotificationOwnerRef, NotificationStore, StoredNotification } from './interfaces';
 import { READ_SYNC_PUBLISHER, type ReadSyncPublisher } from './read-sync';
 import { NOTIFICATION_STORE } from './tokens';
 
@@ -60,12 +60,17 @@ export interface ScopedNotificationsQuery {
   paginate(target: NotifiableTarget, options?: PaginateOptions): Promise<PaginatedNotifications>;
   unreadCount(target: NotifiableTarget, options?: NotificationsFilterOptions): Promise<number>;
   /**
-   * Mark one notification read. Pass the owning `target` to also broadcast a cross-device read
-   * event (so the user's other devices update); omit it to just persist (unchanged behavior).
+   * Mark one notification read. Pass the owning `target` to enforce that the notification belongs
+   * to it (throwing `NotFoundException` when it doesn't) and to broadcast a cross-device read event
+   * so the user's other devices update. Omit it to just persist, unscoped (unchanged behavior).
    */
   markAsRead(id: string, target?: NotifiableTarget): Promise<void>;
   markAllAsRead(target: NotifiableTarget): Promise<void>;
-  delete(id: string): Promise<void>;
+  /**
+   * Delete one notification. Pass the owning `target` to enforce that it belongs to that notifiable,
+   * throwing `NotFoundException` otherwise. Omit it to delete unscoped (unchanged behavior).
+   */
+  delete(id: string, target?: NotifiableTarget): Promise<void>;
 }
 
 /**
@@ -80,6 +85,16 @@ export interface ScopedNotificationsQuery {
  */
 @Injectable()
 export class NotificationsQueryService implements ScopedNotificationsQuery {
+  private readonly logger = new Logger('Notifications');
+
+  /** Guards {@link warnUnenforceable} — a store capability gap is worth saying once, not per call. */
+  private static warnedUnenforceable = false;
+
+  /** Test seam: re-arm the once-per-process warning. */
+  static resetOwnershipWarning(): void {
+    NotificationsQueryService.warnedUnenforceable = false;
+  }
+
   constructor(
     @Inject(NOTIFICATION_STORE)
     private readonly store: NotificationStore,
@@ -115,16 +130,15 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
   }
 
   async markAsRead(id: string, target?: NotifiableTarget): Promise<void> {
-    await this.store.markAsRead(id);
-    if (target) this.publishRead(this.refOf(target), id, undefined);
+    await this.markAsReadScoped(id, target, undefined);
   }
 
   markAllAsRead(target: NotifiableTarget): Promise<void> {
     return this.markAllAsReadScoped(target, undefined);
   }
 
-  async delete(id: string): Promise<void> {
-    await this.store.delete(id);
+  async delete(id: string, target?: NotifiableTarget): Promise<void> {
+    await this.deleteScoped(id, target, undefined);
   }
 
   /** Scope every read/mutation to a tenant (workspace). */
@@ -134,13 +148,100 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
       unread: (target, options) => this.unreadScoped(target, tenant, options?.types),
       paginate: (target, options) => this.paginateScoped(target, options ?? {}, tenant),
       unreadCount: (target, options) => this.unreadCountScoped(target, tenant, options?.types),
-      markAsRead: async (id, target) => {
-        await this.store.markAsRead(id);
-        if (target) this.publishRead(this.refOf(target), id, tenant);
-      },
+      markAsRead: (id, target) => this.markAsReadScoped(id, target, tenant),
       markAllAsRead: (target) => this.markAllAsReadScoped(target, tenant),
-      delete: (id) => this.delete(id),
+      delete: (id, target) => this.deleteScoped(id, target, tenant),
     };
+  }
+
+  /**
+   * Mark read, enforcing ownership when a `target` is given. The tenant is carried into the owner
+   * ref so a tenant-scoped query can't touch another tenant's row for the same notifiable.
+   */
+  private async markAsReadScoped(
+    id: string,
+    target: NotifiableTarget | undefined,
+    tenant: string | undefined,
+  ): Promise<void> {
+    if (!target) {
+      await this.store.markAsRead(id);
+      return;
+    }
+    const ref = this.refOf(target);
+    const owner = this.ownerRef(ref, tenant);
+    if (this.store.markAsReadOwned) {
+      if (!(await this.store.markAsReadOwned(id, owner))) throw new NotFoundException();
+    } else {
+      await this.assertOwned(id, owner, 'markAsRead');
+      await this.store.markAsRead(id);
+    }
+    this.publishRead(ref, id, tenant);
+  }
+
+  /** Delete, enforcing ownership when a `target` is given. See {@link markAsReadScoped}. */
+  private async deleteScoped(
+    id: string,
+    target: NotifiableTarget | undefined,
+    tenant: string | undefined,
+  ): Promise<void> {
+    if (!target) {
+      await this.store.delete(id);
+      return;
+    }
+    const owner = this.ownerRef(this.refOf(target), tenant);
+    if (this.store.deleteOwned) {
+      if (!(await this.store.deleteOwned(id, owner))) throw new NotFoundException();
+      return;
+    }
+    await this.assertOwned(id, owner, 'delete');
+    await this.store.delete(id);
+  }
+
+  /**
+   * Ownership fallback for stores without the scoped mutations: read the row and compare. Throws
+   * `NotFoundException` — never `ForbiddenException` — so a caller can't tell "someone else's" from
+   * "doesn't exist" and use the endpoint to enumerate ids.
+   *
+   * A store implementing neither the scoped form nor `findById` cannot enforce ownership at all;
+   * that degrades to the unchecked mutation, but says so loudly rather than silently.
+   */
+  private async assertOwned(
+    id: string,
+    owner: NotificationOwnerRef,
+    operation: string,
+  ): Promise<void> {
+    if (!this.store.findById) {
+      this.warnUnenforceable(operation);
+      return;
+    }
+    const row = await this.store.findById(id);
+    if (
+      !row ||
+      row.notifiableType !== owner.notifiableType ||
+      row.notifiableId !== owner.notifiableId ||
+      (owner.tenantId !== undefined && row.tenantId !== owner.tenantId)
+    ) {
+      throw new NotFoundException();
+    }
+  }
+
+  /** Warn once per process — this is a store capability gap, not a per-request condition. */
+  private warnUnenforceable(operation: string): void {
+    if (NotificationsQueryService.warnedUnenforceable) return;
+    NotificationsQueryService.warnedUnenforceable = true;
+    this.logger.warn(
+      [
+        `${this.store.constructor.name} implements neither the ownership-scoped mutations`,
+        '(deleteOwned/markAsReadOwned) nor findById, so ownership cannot be verified —',
+        `${operation} is running unscoped and will act on any id, including notifications`,
+        'belonging to other notifiables. Implement findById on the store to close this.',
+      ].join(' '),
+    );
+  }
+
+  /** Widen a {@link NotifiableRef} into the owner predicate the store methods take. */
+  private ownerRef(ref: NotifiableRef, tenant: string | undefined): NotificationOwnerRef {
+    return { notifiableType: ref.type, notifiableId: String(ref.id), tenantId: tenant };
   }
 
   private async allScoped(

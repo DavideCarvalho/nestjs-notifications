@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   NewStoredNotification,
+  NotificationOwnerRef,
   NotificationStore,
   PaginateForNotifiableOptions,
   PaginatedStoredNotifications,
@@ -13,6 +14,15 @@ import { PRISMA_CLIENT, type PrismaNotificationClientLike } from './prisma-clien
 /** `types` absent or empty applies no filter; otherwise an IN clause on `type`. */
 function typeFilter(types?: string[]): { type?: { in: string[] } } {
   return types !== undefined && types.length > 0 ? { type: { in: types } } : {};
+}
+
+/** Ownership predicate for the scoped mutations; an absent `tenantId` matches any tenant. */
+function ownerFilter(owner: NotificationOwnerRef): Record<string, string> {
+  return {
+    notifiableType: owner.notifiableType,
+    notifiableId: owner.notifiableId,
+    ...(owner.tenantId !== undefined ? { tenantId: owner.tenantId } : {}),
+  };
 }
 
 /** Maps a Prisma `Notification` row to the channel-agnostic {@link StoredNotification}. */
@@ -138,6 +148,31 @@ export class PrismaNotificationStore implements NotificationStore {
 
   async delete(id: string): Promise<void> {
     await this.client.notification.delete({ where: { id } });
+  }
+
+  async deleteOwned(id: string, owner: NotificationOwnerRef): Promise<boolean> {
+    // deleteMany, not delete: a compound where on a non-unique combination isn't valid for the
+    // single-row form, and deleteMany simply reports 0 instead of throwing when nothing matches.
+    const { count } = await this.client.notification.deleteMany({
+      where: { id, ...ownerFilter(owner) },
+    });
+    return count > 0;
+  }
+
+  async markAsReadOwned(id: string, owner: NotificationOwnerRef): Promise<boolean> {
+    // Match on ownership alone, not on readAt — an already-read row still belongs to the owner,
+    // so re-reading it is a success, matching markAsRead's idempotence.
+    const { count } = await this.client.notification.updateMany({
+      where: { id, ...ownerFilter(owner) },
+      data: { readAt: new Date() },
+    });
+    return count > 0;
+  }
+
+  async findById(id: string): Promise<StoredNotification | null> {
+    // findMany rather than findUnique so the structural client interface stays as narrow as it is.
+    const [row] = await this.client.notification.findMany({ where: { id }, take: 1 });
+    return row ? toStored(row) : null;
   }
 
   async paginateForNotifiable(

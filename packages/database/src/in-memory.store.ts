@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type {
   NewStoredNotification,
+  NotificationOwnerRef,
   NotificationStore,
   PaginateForNotifiableOptions,
   PaginatedStoredNotifications,
@@ -90,6 +91,27 @@ export class InMemoryStore implements NotificationStore {
     this.rows.delete(id);
   }
 
+  async deleteOwned(id: string, owner: NotificationOwnerRef): Promise<boolean> {
+    const row = this.rows.get(id);
+    if (!row || !ownedBy(row, owner)) return false;
+    this.rows.delete(id);
+    return true;
+  }
+
+  async markAsReadOwned(id: string, owner: NotificationOwnerRef): Promise<boolean> {
+    const row = this.rows.get(id);
+    if (!row || !ownedBy(row, owner)) return false;
+    if (!row.readAt) {
+      row.readAt = new Date();
+      row.updatedAt = new Date();
+    }
+    return true;
+  }
+
+  async findById(id: string): Promise<StoredNotification | null> {
+    return this.rows.get(id) ?? null;
+  }
+
   async paginateForNotifiable(
     notifiableType: string,
     notifiableId: string,
@@ -144,6 +166,15 @@ export class InMemoryStore implements NotificationStore {
   private all(): StoredNotification[] {
     return [...this.rows.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
+}
+
+/** Whether a row belongs to `owner`. An absent `tenantId` on the owner matches any tenant. */
+function ownedBy(row: StoredNotification, owner: NotificationOwnerRef): boolean {
+  return (
+    row.notifiableType === owner.notifiableType &&
+    row.notifiableId === owner.notifiableId &&
+    (owner.tenantId === undefined || row.tenantId === owner.tenantId)
+  );
 }
 
 /** `types` absent or empty matches every type; otherwise `type` must be one of the listed values. */
