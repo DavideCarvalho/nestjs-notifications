@@ -29,7 +29,7 @@ app has the whole setup wired; this recipe walks through both.
 ## The extension: `nestjsNotificationsCodegen()`
 
 The library mounts its inbox (and preference center) with **factories** —
-[`createNotificationsController`](/docs/recipes/in-app-notifications#mount-the-rest-controller) and the
+[`createNotificationsController`](/docs/recipes/in-app-notifications#the-rest-controller) and the
 preference-center controller — that build their `@Controller` at runtime. Codegen's static AST pass
 can't see a runtime-built class, so those routes are invisible to plain discovery.
 

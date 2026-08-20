@@ -1,0 +1,35 @@
+---
+title: Overview
+icon: Layers
+description: The model in nine pieces — what a notifiable and a notification are, the channel/dispatcher split, and the behaviours layered on top: async delivery, tenancy, attribution, guards, fallbacks and locales.
+---
+
+Two nouns and one split carry the whole library. Read the first three pages in order; the rest are
+behaviours you opt into when you need them.
+
+## The model
+
+- **[Notifiables](/docs/concepts/notifiables)** — anything that can receive a notification. Per-channel
+  addresses come from `@RouteFor` decorators, and `@NotifiableId` marks the id.
+- **[Notifications](/docs/concepts/notifications)** — a plain class. Annotate each payload method with
+  its channel handle (`@Mail()`, `@Database()`) and `via()` is inferred for you.
+- **[Channels & dispatchers](/docs/concepts/channels-and-dispatchers)** — the split everything else
+  hangs off: a channel decides *how* a notification leaves, a dispatcher decides *where and when* it
+  runs.
+
+## Delivery
+
+- **[Async dispatch](/docs/concepts/async-dispatch)** — what survives the trip to a worker: a
+  notification serializes to `{ name, data }`, a notifiable to a reference.
+- **[Fallback chains](/docs/concepts/fallback-chains)** — an ordered chain of channels, stopping at the
+  first that reaches the recipient.
+- **[Dispatch guards](/docs/concepts/dispatch-guards)** — dedup and throttle *before* any channel runs.
+
+## Per-recipient concerns
+
+- **[Multi-tenancy](/docs/concepts/multi-tenancy)** — the same user in many workspaces, each with its
+  own feed; scope one send or fan out with `forTenant`.
+- **[Localization](/docs/concepts/localization)** — resolve a locale off the notifiable and translate
+  per recipient.
+- **[Context capture](/docs/concepts/context-capture)** — who triggered this, in which tenant, under
+  which trace, threaded through the lifecycle events.

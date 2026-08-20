@@ -2,6 +2,7 @@
   "title": "Reference",
   "icon": "ScrollText",
   "pages": [
+    "index",
     "configuration",
     "testing"
   ]

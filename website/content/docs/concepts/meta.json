@@ -2,6 +2,7 @@
   "title": "Concepts",
   "icon": "Layers",
   "pages": [
+    "index",
     "notifiables",
     "notifications",
     "channels-and-dispatchers",
