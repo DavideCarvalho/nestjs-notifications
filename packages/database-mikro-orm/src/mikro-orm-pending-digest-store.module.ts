@@ -2,6 +2,7 @@ import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { MikroOrmPendingDigestStore } from './mikro-orm-pending-digest.store';
 import { DigestWindowEntity, PendingDigestEntity } from './pending-digest.entity';
+import { DigestWindowRepository, PendingDigestRepository } from './pending-digest.repository';
 
 /**
  * `@dudousxd/nestjs-notifications-preferences`'s PENDING_DIGEST_STORE token, inlined via the
@@ -43,7 +44,12 @@ export class MikroOrmPendingDigestStoreModule {
         MikroOrmPendingDigestStore,
         { provide: PENDING_DIGEST_STORE, useExisting: MikroOrmPendingDigestStore },
       ],
-      exports: [MikroOrmPendingDigestStore, PENDING_DIGEST_STORE],
+      exports: [
+        MikroOrmPendingDigestStore,
+        PENDING_DIGEST_STORE,
+        PendingDigestRepository,
+        DigestWindowRepository,
+      ],
     };
   }
 }
