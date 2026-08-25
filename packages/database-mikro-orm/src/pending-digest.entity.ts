@@ -1,4 +1,5 @@
 import { Entity, Index, PrimaryKey, Property } from '@mikro-orm/decorators/legacy';
+import { DigestWindowRepository, PendingDigestRepository } from './pending-digest.repository';
 
 /**
  * MikroORM entity for notifications suppressed by a non-instant digest cadence and awaiting their
@@ -12,7 +13,7 @@ import { Entity, Index, PrimaryKey, Property } from '@mikro-orm/decorators/legac
  * grouped read. `length: 3` on the timestamp keeps millisecond precision so oldest-first ordering
  * inside a digest group is stable across SQLite/Postgres/MySQL.
  */
-@Entity({ tableName: 'notification_pending_digests' })
+@Entity({ tableName: 'notification_pending_digests', repository: () => PendingDigestRepository })
 @Index({ properties: ['cadence', 'tenantId', 'notifiableType', 'notifiableId', 'category'] })
 export class PendingDigestEntity {
   @PrimaryKey({ type: 'string' })
@@ -56,7 +57,7 @@ export class PendingDigestEntity {
  * re-run of the same window is a no-op. Inserted under a unique primary key — a duplicate insert
  * fails, which {@link MikroOrmPendingDigestStore.tryLockWindow} treats as "already run".
  */
-@Entity({ tableName: 'notification_digest_windows' })
+@Entity({ tableName: 'notification_digest_windows', repository: () => DigestWindowRepository })
 export class DigestWindowEntity {
   /** `${cadence}:${windowKey}`. */
   @PrimaryKey({ type: 'string' })

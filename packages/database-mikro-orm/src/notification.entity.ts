@@ -1,4 +1,5 @@
 import { Entity, PrimaryKey, Property } from '@mikro-orm/decorators/legacy';
+import { NotificationRepository } from './notification.repository';
 
 /**
  * MikroORM entity mirroring Laravel's `notifications` table.
@@ -8,7 +9,7 @@ import { Entity, PrimaryKey, Property } from '@mikro-orm/decorators/legacy';
  * when the consuming app compiles with SWC/esbuild/Vite (which don't emit
  * decorator metadata).
  */
-@Entity({ tableName: 'notifications' })
+@Entity({ tableName: 'notifications', repository: () => NotificationRepository })
 export class NotificationEntity {
   @PrimaryKey({ type: 'string' })
   id!: string;

@@ -3,6 +3,7 @@ import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { MikroOrmNotificationStore } from './mikro-orm-notification.store';
 import { NotificationEntity } from './notification.entity';
+import { NotificationRepository } from './notification.repository';
 
 /**
  * Provides the MikroORM-backed notification store and binds it to the
@@ -32,7 +33,7 @@ export class MikroOrmNotificationStoreModule {
         MikroOrmNotificationStore,
         { provide: NOTIFICATION_STORE, useExisting: MikroOrmNotificationStore },
       ],
-      exports: [MikroOrmNotificationStore, NOTIFICATION_STORE],
+      exports: [MikroOrmNotificationStore, NOTIFICATION_STORE, NotificationRepository],
     };
   }
 }
