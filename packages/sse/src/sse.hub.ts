@@ -84,7 +84,7 @@ export class SseHub implements OnModuleInit, OnModuleDestroy {
   private deliverLocal(key: string, message: SseBackplaneMessage): void {
     const subject = this.subjects.get(key);
     if (!subject) return;
-    const data = message.data as MessageEvent['data'];
+    const data = message.data as NonNullable<MessageEvent['data']>;
     subject.next(message.event ? { data, type: message.event } : { data });
   }
 

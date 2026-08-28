@@ -25,7 +25,7 @@
     "@mikro-orm/nestjs": "^7.0.0",
     "@dudousxd/nestjs-notifications-database": ">=0.1.0 <1.0.0",
     "@dudousxd/nestjs-notifications-preferences": ">=0.1.0 <1.0.0",
-    "@nestjs/common": "^10.0.0 || ^11.0.0"
+    "@nestjs/common": "^10.0.0 || ^11.0.0 || ^12.0.0"
   },
   "peerDependenciesMeta": {
     "@dudousxd/nestjs-notifications-preferences": {
@@ -42,7 +42,7 @@
     "@dudousxd/nestjs-notifications-core": "workspace:^",
     "@dudousxd/nestjs-notifications-database": "workspace:^",
     "@dudousxd/nestjs-notifications-preferences": "workspace:^",
-    "@nestjs/common": "11.1.26",
+    "@nestjs/common": "12.0.1",
     "@testcontainers/mysql": "10.18.0",
     "@testcontainers/postgresql": "10.18.0",
     "reflect-metadata": "0.2.2",
