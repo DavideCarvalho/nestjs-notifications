@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-telegram",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Telegram channel for nestjs-notifications — deliver notifications via the Bot API",
   "license": "MIT",
   "author": "Davide Carvalho",
