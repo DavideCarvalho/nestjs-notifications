@@ -9,6 +9,18 @@
     "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
     "directory": "packages/client"
   },
+  "homepage": "https://davidecarvalho.github.io/aviary/docs/notifications",
+  "bugs": {
+    "url": "https://github.com/DavideCarvalho/nestjs-notifications/issues"
+  },
+  "keywords": [
+    "nestjs",
+    "notifications",
+    "sdk",
+    "client",
+    "tanstack-query",
+    "sse"
+  ],
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -37,14 +49,6 @@
   },
   "files": [
     "dist"
-  ],
-  "keywords": [
-    "nestjs",
-    "notifications",
-    "sdk",
-    "client",
-    "tanstack-query",
-    "sse"
   ],
   "scripts": {
     "build": "tsup",

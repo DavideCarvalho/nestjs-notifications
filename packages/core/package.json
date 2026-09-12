@@ -9,6 +9,13 @@
     "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
     "directory": "packages/core"
   },
+  "homepage": "https://davidecarvalho.github.io/aviary/docs/notifications",
+  "bugs": {
+    "url": "https://github.com/DavideCarvalho/nestjs-notifications/issues"
+  },
+  "keywords": [
+    "tanstack-intent"
+  ],
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -54,8 +61,5 @@
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "typescript": "5.9.3"
-  },
-  "keywords": [
-    "tanstack-intent"
-  ]
+  }
 }
