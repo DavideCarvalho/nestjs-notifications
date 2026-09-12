@@ -39,8 +39,9 @@ export function readFallback(notification: Notification): FallbackAware {
 /**
  * Optional probe consulted to decide whether a channel reached the recipient, using the
  * delivery-tracking signal. Returns `true` when the channel is confirmed delivered (stop the
- * chain), `false` when it is not (escalate). Bound under {@link DELIVERY_CONFIRMATION} — absent,
- * the chain uses only the immediate per-channel {@link ChannelResult}.
+ * chain), `false` when it is not (escalate). Bound under
+ * {@link NOTIFICATION_DELIVERY_CONFIRMATION} — absent, the chain uses only the immediate
+ * per-channel {@link ChannelResult}.
  */
 export interface DeliveryConfirmation {
   /**
