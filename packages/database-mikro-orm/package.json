@@ -47,7 +47,7 @@
     "@mikro-orm/core": "7.1.4",
     "@mikro-orm/decorators": "7.1.4",
     "@mikro-orm/mysql": "7.1.4",
-    "@mikro-orm/nestjs": "7.0.2",
+    "@mikro-orm/nestjs": "7.1.0",
     "@mikro-orm/postgresql": "7.1.4",
     "@mikro-orm/sqlite": "7.1.4",
     "@dudousxd/nestjs-notifications-core": "workspace:^",
