@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-core
 
+## 0.9.2
+
+### Patch Changes
+
+- d106dbe: Fix the `DeliveryConfirmation` docblock to name the real DI token, `NOTIFICATION_DELIVERY_CONFIRMATION`
+
 ## 0.9.1
 
 ### Patch Changes
