@@ -31,9 +31,9 @@ jobs:
           cache: pnpm
           registry-url: "https://registry.npmjs.org"
 
-      # Trusted publishing (OIDC) needs npm >= 11.5. With a Trusted Publisher configured on
-      # npmjs.com for this repo + workflow, publishes are tokenless; NPM_TOKEN stays as a
-      # fallback until then. Either way, --provenance attaches a signed SLSA statement.
+      # Trusted publishing (OIDC) needs npm >= 11.5, and this repo's packages are registered
+      # as Trusted Publishers for (DavideCarvalho/nestjs-notifications, release.yml), so a
+      # publish is tokenless. --provenance attaches a signed SLSA statement either way.
       # PINNED, not @latest: npm 12.0.x returns empty stdout for `npm info --json` and
       # changed the E403 error shape, which makes changesets 2.31.0 think every package is
       # unpublished, attempt to republish all of them, and crash in isAlreadyPublishedError
@@ -133,6 +133,10 @@ jobs:
           title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Deliberately no NODE_AUTH_TOKEN, and no NPM_TOKEN either: publish auth is npm
+          # trusted publishing over OIDC. setup-node writes
+          # `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` into ~/.npmrc regardless, so
+          # wiring an unset secret here would leave an EMPTY credential that npm sends instead
+          # of falling through to the OIDC exchange. Absent is not the same as empty.
           # Generate npm provenance (verified build attestation). Requires id-token: write.
           NPM_CONFIG_PROVENANCE: "true"
