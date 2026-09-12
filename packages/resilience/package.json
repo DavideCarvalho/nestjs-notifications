@@ -1,6 +1,11 @@
 {
   "name": "@dudousxd/nestjs-notifications-resilience",
   "version": "0.2.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DavideCarvalho/nestjs-notifications.git",
+    "directory": "packages/resilience"
+  },
   "description": "Resilient provider failover for nestjs-notifications — per-provider circuit breaker + per-attempt timeout + ordered failover, powered by @dudousxd/nestjs-resilience",
   "license": "MIT",
   "author": "Davide Carvalho",
