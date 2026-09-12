@@ -36,5 +36,8 @@ jobs:
       - name: Build (turbo)
         run: pnpm build
 
+      - name: Typecheck (turbo)
+        run: pnpm typecheck
+
       - name: Test (turbo)
         run: pnpm test
