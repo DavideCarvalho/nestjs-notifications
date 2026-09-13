@@ -38,7 +38,7 @@
     "@dudousxd/nestjs-notifications-core": "workspace:^",
     "@nestjs/bullmq": "12.0.0",
     "@nestjs/common": "12.0.1",
-    "bullmq": "5.78.0",
+    "bullmq": "5.81.4",
     "reflect-metadata": "0.2.2",
     "typescript": "5.9.3"
   },
