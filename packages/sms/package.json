@@ -50,7 +50,7 @@
     "@dudousxd/nestjs-notifications-core": "workspace:^",
     "@nestjs/common": "12.0.1",
     "twilio": "5.13.1",
-    "@vonage/server-sdk": "3.27.0",
+    "@vonage/server-sdk": "3.30.1",
     "@aws-sdk/client-sns": "3.1129.0",
     "reflect-metadata": "0.2.2",
     "typescript": "5.9.3"
