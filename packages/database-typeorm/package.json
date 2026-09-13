@@ -49,7 +49,7 @@
     "@nestjs/typeorm": "12.0.1",
     "@testcontainers/mysql": "10.18.0",
     "@testcontainers/postgresql": "10.18.0",
-    "mysql2": "3.11.5",
+    "mysql2": "3.24.4",
     "pg": "8.13.1",
     "reflect-metadata": "0.2.2",
     "typeorm": "0.3.31",
