@@ -34,7 +34,7 @@
     "@swc/core": "1.16.2",
     "@testcontainers/mysql": "10.18.0",
     "@testcontainers/postgresql": "10.18.0",
-    "@types/node": "22.19.20",
+    "@types/node": "22.20.2",
     "reflect-metadata": "0.2.2",
     "tsup": "8.5.1",
     "turbo": "2.9.17",
