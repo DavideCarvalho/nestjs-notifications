@@ -329,8 +329,8 @@ importers:
         specifier: 0.2.2
         version: 0.2.2
       typescript:
-        specifier: 5.7.2
-        version: 5.7.2
+        specifier: 5.9.3
+        version: 5.9.3
 
   packages/diagnostics:
     devDependencies:
@@ -6974,11 +6974,6 @@ packages:
         optional: true
       typeorm-aurora-data-api-driver:
         optional: true
-
-  typescript@5.7.2:
-    resolution: {integrity: sha512-i5t66RHxDvVN40HfDd1PsEThGNnlMCMT3jMUuoh9/0TaqWevNontacunWyN02LA9/fIbEWlcHZcgTKb9QoaLfg==}
-    engines: {node: '>=14.17'}
-    hasBin: true
 
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
@@ -14477,8 +14472,6 @@ snapshots:
     transitivePeerDependencies:
       - babel-plugin-macros
       - supports-color
-
-  typescript@5.7.2: {}
 
   typescript@5.9.3: {}
 
