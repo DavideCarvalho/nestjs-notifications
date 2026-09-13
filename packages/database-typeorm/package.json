@@ -50,7 +50,7 @@
     "@testcontainers/mysql": "10.18.0",
     "@testcontainers/postgresql": "10.18.0",
     "mysql2": "3.11.5",
-    "pg": "8.13.1",
+    "pg": "8.23.0",
     "reflect-metadata": "0.2.2",
     "typeorm": "0.3.31",
     "typescript": "5.9.3",
