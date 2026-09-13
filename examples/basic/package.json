@@ -27,7 +27,7 @@
     "@dudousxd/nestjs-codegen": "0.25.1",
     "@dudousxd/nestjs-notifications-testing": "workspace:^",
     "@nestjs/testing": "12.0.1",
-    "tsx": "4.22.4",
+    "tsx": "4.23.13",
     "typescript": "5.9.3"
   }
 }
