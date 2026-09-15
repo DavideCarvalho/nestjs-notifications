@@ -35,7 +35,7 @@
     "@dudousxd/nestjs-codegen": ">=0.2.0"
   },
   "devDependencies": {
-    "@dudousxd/nestjs-codegen": "0.25.1",
+    "@dudousxd/nestjs-codegen": "0.25.2",
     "typescript": "5.9.3"
   },
   "module": "./dist/index.js",
