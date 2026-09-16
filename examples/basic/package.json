@@ -12,7 +12,7 @@
     "start": "node dist/main.js"
   },
   "dependencies": {
-    "@dudousxd/nestjs-client": "0.2.1",
+    "@dudousxd/nestjs-client": "0.8.1",
     "@dudousxd/nestjs-notifications-core": "workspace:^",
     "@dudousxd/nestjs-notifications-database": "workspace:^",
     "@dudousxd/nestjs-notifications-mail": "workspace:^",
