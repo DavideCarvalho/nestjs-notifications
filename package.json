@@ -9,7 +9,7 @@
     "type": "git",
     "url": "https://github.com/DavideCarvalho/nestjs-notifications.git"
   },
-  "packageManager": "pnpm@11.5.0",
+  "packageManager": "pnpm@11.27.0",
   "engines": {
     "node": ">=20"
   },
