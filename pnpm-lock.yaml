@@ -51,8 +51,8 @@ importers:
   examples/basic:
     dependencies:
       '@dudousxd/nestjs-client':
-        specifier: 0.2.1
-        version: 0.2.1
+        specifier: 0.8.1
+        version: 0.8.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)
       '@dudousxd/nestjs-notifications-core':
         specifier: workspace:^
         version: link:../../packages/core
@@ -1026,9 +1026,20 @@ packages:
   '@changesets/write@0.4.0':
     resolution: {integrity: sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q==}
 
-  '@dudousxd/nestjs-client@0.2.1':
-    resolution: {integrity: sha512-WNbQXNd82DzU/VTYV4/lTpdOPFSHDmICKqQlkGAPhuUTXXIMGh63vl1K8sZKF3wx5OI5eSFbw8V+VVn9OPKQzA==}
+  '@dudousxd/nestjs-client@0.8.1':
+    resolution: {integrity: sha512-1geyY4hOHcw9NMh0lF8QFStODQw85duV/oubV0F5IrG42wtMgK9BIHeQHavC+EkrUWOwrT0q5h6Ao8lhVV8djg==}
     engines: {node: '>=20'}
+    peerDependencies:
+      '@nestjs/common': ^10.0.0 || ^11.0.0 || ^12.0.0
+      rxjs: ^7.0.0
+      superjson: ^2.0.0
+    peerDependenciesMeta:
+      '@nestjs/common':
+        optional: true
+      rxjs:
+        optional: true
+      superjson:
+        optional: true
 
   '@dudousxd/nestjs-codegen@0.25.2':
     resolution: {integrity: sha512-ufNVD22rgIJVU0CoC7+FXvJEGWB179vstpKWBr1y63EqtN7+8x+OWQbTQy86YTw3g1hesrFO63170HECRvoHgQ==}
@@ -7657,7 +7668,10 @@ snapshots:
       human-id: 4.2.0
       prettier: 2.8.8
 
-  '@dudousxd/nestjs-client@0.2.1': {}
+  '@dudousxd/nestjs-client@0.8.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(rxjs@7.8.2)':
+    optionalDependencies:
+      '@nestjs/common': 12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      rxjs: 7.8.2
 
   '@dudousxd/nestjs-codegen@0.25.2(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(tsx@4.23.13)(typescript@5.9.3)':
     dependencies:
