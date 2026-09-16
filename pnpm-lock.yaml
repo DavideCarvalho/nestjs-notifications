@@ -212,23 +212,23 @@ importers:
         specifier: workspace:^
         version: link:../preferences
       '@mikro-orm/core':
-        specifier: 7.1.4
-        version: 7.1.4
+        specifier: 7.2.0
+        version: 7.2.0
       '@mikro-orm/decorators':
-        specifier: 7.1.4
-        version: 7.1.4(@mikro-orm/core@7.1.4)(reflect-metadata@0.2.2)
+        specifier: 7.2.0
+        version: 7.2.0(@mikro-orm/core@7.2.0)(reflect-metadata@0.2.2)
       '@mikro-orm/mysql':
-        specifier: 7.1.4
-        version: 7.1.4(@mikro-orm/core@7.1.4)(@types/node@22.20.2)
+        specifier: 7.2.0
+        version: 7.2.0(@mikro-orm/core@7.2.0)(@types/node@22.20.2)
       '@mikro-orm/nestjs':
         specifier: 7.1.0
-        version: 7.1.0(@mikro-orm/core@7.1.4)(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(reflect-metadata@0.2.2)
+        version: 7.1.0(@mikro-orm/core@7.2.0)(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(reflect-metadata@0.2.2)
       '@mikro-orm/postgresql':
-        specifier: 7.1.4
-        version: 7.1.4(@mikro-orm/core@7.1.4)
+        specifier: 7.2.0
+        version: 7.2.0(@mikro-orm/core@7.2.0)
       '@mikro-orm/sqlite':
-        specifier: 7.1.4
-        version: 7.1.4(@mikro-orm/core@7.1.4)
+        specifier: 7.2.0
+        version: 7.2.0(@mikro-orm/core@7.2.0)
       '@nestjs/common':
         specifier: 12.0.1
         version: 12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -285,7 +285,7 @@ importers:
         version: 12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/typeorm':
         specifier: 12.0.1
-        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(better-sqlite3@12.10.0)(ioredis@5.11.1)(mysql2@3.24.4(@types/node@22.20.2))(pg@8.23.0)(sqlite3@5.1.7))
+        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(better-sqlite3@11.10.0)(ioredis@5.11.1)(mysql2@3.24.4(@types/node@22.20.2))(pg@8.23.0)(sqlite3@5.1.7))
       '@testcontainers/mysql':
         specifier: 10.18.0
         version: 10.18.0
@@ -306,7 +306,7 @@ importers:
         version: 5.1.7
       typeorm:
         specifier: 0.3.31
-        version: 0.3.31(better-sqlite3@12.10.0)(ioredis@5.11.1)(mysql2@3.24.4(@types/node@22.20.2))(pg@8.23.0)(sqlite3@5.1.7)
+        version: 0.3.31(better-sqlite3@11.10.0)(ioredis@5.11.1)(mysql2@3.24.4(@types/node@22.20.2))(pg@8.23.0)(sqlite3@5.1.7)
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -1835,8 +1835,8 @@ packages:
   '@mdx-js/mdx@3.1.1':
     resolution: {integrity: sha512-f6ZO2ifpwAQIpzGWaBQT2TXxPv6z3RBzQKpVftEWN78Vl/YweF1uwussDx8ECAXVtr3Rs89fKyG9YlzUs9DyGQ==}
 
-  '@mikro-orm/core@7.1.4':
-    resolution: {integrity: sha512-JPpOoBw2r98hVmsa7kFdt9HDqTa6/x9dhLL2MZRJQt1HwNg7S7A6Eh+nJ21dmB5QfXhu2PXqt03Y+xZZDnUD0w==}
+  '@mikro-orm/core@7.2.0':
+    resolution: {integrity: sha512-a4RoZXfzVJqiaOwsw2k7EH1Vv+BOdOokB+F4TofUz0mLz4XPewwaKUQIUeqRNmf0fKpOFJxlgTxsZYXhZoFxCQ==}
     engines: {node: '>= 22.17.0'}
     peerDependencies:
       dataloader: 2.2.3
@@ -1844,21 +1844,21 @@ packages:
       dataloader:
         optional: true
 
-  '@mikro-orm/decorators@7.1.4':
-    resolution: {integrity: sha512-3OSFkdgi39c/kFJ89/ylDZ27n5WV3uJgqrAMNVjrAxQs9xByt6mzoTBsWuU/EdNqw3yBLR43FNwTNPc1lWQ7lA==}
+  '@mikro-orm/decorators@7.2.0':
+    resolution: {integrity: sha512-iFhSIoQmt4jFA1+4hLkSEC+cvWOuUdvUv6ljN3h7qgzeSxO3pLc0vHxkUw2QZOSezo0DjOSSzjP+j9ic+l/YFg==}
     engines: {node: '>= 22.17.0'}
     peerDependencies:
-      '@mikro-orm/core': 7.1.4
+      '@mikro-orm/core': 7.2.0
       reflect-metadata: ^0.1.0 || ^0.2.0
     peerDependenciesMeta:
       reflect-metadata:
         optional: true
 
-  '@mikro-orm/mysql@7.1.4':
-    resolution: {integrity: sha512-Gck977Bp91KD9gB3TO0Trd46jiNw0fSM53kPOiX9WiBNoYdKIli6Yz8mAzYnd63dYb2q67jif5/gjZ2IMYlJIQ==}
+  '@mikro-orm/mysql@7.2.0':
+    resolution: {integrity: sha512-jV76BvNsbvCVrynb9nWURDZ8JoHB7YMFwyZM4+9smvn7KMKbkzCw4f+dk5xdkiPs2387wfxI/ZLUX0rFcI5JXA==}
     engines: {node: '>= 22.17.0'}
     peerDependencies:
-      '@mikro-orm/core': 7.1.4
+      '@mikro-orm/core': 7.2.0
 
   '@mikro-orm/nestjs@7.1.0':
     resolution: {integrity: sha512-S7UXOR4jYtl+lSl23GxQNoWaI3naf5WGUaWMjqZ1o+xcp+fha8une9Yu3qEizZNA+iulE4qA+yaB6sKnA67fbw==}
@@ -1869,23 +1869,23 @@ packages:
       '@nestjs/core': ^11.0.5 || ^12.0.0
       reflect-metadata: ^0.1.0 || ^0.2.0
 
-  '@mikro-orm/postgresql@7.1.4':
-    resolution: {integrity: sha512-oAGi4qb5mbct8ZG6YL9saaIkMTblt82RmBR5pY4qAtWAwQc0OAtvOMYGFzdSImG+7CRHUi618FPtz5k9CIF/VQ==}
+  '@mikro-orm/postgresql@7.2.0':
+    resolution: {integrity: sha512-15M7ntKtiND22YAGYOzvKXtHJ8lm0ukRW+TaHjk9m/HFop4fXyHzqWC91cTb+kdcE+RzeLqOqbkmcIzFOC5BkA==}
     engines: {node: '>= 22.17.0'}
     peerDependencies:
-      '@mikro-orm/core': 7.1.4
+      '@mikro-orm/core': 7.2.0
 
-  '@mikro-orm/sql@7.1.4':
-    resolution: {integrity: sha512-YOie3z0Y24XlzWPUrATGJja5U6Ij81gji9yEDT6JkZxJH9uF1tbmZ2qX9WHectnMB5h8JHCic5AMvaflhBviNg==}
+  '@mikro-orm/sql@7.2.0':
+    resolution: {integrity: sha512-ZpuCfBL6XAYrJsUglvXrah+erB9gVgkoSuIKR/x+o1o/OVOE8ljgRxYIIIMGE+LetR9s1wrDQjrwfm0gghqsiA==}
     engines: {node: '>= 22.17.0'}
     peerDependencies:
-      '@mikro-orm/core': 7.1.4
+      '@mikro-orm/core': 7.2.0
 
-  '@mikro-orm/sqlite@7.1.4':
-    resolution: {integrity: sha512-0Buc7GMkib22SliR4dj4O3Yzs26k8lzRn5xRRpgkLpt+Mlse9ac3Mk+2ilLTwsjHm2yoIIRQbfNnhVk1z0UoSw==}
+  '@mikro-orm/sqlite@7.2.0':
+    resolution: {integrity: sha512-Z617OmwJv0uctAI3p/VHmclvsR7hxqWU8+bebw5NQsA1YVoI3Gucbhj/Q/14INulxNw+UDBvk0bQ1GIf2UVWAA==}
     engines: {node: '>= 22.17.0'}
     peerDependencies:
-      '@mikro-orm/core': 7.1.4
+      '@mikro-orm/core': 7.2.0
 
   '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.4':
     resolution: {integrity: sha512-LCkGo6JDfaBhgST7UpPWgNgLINpcpabaHfyz5OBx75nUYxBsaEPxjnyNjWpeb/xBup/682QnBfRBy2/LvPutZQ==}
@@ -3479,9 +3479,9 @@ packages:
   better-sqlite3@11.10.0:
     resolution: {integrity: sha512-EwhOpyXiOEL/lKzHz9AW1msWFNzGc/z+LzeB3/jnFJpxu+th2yqvzsSWas1v9jgs9+xiXJcD5A8CJxAG2TaghQ==}
 
-  better-sqlite3@12.10.0:
-    resolution: {integrity: sha512-CyzaZRQKyHkB2ZInfTTl2nvT33EbDpjkLEbE8/Zck3Ll6O0qqvuGdrJ45HgtH+HykRg88ITY3AdreBGN70aBSQ==}
-    engines: {node: 20.x || 22.x || 23.x || 24.x || 25.x || 26.x}
+  better-sqlite3@13.0.3:
+    resolution: {integrity: sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==}
+    engines: {node: '>=22'}
 
   bignumber.js@9.3.1:
     resolution: {integrity: sha512-Ko0uX15oIUS7wJ3Rb30Fs6SkVbLmPBAKdlm7q9+ak9bbIeFf0MwuBsQV6z7+X768/cHsfg+WlysDWJcmthjsjQ==}
@@ -4890,8 +4890,8 @@ packages:
   jws@4.0.1:
     resolution: {integrity: sha512-EKI/M/yqPncGUUh44xz0PxSidXFr/+r0pA70+gIYhjv+et7yxM+s29Y+VGDkovRofQem0fs7Uvf4+YmAdyRduA==}
 
-  kysely@0.29.2:
-    resolution: {integrity: sha512-s6WVJyEZrbm6jhBpiKHsGHyePMrVQKJ85wZCFCr9W4QHv6WTjWIrdvTmO9hDEA3bNK0xkrE2DqrHsXMLWuZpQg==}
+  kysely@0.29.5:
+    resolution: {integrity: sha512-ooa+eSbBNPTo3MycPEuW5jdrxQdQwdtB3LC3h43FiXQbIry5tR0C5lDG7eealK0E4D7XjrnOP5DIUg/LyjRMYQ==}
     engines: {node: '>=22.0.0'}
 
   lazystream@1.0.1:
@@ -5521,8 +5521,8 @@ packages:
     resolution: {integrity: sha512-6rdyFg2kLrMh9Jee7/BMPuV9lEAd7lLW2YUpF9/YxR7njyoUwwQ0ZPh3TaIY50Sw6vlyD2HW3wGOkTS4P79xrQ==}
     engines: {node: '>= 10.16.0'}
 
-  mysql2@3.22.4:
-    resolution: {integrity: sha512-CtXYlmL7ZamiYKbmqkamQHWJROUHSfm+f3kByzGfknw7kW51mcB2ouMUqYq1XfYxbXmnWo6RhPydx6OCqdgcmQ==}
+  mysql2@3.24.3:
+    resolution: {integrity: sha512-OKfWHkMAg9v06neq8FmSyhbxPQKABN9PAW5G9/bDTXzJBO5xXtkKL0V27vju7HQWk9UD4Od5BZsvCtBTB1CPEw==}
     engines: {node: '>= 8.0'}
     peerDependencies:
       '@types/node': '>= 8'
@@ -5607,6 +5607,10 @@ packages:
 
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
+
+  node-addon-api@8.9.2:
+    resolution: {integrity: sha512-VijLXbi3UACN69I0JVXJsX4tjACjNoQDgv2gTF6sx2wWEi8tkSg2eX8p5gSIFi8z2+DL3oHmY6OyKce38SDolg==}
+    engines: {node: ^18 || ^20 || >= 21}
 
   node-domexception@1.0.0:
     resolution: {integrity: sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ==}
@@ -5810,14 +5814,11 @@ packages:
   pg-cloudflare@1.4.0:
     resolution: {integrity: sha512-Vo7z/6rrQYxpNRylp4Tlob2elzbh+N/MOQbxFVWCxS7oEx6jF53GTJFxK2WWpKuBRkmiin4Mt+xofFDjx09R0A==}
 
-  pg-connection-string@2.13.0:
-    resolution: {integrity: sha512-EMnU9E2fSULdsbErBbMaXJvFeD9B4+nPcM3f+4lsiCR0BHLPrLVjv3DbyM2hgQQviKJaTWIRRTjKjWlHg3p2ig==}
-
   pg-connection-string@2.14.0:
     resolution: {integrity: sha512-XwWDGcLRGCXAR8F/AM5bG7Q+A3Wm2s6QeEjlOKZLlH3UYcguiqCWKyWXVag5TLTIjR7oOJUY8kcADaZgWPyLeg==}
 
-  pg-cursor@2.20.0:
-    resolution: {integrity: sha512-HP/EbUafheaUOs7DxlG6tda/rhmsX2hCTJJJ+gCnhljGyNEs6pBHddbNuomlW3DqEhP3zYD+GqBWkYnJPIZ4tA==}
+  pg-cursor@2.22.0:
+    resolution: {integrity: sha512-knzXLKqarTjOvb3qDSW0JiGsazmxwEKXrqHfWRte7XUsOYccQRafn3BLnQobWwInkzFJSyOej8y8cQRh2z3kGw==}
     peerDependencies:
       pg: ^8
 
@@ -5830,24 +5831,12 @@ packages:
     peerDependencies:
       pg: '>=8.0'
 
-  pg-protocol@1.14.0:
-    resolution: {integrity: sha512-n5taZ1kO3s9ngDTVxsEznOqCyToTgz0FLuPq0B33COy5pPpuWJpY3/2oRBVETuOgzdqRXfWpM9HIhp2LBBT1BA==}
-
   pg-protocol@1.16.0:
     resolution: {integrity: sha512-sILXutLVjCLjcDuOmvhX5e2Z4cS5qG/6Bu3VkpFwdf/633ElGLpEh9bgmuI5I4sqKqkifQiGyiCcx1HdtrK7tg==}
 
   pg-types@2.2.0:
     resolution: {integrity: sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA==}
     engines: {node: '>=4'}
-
-  pg@8.21.0:
-    resolution: {integrity: sha512-AUP1EYJuHraQGsVoCQVIcM7TEJVGtDzxWtGFZd8rds9d+CCXlU5Js1rYgfLNvxy9iJrpHjGrRjoi/3BT9fRyiA==}
-    engines: {node: '>= 16.0.0'}
-    peerDependencies:
-      pg-native: '>=3.0.1'
-    peerDependenciesMeta:
-      pg-native:
-        optional: true
 
   pg@8.23.0:
     resolution: {integrity: sha512-Ip2EQCngowJLGOfCwkFhPXU7/ljlhn6Rxlmy4XYfL2Y+vyRM59+8uR2xqRWKdYmbXmxCFOAmKxBuSUCdF34qLg==}
@@ -5941,8 +5930,8 @@ packages:
     resolution: {integrity: sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==}
     engines: {node: '>=0.10.0'}
 
-  postgres-interval@4.0.2:
-    resolution: {integrity: sha512-EMsphSQ1YkQqKZL2cuG0zHkmjCCzQqQ71l2GXITqRwjhRleCdv00bDk/ktaSi0LnlaPzAc3535KTrjXsTdtx7A==}
+  postgres-interval@4.1.0:
+    resolution: {integrity: sha512-nJLACcOHi2iyRuMJeW6CuIA0Dc0i1YEpRr26XDyHAfxPjYUJOFxwZjmOc5oFFctTTh/OlRAMlnlXEJvr170fJg==}
     engines: {node: '>=12'}
 
   prebuild-install@7.1.3:
@@ -6410,10 +6399,6 @@ packages:
 
   sprintf-js@1.0.3:
     resolution: {integrity: sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==}
-
-  sql-escaper@1.3.3:
-    resolution: {integrity: sha512-BsTCV265VpTp8tm1wyIm1xqQCS+Q9NHx2Sr+WcnUrgLrQ6yiDIvHYJV5gHxsj1lMBy2zm5twLaZao8Jd+S8JJw==}
-    engines: {bun: '>=1.0.0', deno: '>=2.0.0', node: '>=12.0.0'}
 
   sql-escaper@1.5.1:
     resolution: {integrity: sha512-4toX5E1fQbBrpfXidaHnF0669nkAdETeIPTs2SUjxxD7RRIs9ICG4gtpmfc68JCEKehsdwLFqBu9VlQqZ1P1gg==}
@@ -8249,55 +8234,55 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@mikro-orm/core@7.1.4': {}
+  '@mikro-orm/core@7.2.0': {}
 
-  '@mikro-orm/decorators@7.1.4(@mikro-orm/core@7.1.4)(reflect-metadata@0.2.2)':
+  '@mikro-orm/decorators@7.2.0(@mikro-orm/core@7.2.0)(reflect-metadata@0.2.2)':
     dependencies:
-      '@mikro-orm/core': 7.1.4
+      '@mikro-orm/core': 7.2.0
     optionalDependencies:
       reflect-metadata: 0.2.2
 
-  '@mikro-orm/mysql@7.1.4(@mikro-orm/core@7.1.4)(@types/node@22.20.2)':
+  '@mikro-orm/mysql@7.2.0(@mikro-orm/core@7.2.0)(@types/node@22.20.2)':
     dependencies:
-      '@mikro-orm/core': 7.1.4
-      '@mikro-orm/sql': 7.1.4(@mikro-orm/core@7.1.4)
-      kysely: 0.29.2
-      mysql2: 3.22.4(@types/node@22.20.2)
+      '@mikro-orm/core': 7.2.0
+      '@mikro-orm/sql': 7.2.0(@mikro-orm/core@7.2.0)
+      kysely: 0.29.5
+      mysql2: 3.24.3(@types/node@22.20.2)
       sqlstring: 2.3.3
     transitivePeerDependencies:
       - '@types/node'
 
-  '@mikro-orm/nestjs@7.1.0(@mikro-orm/core@7.1.4)(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(reflect-metadata@0.2.2)':
+  '@mikro-orm/nestjs@7.1.0(@mikro-orm/core@7.2.0)(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(reflect-metadata@0.2.2)':
     dependencies:
-      '@mikro-orm/core': 7.1.4
+      '@mikro-orm/core': 7.2.0
       '@nestjs/common': 12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core': 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@12.0.1)(@nestjs/websockets@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       reflect-metadata: 0.2.2
 
-  '@mikro-orm/postgresql@7.1.4(@mikro-orm/core@7.1.4)':
+  '@mikro-orm/postgresql@7.2.0(@mikro-orm/core@7.2.0)':
     dependencies:
-      '@mikro-orm/core': 7.1.4
-      '@mikro-orm/sql': 7.1.4(@mikro-orm/core@7.1.4)
-      kysely: 0.29.2
-      pg: 8.21.0
-      pg-cursor: 2.20.0(pg@8.21.0)
+      '@mikro-orm/core': 7.2.0
+      '@mikro-orm/sql': 7.2.0(@mikro-orm/core@7.2.0)
+      kysely: 0.29.5
+      pg: 8.23.0
+      pg-cursor: 2.22.0(pg@8.23.0)
       postgres-array: 3.0.4
       postgres-date: 2.1.0
-      postgres-interval: 4.0.2
+      postgres-interval: 4.1.0
     transitivePeerDependencies:
       - pg-native
 
-  '@mikro-orm/sql@7.1.4(@mikro-orm/core@7.1.4)':
+  '@mikro-orm/sql@7.2.0(@mikro-orm/core@7.2.0)':
     dependencies:
-      '@mikro-orm/core': 7.1.4
-      kysely: 0.29.2
+      '@mikro-orm/core': 7.2.0
+      kysely: 0.29.5
 
-  '@mikro-orm/sqlite@7.1.4(@mikro-orm/core@7.1.4)':
+  '@mikro-orm/sqlite@7.2.0(@mikro-orm/core@7.2.0)':
     dependencies:
-      '@mikro-orm/core': 7.1.4
-      '@mikro-orm/sql': 7.1.4(@mikro-orm/core@7.1.4)
-      better-sqlite3: 12.10.0
-      kysely: 0.29.2
+      '@mikro-orm/core': 7.2.0
+      '@mikro-orm/sql': 7.2.0(@mikro-orm/core@7.2.0)
+      better-sqlite3: 13.0.3
+      kysely: 0.29.5
 
   '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.4':
     optional: true
@@ -8396,13 +8381,13 @@ snapshots:
     optionalDependencies:
       '@nestjs/platform-express': 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)
 
-  '@nestjs/typeorm@12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(better-sqlite3@12.10.0)(ioredis@5.11.1)(mysql2@3.24.4(@types/node@22.20.2))(pg@8.23.0)(sqlite3@5.1.7))':
+  '@nestjs/typeorm@12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(better-sqlite3@11.10.0)(ioredis@5.11.1)(mysql2@3.24.4(@types/node@22.20.2))(pg@8.23.0)(sqlite3@5.1.7))':
     dependencies:
       '@nestjs/common': 12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core': 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@12.0.1)(@nestjs/websockets@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       reflect-metadata: 0.2.2
       rxjs: 7.8.2
-      typeorm: 0.3.31(better-sqlite3@12.10.0)(ioredis@5.11.1)(mysql2@3.24.4(@types/node@22.20.2))(pg@8.23.0)(sqlite3@5.1.7)
+      typeorm: 0.3.31(better-sqlite3@11.10.0)(ioredis@5.11.1)(mysql2@3.24.4(@types/node@22.20.2))(pg@8.23.0)(sqlite3@5.1.7)
 
   '@nestjs/websockets@12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(@nestjs/platform-socket.io@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)':
     dependencies:
@@ -9836,10 +9821,9 @@ snapshots:
       bindings: 1.5.0
       prebuild-install: 7.1.3
 
-  better-sqlite3@12.10.0:
+  better-sqlite3@13.0.3:
     dependencies:
-      bindings: 1.5.0
-      prebuild-install: 7.1.3
+      node-addon-api: 8.9.2
 
   bignumber.js@9.3.1: {}
 
@@ -11587,7 +11571,7 @@ snapshots:
       jwa: 2.0.1
       safe-buffer: 5.2.1
 
-  kysely@0.29.2: {}
+  kysely@0.29.5: {}
 
   lazystream@1.0.1:
     dependencies:
@@ -12630,17 +12614,16 @@ snapshots:
       concat-stream: 2.0.0
       type-is: 1.6.18
 
-  mysql2@3.22.4(@types/node@22.20.2):
+  mysql2@3.24.3(@types/node@22.20.2):
     dependencies:
       '@types/node': 22.20.2
       aws-ssl-profiles: 1.1.2
-      denque: 2.1.0
       generate-function: 2.3.1
-      iconv-lite: 0.7.2
+      iconv-lite: 0.7.3
       long: 5.3.2
       lru.min: 1.1.4
       named-placeholders: 1.1.6
-      sql-escaper: 1.3.3
+      sql-escaper: 1.5.1
 
   mysql2@3.24.4(@types/node@22.20.2):
     dependencies:
@@ -12719,6 +12702,8 @@ snapshots:
   node-abort-controller@3.1.1: {}
 
   node-addon-api@7.1.1: {}
+
+  node-addon-api@8.9.2: {}
 
   node-domexception@1.0.0: {}
 
@@ -12914,25 +12899,17 @@ snapshots:
   pg-cloudflare@1.4.0:
     optional: true
 
-  pg-connection-string@2.13.0: {}
-
   pg-connection-string@2.14.0: {}
 
-  pg-cursor@2.20.0(pg@8.21.0):
+  pg-cursor@2.22.0(pg@8.23.0):
     dependencies:
-      pg: 8.21.0
+      pg: 8.23.0
 
   pg-int8@1.0.1: {}
-
-  pg-pool@3.14.0(pg@8.21.0):
-    dependencies:
-      pg: 8.21.0
 
   pg-pool@3.14.0(pg@8.23.0):
     dependencies:
       pg: 8.23.0
-
-  pg-protocol@1.14.0: {}
 
   pg-protocol@1.16.0: {}
 
@@ -12943,16 +12920,6 @@ snapshots:
       postgres-bytea: 1.0.1
       postgres-date: 1.0.7
       postgres-interval: 1.2.0
-
-  pg@8.21.0:
-    dependencies:
-      pg-connection-string: 2.13.0
-      pg-pool: 3.14.0(pg@8.21.0)
-      pg-protocol: 1.14.0
-      pg-types: 2.2.0
-      pgpass: 1.0.5
-    optionalDependencies:
-      pg-cloudflare: 1.4.0
 
   pg@8.23.0:
     dependencies:
@@ -13027,7 +12994,7 @@ snapshots:
     dependencies:
       xtend: 4.0.2
 
-  postgres-interval@4.0.2: {}
+  postgres-interval@4.1.0: {}
 
   prebuild-install@7.1.3:
     dependencies:
@@ -13124,7 +13091,7 @@ snapshots:
     dependencies:
       bytes: 3.1.2
       http-errors: 2.0.1
-      iconv-lite: 0.7.2
+      iconv-lite: 0.7.3
       unpipe: 1.0.0
 
   rc@1.2.8:
@@ -13683,8 +13650,6 @@ snapshots:
 
   sprintf-js@1.0.3: {}
 
-  sql-escaper@1.3.3: {}
-
   sql-escaper@1.5.1: {}
 
   sql-highlight@6.1.0: {}
@@ -14076,7 +14041,7 @@ snapshots:
 
   typedarray@0.0.6: {}
 
-  typeorm@0.3.31(better-sqlite3@12.10.0)(ioredis@5.11.1)(mysql2@3.24.4(@types/node@22.20.2))(pg@8.23.0)(sqlite3@5.1.7):
+  typeorm@0.3.31(better-sqlite3@11.10.0)(ioredis@5.11.1)(mysql2@3.24.4(@types/node@22.20.2))(pg@8.23.0)(sqlite3@5.1.7):
     dependencies:
       '@sqltools/formatter': 1.2.5
       ansis: 4.3.1
@@ -14094,7 +14059,7 @@ snapshots:
       uuid: 11.1.1
       yargs: 17.7.3
     optionalDependencies:
-      better-sqlite3: 12.10.0
+      better-sqlite3: 11.10.0
       ioredis: 5.11.1
       mysql2: 3.24.4(@types/node@22.20.2)
       pg: 8.23.0

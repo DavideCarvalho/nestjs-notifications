@@ -44,12 +44,12 @@
     }
   },
   "devDependencies": {
-    "@mikro-orm/core": "7.1.4",
-    "@mikro-orm/decorators": "7.1.4",
-    "@mikro-orm/mysql": "7.1.4",
+    "@mikro-orm/core": "7.2.0",
+    "@mikro-orm/decorators": "7.2.0",
+    "@mikro-orm/mysql": "7.2.0",
     "@mikro-orm/nestjs": "7.1.0",
-    "@mikro-orm/postgresql": "7.1.4",
-    "@mikro-orm/sqlite": "7.1.4",
+    "@mikro-orm/postgresql": "7.2.0",
+    "@mikro-orm/sqlite": "7.2.0",
     "@dudousxd/nestjs-notifications-core": "workspace:^",
     "@dudousxd/nestjs-notifications-database": "workspace:^",
     "@dudousxd/nestjs-notifications-preferences": "workspace:^",
