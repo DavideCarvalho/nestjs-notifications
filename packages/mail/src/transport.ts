@@ -44,14 +44,18 @@ export interface SMTPOptions {
   [key: string]: unknown;
 }
 
-/** A {@link MailTransport} backed by nodemailer's SMTP transport. */
+/**
+ * A {@link MailTransport} backed by nodemailer's SMTP transport. Configure it with
+ * {@link SMTPOptions} or a connection URL (`smtp://user:pass@relay.internal:25`,
+ * `smtps://...:465`) — the usual single-env-var form, e.g. for an internal relay.
+ */
 @Injectable()
 export class NodemailerTransport implements MailTransport {
   private readonly transporter: nodemailer.Transporter;
 
   constructor(
     @Inject(MAIL_SMTP_OPTIONS)
-    private readonly smtp: SMTPOptions,
+    private readonly smtp: SMTPOptions | string,
   ) {
     this.transporter = nodemailer.createTransport(this.smtp);
   }

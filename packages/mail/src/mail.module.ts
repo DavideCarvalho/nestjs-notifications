@@ -24,8 +24,11 @@ export interface MailChannelModuleOptions {
   renderer?: Type<MailRenderer>;
   /** A pre-built renderer instance. Takes precedence over `renderer`. */
   rendererInstance?: MailRenderer;
-  /** SMTP options for the default nodemailer transport. */
-  smtp?: SMTPOptions;
+  /**
+   * SMTP options for the default nodemailer transport, or a connection URL
+   * (`smtp://user:pass@host:587`, `smtps://host:465`).
+   */
+  smtp?: SMTPOptions | string;
   /**
    * Resolve a per-tenant transport. When delivery runs with a `context.tenant`, the
    * channel uses the returned transport instead of the default. Lets each tenant use

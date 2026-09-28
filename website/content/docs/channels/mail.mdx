@@ -51,7 +51,7 @@ export class AppModule {}
 | `transport` | `Type<MailTransport>` | `NodemailerTransport` | Transport **class** that delivers the rendered mail (resolved from DI). |
 | `transportInstance` | `MailTransport` | — | A pre-built transport **instance** — use for transports you construct yourself (e.g. [`SesTransport`](#aws-ses) or a [failover](#multi-provider-failover) wrapper). Takes precedence over `transport`. |
 | `renderer` | `Type<MailRenderer>` | `DefaultMailRenderer` | Renderer that produces the HTML + text bodies. |
-| `smtp` | `SMTPOptions` | `{}` | SMTP options forwarded to the default nodemailer transport. |
+| `smtp` | `SMTPOptions \| string` | `{}` | SMTP options, or a connection URL (`smtp://user:pass@host:587`), forwarded to the default nodemailer transport. |
 | `resolveTransport` | `(tenant: string) => MailTransport` | — | Per-tenant transport resolver. See [Per-tenant transport](#per-tenant-transport). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
 
@@ -133,8 +133,32 @@ MailChannelModule.forRoot({
 });
 ```
 
-`SMTPOptions` requires `host` and `port`, with optional `secure` and `auth`; any extra keys pass
-straight through to nodemailer.
+`SMTPOptions` requires `host` and `port`, with optional `secure` and `auth`. Any extra keys pass
+straight through to nodemailer. You can also pass a connection URL, which is the usual
+single-env-var form, for example for an internal relay on a private network:
+
+```ts
+MailChannelModule.forRoot({ from: 'no-reply@corp.internal', smtp: process.env.SMTP_URL }); // smtp://user:pass@relay.internal:25
+```
+
+### Log and null transports
+
+Two built-in transports cover environments that shouldn't really send mail:
+
+- `LogMailTransport` writes each message (recipient, subject, text body) to the Nest logger. It's the
+  "log" driver for local development, so you can click an invite link straight from the console.
+  Never use it in production, because links end up in your logs.
+- `NullMailTransport` drops every message and logs the drop at debug level. Use it where outgoing
+  mail is deliberately off, such as CI or an air-gapped install with no relay configured.
+
+```ts
+MailChannelModule.forRoot({
+  from: 'no-reply@example.com',
+  ...(process.env.SMTP_URL
+    ? { smtp: process.env.SMTP_URL }
+    : { transport: process.env.NODE_ENV === 'production' ? NullMailTransport : LogMailTransport }),
+});
+```
 
 To use a provider's HTTP API instead of SMTP, implement `MailTransport` and pass it as `transport`:
 
