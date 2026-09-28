@@ -14,6 +14,7 @@ export {
   type SMTPOptions,
   NodemailerTransport,
 } from './transport';
+export { LogMailTransport, NullMailTransport } from './dev.transports';
 export {
   SesTransport,
   composeRawEmail,
