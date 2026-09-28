@@ -1,8 +1,11 @@
+import { createHmac } from 'node:crypto';
 import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { WEBHOOK_OPTIONS } from './tokens';
 import { WebhookMessage } from './webhook-message';
 import { WebhookChannel } from './webhook.channel';
 import type { WebhookNotification } from './webhook.channel';
+import { WebhookChannelModule } from './webhook.module';
 
 const URL = 'https://example.com/hooks/notifications';
 
@@ -133,5 +136,62 @@ describe('WebhookChannel', () => {
     const bare: Notification = { via: () => ['webhook'] };
 
     await expect(channel.send(new TestUser(URL), bare)).rejects.toThrow(/toWebhook\(\)/);
+  });
+
+  it('forRoot() forwards secret / signatureHeader / timeoutMs / redirect to the channel options', () => {
+    const module = WebhookChannelModule.forRoot({
+      url: URL,
+      secret: 's3cret',
+      signatureHeader: 'X-Hub-Signature-256',
+      timeoutMs: 15_000,
+      redirect: 'error',
+    });
+    const provider = (module.providers ?? []).find(
+      (p) => typeof p === 'object' && 'provide' in p && p.provide === WEBHOOK_OPTIONS,
+    ) as { useValue: unknown } | undefined;
+    expect(provider?.useValue).toEqual({
+      url: URL,
+      secret: 's3cret',
+      signatureHeader: 'X-Hub-Signature-256',
+      timeoutMs: 15_000,
+      redirect: 'error',
+    });
+  });
+
+  it('signs with the configured secret through forRoot options (documented usage)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const channel = new WebhookChannel({ url: URL, secret: 's3cret' });
+    await channel.send(new TestUser(undefined), new OrderPaidPlain());
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    const expected = createHmac('sha256', 's3cret')
+      .update(init.body as string)
+      .digest('hex');
+    expect(init.headers['X-Signature-256']).toBe(`sha256=${expected}`);
+  });
+
+  it('passes a timeout signal and the redirect mode to fetch when configured', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const channel = new WebhookChannel({ url: URL, timeoutMs: 1_000, redirect: 'error' });
+    await channel.send(new TestUser(undefined), new OrderPaidPlain());
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(init.redirect).toBe('error');
+  });
+
+  it('leaves fetch defaults untouched when no timeout / redirect is configured', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await new WebhookChannel({ url: URL }).send(new TestUser(undefined), new OrderPaidPlain());
+
+    const [, init] = fetchMock.mock.calls[0] ?? [];
+    expect(init).not.toHaveProperty('signal');
+    expect(init).not.toHaveProperty('redirect');
   });
 });

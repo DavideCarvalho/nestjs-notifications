@@ -13,6 +13,17 @@ export interface WebhookChannelModuleOptions {
   /** Default headers merged into every request. */
   headers?: Record<string, string>;
   /**
+   * HMAC-SHA256 signing secret. When set, every request carries
+   * `<signatureHeader>: sha256=<hex digest of the JSON body>`.
+   */
+  secret?: string;
+  /** Header name for the signature. Default `X-Signature-256`. */
+  signatureHeader?: string;
+  /** Abort a request that takes longer than this (ms). Unset = no timeout. */
+  timeoutMs?: number;
+  /** Redirect handling: `'follow'` (default), `'error'` or `'manual'`. */
+  redirect?: 'follow' | 'error' | 'manual';
+  /**
    * Optional per-tenant options resolver. When a notification is delivered with a
    * `context.tenant`, the returned options are used instead of the defaults.
    */
@@ -36,6 +47,12 @@ export class WebhookChannelModule {
       // per-notifiable URL and default headers when these are absent.
       ...(options.url !== undefined ? { url: options.url } : {}),
       ...(options.headers !== undefined ? { headers: options.headers } : {}),
+      ...(options.secret !== undefined ? { secret: options.secret } : {}),
+      ...(options.signatureHeader !== undefined
+        ? { signatureHeader: options.signatureHeader }
+        : {}),
+      ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+      ...(options.redirect !== undefined ? { redirect: options.redirect } : {}),
     };
 
     return defineChannelModule({
