@@ -113,6 +113,7 @@ mirroring the [notification stores](/docs/channels/database):
 | MikroORM | `MikroOrmPendingDigestStoreModule.forFeature()` | `ensurePendingDigestTables(em)` (or `pendingDigestSchemaSql(em)` for a migration) |
 | TypeORM | `TypeOrmPendingDigestStoreModule.forFeature()` | `createPendingDigestTables(queryRunner)` in a migration, or `ensurePendingDigestTables(dataSource)` |
 | Prisma | `PrismaPendingDigestStoreModule.forRoot({ client })` | Add the `PendingDigest` + `DigestWindow` models to your `schema.prisma` and migrate |
+| Drizzle (Postgres) | `DrizzlePendingDigestStoreModule.forRoot({ db })` | Spread `createNotificationTables()` into your drizzle-kit schema, or `store.ensureSchema()` |
 
 ```ts title="app.module.ts — MikroORM example"
 @Module({

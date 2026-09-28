@@ -1,7 +1,7 @@
 ---
 title: Database
 icon: Database
-description: Persist notifications so you can show an in-app feed. A NotificationStore interface, a bundled in-memory store, and TypeORM / MikroORM / Prisma adapters.
+description: Persist notifications so you can show an in-app feed. A NotificationStore interface, a bundled in-memory store, and TypeORM / MikroORM / Prisma / Drizzle adapters.
 ---
 
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
@@ -10,7 +10,7 @@ import { Callout } from 'fumadocs-ui/components/callout';
 The database channel writes a notification to a store so you can render an in-app feed — an unread
 count, a notifications dropdown, a "mark all as read" button. It persists through a
 `NotificationStore` abstraction: a bundled in-memory store for development, and ORM adapters
-(TypeORM, MikroORM, Prisma) for production. The row shape mirrors Laravel's `notifications` table.
+(TypeORM, MikroORM, Prisma, Drizzle) for production. The row shape mirrors Laravel's `notifications` table.
 
 ## Install
 
@@ -146,7 +146,7 @@ feed:
 
 `types` is absent or an empty array by default, matching every type (unchanged behavior) — it's
 purely additive. `PaginateForNotifiableOptions` carries the same `types?: string[]` for the
-paginated read path. Every bundled adapter (in-memory, TypeORM, MikroORM, Prisma) implements the
+paginated read path. Every bundled adapter (in-memory, TypeORM, MikroORM, Prisma, Drizzle) implements the
 filter; see [In-app notifications](/docs/recipes/in-app-notifications) for the higher-level
 `NotificationsQueryService` and REST `?type=` query param this powers.
 
@@ -179,7 +179,7 @@ For real persistence, pair the channel with an adapter. Each adapter provides a 
 `DatabaseChannelModule.forFeature()` — the adapter provides the store token, `forFeature()` registers
 the channel that consumes it.
 
-<Tabs items={['TypeORM', 'MikroORM', 'Prisma']}>
+<Tabs items={['TypeORM', 'MikroORM', 'Prisma', 'Drizzle']}>
   <Tab value="TypeORM">
 
     <Tabs items={['pnpm', 'npm']}>
@@ -310,6 +310,48 @@ the channel that consumes it.
     elsewhere (e.g. a shared `PrismaModule`), use `PrismaNotificationStoreModule.forFeature()` instead.
 
   </Tab>
+  <Tab value="Drizzle">
+
+    <Tabs items={['pnpm', 'npm']}>
+      <Tab value="pnpm">
+        ```bash
+        pnpm add @dudousxd/nestjs-notifications-database-drizzle drizzle-orm
+        ```
+      </Tab>
+      <Tab value="npm">
+        ```bash
+        npm install @dudousxd/nestjs-notifications-database-drizzle drizzle-orm
+        ```
+      </Tab>
+    </Tabs>
+
+    Postgres only. Any Drizzle Postgres driver works (`node-postgres`, `postgres-js`, PGlite, Neon, and
+    so on). The Drizzle database belongs to your app, so you pass your instance in. The easiest way is
+    `forRootAsync` from the token your app already exposes:
+
+    ```ts title="app.module.ts"
+    import { DatabaseChannelModule } from '@dudousxd/nestjs-notifications-database';
+    import { DrizzleNotificationStoreModule } from '@dudousxd/nestjs-notifications-database-drizzle';
+
+    @Module({
+      imports: [
+        DrizzleNotificationStoreModule.forRootAsync({
+          inject: [DB], // your Drizzle database token
+          useFactory: (db: Db) => ({ db }),
+        }),
+        DatabaseChannelModule.forFeature(),
+      ],
+    })
+    export class AppModule {}
+    ```
+
+    `DrizzleNotificationStoreModule` binds `DrizzleNotificationStore` to `NOTIFICATION_STORE`. The
+    tables are plain `pgTable`s from `createNotificationTables()`. Columns are snake_case, as in
+    Laravel's table. You can also pass `{ tableNames, schema }`. If you already provide
+    `DRIZZLE_NOTIFICATIONS_DB` from a shared module, use `forFeature()`. `upsert` is a single
+    `INSERT … ON CONFLICT`, and the digest window lock is an `ON CONFLICT DO NOTHING RETURNING`.
+
+  </Tab>
 </Tabs>
 
 <Callout type="info">
@@ -338,7 +380,7 @@ migration helpers:
 DatabaseChannelModule.forFeature({ autoCreateSchema: false }),
 ```
 
-<Tabs items={['TypeORM', 'MikroORM', 'Prisma']}>
+<Tabs items={['TypeORM', 'MikroORM', 'Prisma', 'Drizzle']}>
   <Tab value="TypeORM">
 
     Call `createNotificationsTable(queryRunner)` inside a TypeORM migration. It's non-destructive
@@ -390,10 +432,36 @@ DatabaseChannelModule.forFeature({ autoCreateSchema: false }),
     ```
 
   </Tab>
+  <Tab value="Drizzle">
+
+    Spread the tables into the schema file that `drizzle.config.ts` points at, and drizzle-kit
+    generates the migration. Give the store the **same** object, so the queries and the migration
+    come from one definition:
+
+    ```ts title="db/schema.ts"
+    import { createNotificationTables } from '@dudousxd/nestjs-notifications-database-drizzle';
+
+    export const notificationTables = createNotificationTables(); // or { tableNames, schema }
+    export const { notifications, pendingDigests, digestWindows } = notificationTables;
+    ```
+
+    ```ts title="app.module.ts"
+    DrizzleNotificationStoreModule.forRootAsync({
+      inject: [DB],
+      useFactory: (db: Db) => ({ db, tables: notificationTables }),
+    }),
+    DatabaseChannelModule.forFeature({ autoCreateSchema: false }),
+    ```
+
+    If you don't use drizzle-kit, leave `autoCreateSchema` on. `ensureSchema()` runs
+    `CREATE TABLE/INDEX IF NOT EXISTS`. `notificationsSchemaDdl()` / `pendingDigestSchemaDdl()` give
+    you the same statements for a hand-written migration.
+
+  </Tab>
 </Tabs>
 
 <Callout type="info" title="Managed tables (schema-diff tooling)">
-  The MikroORM and TypeORM adapters export `notificationsManagedTables()` — the table name(s) this
+  The MikroORM, TypeORM and Drizzle adapters export `notificationsManagedTables()` — the table name(s) this
   store creates/manages (`['notifications']`), derived from the same set `ensureSchema()` scopes its
   fingerprint to. Feed it to your ORM's schema-diff exclude list (e.g. MikroORM's
   `schemaGenerator.skipTables`) so a consumer never hand-maintains this table name separately —

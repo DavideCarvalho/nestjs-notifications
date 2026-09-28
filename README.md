@@ -49,6 +49,7 @@ await notifications.send(user, new InvoicePaid(invoice));
 | `@dudousxd/nestjs-notifications-database-typeorm` | TypeORM adapter for the database channel |
 | `@dudousxd/nestjs-notifications-database-mikro-orm` | MikroORM adapter for the database channel |
 | `@dudousxd/nestjs-notifications-database-prisma` | Prisma adapter for the database channel |
+| `@dudousxd/nestjs-notifications-database-drizzle` | Drizzle ORM (Postgres) adapter for the database channel + digest store |
 | `@dudousxd/nestjs-notifications-broadcast` | WebSocket (socket.io) channel for realtime in-app notifications |
 | `@dudousxd/nestjs-notifications-sse` | Server-Sent Events channel for live in-app updates |
 | `@dudousxd/nestjs-notifications-push` | Push channel — Web Push, FCM, Expo, APNs |
