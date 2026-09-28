@@ -16,6 +16,17 @@ export interface PostJsonOptions {
   headers?: Record<string, string>;
   /** HTTP method. Defaults to `POST`. */
   method?: string;
+  /**
+   * Abort the request after this many milliseconds (via `AbortSignal.timeout`). Unset = no
+   * timeout (the platform default), so a hung endpoint can hold the delivery indefinitely.
+   */
+  timeoutMs?: number;
+  /**
+   * `fetch` redirect mode. Defaults to the platform's `'follow'`. `'error'` refuses redirects —
+   * the safe choice when the URL is user-supplied (a 3xx could bounce the request to an internal
+   * address).
+   */
+  redirect?: 'follow' | 'error' | 'manual';
 }
 
 /**
@@ -32,6 +43,8 @@ export async function postJson(
     method: opts.method ?? 'POST',
     headers: { 'Content-Type': 'application/json', ...opts.headers },
     body: JSON.stringify(body),
+    ...(opts.timeoutMs !== undefined ? { signal: AbortSignal.timeout(opts.timeoutMs) } : {}),
+    ...(opts.redirect !== undefined ? { redirect: opts.redirect } : {}),
   });
   if (!response.ok) {
     throw new Error(`${opts.label} request to ${url} failed with status ${response.status}.`);

@@ -32,6 +32,13 @@ export interface WebhookChannelOptions {
   secret?: string;
   /** Header name for the signature. Default `X-Signature-256`. */
   signatureHeader?: string;
+  /** Abort a request that takes longer than this (ms). Unset = no timeout. */
+  timeoutMs?: number;
+  /**
+   * Redirect handling. Default `'follow'` (the `fetch` default). Use `'error'` when webhook URLs
+   * are user-supplied, so a 3xx can't bounce the (possibly signed) request somewhere else.
+   */
+  redirect?: 'follow' | 'error' | 'manual';
 }
 
 /**
@@ -99,6 +106,12 @@ export class WebhookChannel extends BaseChannel {
       headers[options.signatureHeader ?? DEFAULT_SIGNATURE_HEADER] = `sha256=${signature}`;
     }
 
-    await postJson(url, request.body, { label: 'Webhook', method: request.method, headers });
+    await postJson(url, request.body, {
+      label: 'Webhook',
+      method: request.method,
+      headers,
+      ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+      ...(options.redirect !== undefined ? { redirect: options.redirect } : {}),
+    });
   }
 }

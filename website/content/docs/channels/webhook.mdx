@@ -50,6 +50,8 @@ export class AppModule {}
 | `headers` | `Record<string, string>` | — | Default headers merged into every request. |
 | `secret` | `string` | — | HMAC-SHA256 secret. When set, every request is signed (see below). |
 | `signatureHeader` | `string` | `X-Signature-256` | Header the signature is sent in. |
+| `timeoutMs` | `number` | — | Abort a request that takes longer than this. Without it, a hung endpoint holds the delivery until the platform gives up. |
+| `redirect` | `'follow' \| 'error' \| 'manual'` | `'follow'` | Redirect handling. Use `'error'` when webhook URLs are user-supplied, so a 3xx can't bounce the signed request to another host (for example, an internal address). |
 | `resolveOptions` | `(tenant: string) => WebhookChannelOptions` | — | Per-tenant options resolver. See [Per-tenant config](#per-tenant-config). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
 
