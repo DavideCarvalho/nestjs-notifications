@@ -1,5 +1,13 @@
 # @dudousxd/nestjs-notifications-mail
 
+## 0.9.0
+
+### Minor Changes
+
+- [#98](https://github.com/DavideCarvalho/nestjs-notifications/pull/98) [`28ede69`](https://github.com/DavideCarvalho/nestjs-notifications/commit/28ede690ce0d2ffe4d1d99537c45bc6c87613c40) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - - New `LogMailTransport`: logs each message to the Nest logger instead of sending it, as a "log" driver for development.
+  - New `NullMailTransport`: drops mail and logs the drop at debug level, for environments where outgoing mail is disabled (CI, air-gapped installs without a relay).
+  - The `smtp` option (and `NodemailerTransport`) now also accept an SMTP connection URL (`smtp://user:pass@host:587`).
+
 ## 0.8.3
 
 ### Patch Changes

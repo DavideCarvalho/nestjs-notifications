@@ -1,5 +1,16 @@
 # @dudousxd/nestjs-notifications-core
 
+## 0.10.0
+
+### Minor Changes
+
+- [#97](https://github.com/DavideCarvalho/nestjs-notifications/pull/97) [`8097859`](https://github.com/DavideCarvalho/nestjs-notifications/commit/809785954115a286c9a58849e6464554aef72764) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - Webhook channel hardening:
+
+  - **Fix:** `WebhookChannelModule.forRoot()` now accepts and forwards `secret` and `signatureHeader`. The docs showed `forRoot({ secret })` turning on HMAC signing, but the module dropped both options, so signing only worked through `resolveOptions`.
+  - New `timeoutMs` option. It aborts a request that takes too long, so a hung receiver no longer holds the delivery indefinitely.
+  - New `redirect` option (`'follow'` by default, or `'error'` / `'manual'`). Use `'error'` when webhook URLs come from users, so a 3xx can't bounce the signed request to another host.
+  - Core: `postJson` gains optional `timeoutMs` / `redirect`. Both are additive, and the defaults are unchanged.
+
 ## 0.9.2
 
 ### Patch Changes
