@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-database-drizzle
 
+## 0.1.1
+
+### Patch Changes
+
+- [#100](https://github.com/DavideCarvalho/nestjs-notifications/pull/100) [`b9a1946`](https://github.com/DavideCarvalho/nestjs-notifications/commit/b9a1946a4e6ac6ce7253112c8d95f1e0459bf414) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - Republish from CI through npm trusted publishing (OIDC) so the release carries a provenance attestation; 0.1.0 was a one-time manual first publish.
+
 ## 0.1.0
 
 ### Minor Changes
