@@ -32,12 +32,17 @@ describe('ApnsTransport', () => {
     send.mockResolvedValue({ sent: [{ device: 'd' }], failed: [] });
   });
 
-  it('constructs the provider with the injected token options', () => {
-    new ApnsTransport({
+  it('constructs the provider lazily (on first send) with the injected token options', async () => {
+    const transport = new ApnsTransport({
       token: { key: 'k.p8', keyId: 'KID', teamId: 'TID' },
       production: true,
       topic: 'com.example.app',
     });
+    expect(ProviderCtor).not.toHaveBeenCalled();
+
+    await transport.send('device', new PushMessage().title('Hi'));
+    await transport.send('device', new PushMessage().title('Again'));
+    expect(ProviderCtor).toHaveBeenCalledTimes(1);
 
     expect(ProviderCtor).toHaveBeenCalledWith(
       expect.objectContaining({

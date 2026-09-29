@@ -45,6 +45,10 @@ describe('FcmTransport.sendMany', () => {
     const result = await transport.sendMany(['t1'], new PushMessage().title('x'));
 
     expect(result.invalidTargets).toEqual([]);
+    // ...but they are surfaced as failures rather than swallowed.
+    expect(result.failures).toEqual([
+      { target: 't1', error: { code: 'messaging/internal-error' } },
+    ]);
   });
 
   it('chunks requests at the 500-token limit', async () => {

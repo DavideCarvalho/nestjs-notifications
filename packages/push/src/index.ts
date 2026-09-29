@@ -5,7 +5,10 @@ export type {
   BatchSendResult,
   InvalidTokenCallback,
   InvalidTokenReport,
+  PushDeliveryResult,
+  PushTargetFailure,
 } from './transport';
+export { PushDeliveryError } from './transport';
 export {
   Push,
   PushChannel,

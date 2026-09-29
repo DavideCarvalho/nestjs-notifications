@@ -10,7 +10,13 @@ import {
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { PushMessage } from './push-message';
 import { PUSH_INVALID_TOKEN_CALLBACK, PUSH_TRANSPORT, PUSH_TRANSPORT_RESOLVER } from './tokens';
-import type { InvalidTokenCallback, PushTransport } from './transport';
+import {
+  type InvalidTokenCallback,
+  PushDeliveryError,
+  type PushDeliveryResult,
+  type PushTargetFailure,
+  type PushTransport,
+} from './transport';
 
 /** Resolves a per-tenant {@link PushTransport} from a tenant id. */
 export type PushTransportResolver = (tenant: string) => PushTransport | Promise<PushTransport>;
@@ -27,6 +33,15 @@ export interface PushNotification extends Notification {
  * Delivers a notification's {@link PushMessage} through the configured
  * {@link PushTransport}. The target(s) come from `routeNotificationFor('push')`:
  * a single device token / subscription, or an array of them (each gets the message).
+ *
+ * Resolves to a {@link PushDeliveryResult} (`{ targets, delivered, invalidTargets, failures }`).
+ * Error behaviour:
+ * - a single target: the transport's error propagates (the delivery is `failed`);
+ * - an array: every target is attempted. Per-target errors (from `send`, or reported by
+ *   `sendMany` as `failures`) are collected into the result instead of aborting the rest; if NO
+ *   target was delivered and at least one failed, a {@link PushDeliveryError} is thrown (carrying
+ *   the per-target errors) so the delivery is reported as `failed`. Invalid tokens alone never
+ *   throw — they're reported to `onInvalidTokens` for pruning.
  */
 @Injectable()
 export class PushChannel extends BaseChannel {
@@ -50,7 +65,7 @@ export class PushChannel extends BaseChannel {
     notifiable: Notifiable,
     notification: Notification,
     context?: DeliveryContext,
-  ): Promise<void> {
+  ): Promise<PushDeliveryResult> {
     // The resolver may be async (e.g. per-tenant credentials from a database).
     const transport = await this.forTenant<PushTransport | Promise<PushTransport>>(
       this.transport,
@@ -60,21 +75,53 @@ export class PushChannel extends BaseChannel {
     const target = routeFor(notifiable, 'push', notification);
     const message = this.buildPayload<PushMessage>(notification, notifiable, 'toPush', context);
 
-    if (Array.isArray(target)) {
-      // Prefer a single multicast round-trip when the transport supports it, and report any
-      // permanently-invalid tokens back so the app can prune them.
-      if (typeof transport.sendMany === 'function' && target.length > 0) {
-        const { invalidTargets } = await transport.sendMany(target, message);
-        await this.reportInvalid(notifiable, invalidTargets, context?.tenant);
-        return;
-      }
-      for (const one of target) {
-        await transport.send(one, message);
-      }
-      return;
+    if (!Array.isArray(target)) {
+      await transport.send(target, message);
+      return { targets: 1, delivered: 1, invalidTargets: [], failures: [] };
+    }
+    if (target.length === 0) {
+      return { targets: 0, delivered: 0, invalidTargets: [], failures: [] };
     }
 
-    await transport.send(target, message);
+    let invalidTargets: unknown[] = [];
+    let failures: PushTargetFailure[] = [];
+    if (typeof transport.sendMany === 'function') {
+      // Prefer a single multicast round-trip when the transport supports it, and report any
+      // permanently-invalid tokens back so the app can prune them.
+      const batch = await transport.sendMany(target, message);
+      invalidTargets = batch.invalidTargets ?? [];
+      failures = batch.failures ?? [];
+    } else {
+      // No multicast: attempt every target; one failure doesn't stop the rest.
+      for (const one of target) {
+        try {
+          await transport.send(one, message);
+        } catch (error) {
+          failures.push({ target: one, error });
+        }
+      }
+    }
+
+    await this.reportInvalid(notifiable, invalidTargets, context?.tenant);
+
+    const delivered = Math.max(0, target.length - invalidTargets.length - failures.length);
+    if (delivered === 0 && failures.length > 0) {
+      throw new PushDeliveryError(
+        `Push delivery failed for all ${target.length} target(s): ${failures
+          .map((f) => describe(f.error))
+          .join('; ')}`,
+        failures,
+        invalidTargets,
+      );
+    }
+    if (failures.length > 0) {
+      this.logger.warn(
+        `Push delivery failed for ${failures.length} of ${target.length} target(s): ${failures
+          .map((f) => describe(f.error))
+          .join('; ')}`,
+      );
+    }
+    return { targets: target.length, delivered, invalidTargets, failures };
   }
 
   /** Invoke the prune callback for invalid tokens; never let it break delivery. */
@@ -92,4 +139,8 @@ export class PushChannel extends BaseChannel {
       );
     }
   }
+}
+
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

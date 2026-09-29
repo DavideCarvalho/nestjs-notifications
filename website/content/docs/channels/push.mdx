@@ -33,6 +33,10 @@ Each transport pulls a different SDK as an optional peer — install only the on
   </Tab>
 </Tabs>
 
+The SDKs are loaded lazily, on a transport's first send — so importing the package never requires
+them. An app that plugs in its **own** `PushTransport` needs none of them; using a built-in
+transport without its SDK installed fails on the first send with an "install `<sdk>`" error.
+
 ## Register the channel
 
 Pick exactly one transport and supply its matching options:
@@ -212,7 +216,8 @@ PushChannelModule.forRoot({
 });
 ```
 
-Sends with no tenant scope keep the default transport. See
+The resolver may also be async (`(tenant) => PushTransport | Promise<PushTransport>`), e.g. to load
+per-tenant credentials from your database. Sends with no tenant scope keep the default transport. See
 [Multi-tenancy](/docs/concepts/multi-tenancy) for the full picture.
 
 ## Multicast & invalid tokens
@@ -238,3 +243,54 @@ PushChannelModule.forRoot({
 The callback receives an `InvalidTokenReport` (`{ notifiable, invalidTargets, tenant? }`). It fires
 after a batch send when the provider flags rejected tokens — keeping your token list clean so
 deliverability doesn't rot over time.
+
+## Delivery result & errors
+
+`PushChannel.send()` resolves to a `PushDeliveryResult`. Like any channel response, it shows up as the
+push entry's `response` in the `SendResult`, as the third argument of `afterSending()`, and on the
+`notification.sent` event:
+
+```ts
+interface PushDeliveryResult {
+  targets: number;           // how many targets the route resolved to
+  delivered: number;         // targets - invalidTargets - failures
+  invalidTargets: unknown[]; // dead tokens (also passed to onInvalidTokens)
+  failures: { target: unknown; error: unknown }[]; // other per-target errors
+}
+```
+
+- **Single target**: the transport's error propagates, so the delivery is `failed`.
+- **Array of targets**: every target is attempted. With `sendMany`, per-target errors come back as the
+  batch's `failures`; without it, each `send()` error is caught. One failing target never stops the
+  others, and the failures are **reported, not swallowed**: they're in the result and logged as a
+  warning.
+- If **no** target was delivered and at least one failed, the channel throws a `PushDeliveryError`
+  (with `.failures` and `.invalidTargets`), so the delivery is reported as `failed`. Tokens that are
+  only invalid never throw; they go to `onInvalidTokens`.
+
+### Custom transports
+
+Implement `PushTransport` to use your own provider client. Add `sendMany` to batch deliveries and
+report dead and failed targets:
+
+```ts
+class MyWebPushTransport implements PushTransport {
+  async send(subscription: unknown, message: PushMessage) {
+    /* deliver one; throw on failure */
+  }
+
+  async sendMany(subscriptions: unknown[], message: PushMessage): Promise<BatchSendResult> {
+    const invalidTargets: unknown[] = [];
+    const failures: PushTargetFailure[] = [];
+    for (const sub of subscriptions) {
+      try {
+        await this.send(sub, message);
+      } catch (error) {
+        if (isGone(error)) invalidTargets.push(sub); // 404/410 → prune
+        else failures.push({ target: sub, error });
+      }
+    }
+    return { invalidTargets, failures };
+  }
+}
+```

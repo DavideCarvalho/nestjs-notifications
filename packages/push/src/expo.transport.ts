@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Expo, type ExpoPushMessage } from 'expo-server-sdk';
+import type { Expo, ExpoPushMessage } from 'expo-server-sdk';
+import { loadOptionalPeer } from './optional-peer';
 import type { PushMessage } from './push-message';
 import { EXPO_OPTIONS } from './tokens';
-import type { BatchSendResult, PushTransport } from './transport';
+import type { BatchSendResult, PushTargetFailure, PushTransport } from './transport';
 
 /** Options forwarded to the `expo-server-sdk` client constructor. */
 export interface ExpoOptions {
@@ -17,16 +18,28 @@ export interface ExpoOptions {
  * A {@link PushTransport} backed by Expo's push service (`expo-server-sdk`).
  *
  * The target is an Expo push token string (e.g. `ExponentPushToken[...]`).
+ *
+ * `expo-server-sdk` is an optional peer, loaded on first send (a missing install throws a clear
+ * error then, not at import time).
  */
 @Injectable()
 export class ExpoTransport implements PushTransport {
-  private readonly expo: Expo;
+  private client?: Promise<{ expo: Expo; Expo: typeof Expo }>;
 
   constructor(
     @Inject(EXPO_OPTIONS)
     private readonly options: ExpoOptions,
-  ) {
-    this.expo = new Expo(this.options);
+  ) {}
+
+  /** Load `expo-server-sdk` once and build the client. */
+  private sdk(): Promise<{ expo: Expo; Expo: typeof Expo }> {
+    this.client ??= loadOptionalPeer<{ Expo: typeof Expo }>(
+      () => import('expo-server-sdk'),
+      'expo-server-sdk',
+      'ExpoTransport',
+      'Expo',
+    ).then(({ Expo: ExpoClass }) => ({ expo: new ExpoClass(this.options), Expo: ExpoClass }));
+    return this.client;
   }
 
   async send(target: unknown, message: PushMessage): Promise<void> {
@@ -34,8 +47,9 @@ export class ExpoTransport implements PushTransport {
     // `toObject()` already omits absent fields, so spreading keeps `title`/`body`/`data` out of the
     // message entirely when unset (exactOptionalPropertyTypes) rather than passing explicit undefined.
     const { title, body, data } = message.toObject();
+    const { expo } = await this.sdk();
 
-    await this.expo.sendPushNotificationsAsync([
+    await expo.sendPushNotificationsAsync([
       {
         to,
         ...(title !== undefined ? { title } : {}),
@@ -49,11 +63,14 @@ export class ExpoTransport implements PushTransport {
    * Batch delivery to many Expo tokens, chunked with the SDK's own `chunkPushNotifications`.
    * Tickets that come back with `DeviceNotRegistered` map to permanently-invalid tokens, which
    * are collected and returned for pruning. (Malformed tokens are also dropped from the request
-   * by the SDK and reported as invalid here.)
+   * by the SDK and reported as invalid here.) Other ticket errors (e.g. `MessageRateExceeded`) are
+   * returned in `failures`.
    */
   async sendMany(targets: unknown[], message: PushMessage): Promise<BatchSendResult> {
     const { title, body, data } = message.toObject();
     const invalidTargets: unknown[] = [];
+    const failures: PushTargetFailure[] = [];
+    const { expo, Expo } = await this.sdk();
 
     // The SDK only accepts well-formed Expo tokens; anything else is already a dead token.
     const valid: { target: unknown; to: string }[] = [];
@@ -69,24 +86,24 @@ export class ExpoTransport implements PushTransport {
       ...(body !== undefined ? { body } : {}),
       ...(data !== undefined ? { data } : {}),
     }));
-    const chunks = this.expo.chunkPushNotifications(messages);
+    const chunks = expo.chunkPushNotifications(messages);
 
     let cursor = 0;
     for (const chunk of chunks) {
-      const tickets = await this.expo.sendPushNotificationsAsync(chunk);
+      const tickets = await expo.sendPushNotificationsAsync(chunk);
       tickets.forEach((ticket, j) => {
         const source = valid[cursor + j];
-        if (
-          source &&
-          ticket.status === 'error' &&
-          ticket.details?.error === 'DeviceNotRegistered'
-        ) {
-          invalidTargets.push(source.target);
-        }
+        if (!source || ticket.status !== 'error') return;
+        if (ticket.details?.error === 'DeviceNotRegistered') invalidTargets.push(source.target);
+        else
+          failures.push({
+            target: source.target,
+            error: new Error(ticket.message ?? ticket.details?.error ?? 'Expo push failed'),
+          });
       });
       cursor += chunk.length;
     }
 
-    return { invalidTargets };
+    return { invalidTargets, failures };
   }
 }
