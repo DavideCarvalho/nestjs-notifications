@@ -4,6 +4,7 @@ import type {
   NewPendingDigestEntry,
   PendingDigestEntry,
   PendingDigestGroup,
+  PendingDigestGroupFilter,
   PendingDigestStore,
 } from '@dudousxd/nestjs-notifications-preferences';
 import { EntityManager } from '@mikro-orm/core';
@@ -62,10 +63,24 @@ export class MikroOrmPendingDigestStore implements PendingDigestStore {
     await em.persist(entity).flush();
   }
 
-  async listGroups(cadence: DigestCadence): Promise<PendingDigestGroup[]> {
-    const rows = await this.em
-      .fork()
-      .find(PendingDigestEntity, { cadence }, { orderBy: { createdAt: 'ASC' } });
+  async listGroups(
+    cadence: DigestCadence,
+    filter: PendingDigestGroupFilter = {},
+  ): Promise<PendingDigestGroup[]> {
+    const rows = await this.em.fork().find(
+      PendingDigestEntity,
+      {
+        cadence,
+        ...(filter.notifiable
+          ? {
+              notifiableType: filter.notifiable.type,
+              notifiableId: String(filter.notifiable.id),
+            }
+          : {}),
+        ...(filter.tenantId === undefined ? {} : { tenantId: filter.tenantId }),
+      },
+      { orderBy: { createdAt: 'ASC' } },
+    );
     const groups = new Map<string, PendingDigestGroup>();
     for (const row of rows) {
       const key = groupKey(row);

@@ -4,10 +4,11 @@ import type {
   NewPendingDigestEntry,
   PendingDigestEntry,
   PendingDigestGroup,
+  PendingDigestGroupFilter,
   PendingDigestStore,
 } from '@dudousxd/nestjs-notifications-preferences';
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { asc, eq, inArray, sql } from 'drizzle-orm';
+import { type SQL, and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { type NotificationTables, notificationTables, pendingDigestSchemaDdl } from './schema';
 import {
   DRIZZLE_NOTIFICATIONS_DB,
@@ -74,12 +75,25 @@ export class DrizzlePendingDigestStore implements PendingDigestStore {
     });
   }
 
-  async listGroups(cadence: DigestCadence): Promise<PendingDigestGroup[]> {
+  async listGroups(
+    cadence: DigestCadence,
+    filter: PendingDigestGroupFilter = {},
+  ): Promise<PendingDigestGroup[]> {
     const t = this.tables.pendingDigests;
+    const conditions: SQL[] = [eq(t.cadence, cadence)];
+    if (filter.notifiable) {
+      conditions.push(eq(t.notifiableType, filter.notifiable.type));
+      conditions.push(eq(t.notifiableId, String(filter.notifiable.id)));
+    }
+    if (filter.tenantId !== undefined) {
+      conditions.push(
+        filter.tenantId === null ? isNull(t.tenantId) : eq(t.tenantId, filter.tenantId),
+      );
+    }
     const rows = await this.db
       .select()
       .from(t)
-      .where(eq(t.cadence, cadence))
+      .where(and(...conditions))
       .orderBy(asc(t.createdAt), asc(t.id));
     const groups = new Map<string, PendingDigestGroup>();
     for (const row of rows) {

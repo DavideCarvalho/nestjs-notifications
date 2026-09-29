@@ -49,7 +49,7 @@ export class AppModule {}
 | `webhookUrl` | `string` | — | Default incoming-webhook URL, used when the route doesn't supply one. |
 | `token` | `string` | — | Bot/user token for the Web API. When set, delivery uses `chat.postMessage`. |
 | `defaultChannel` | `string` | — | Default channel id for Web API delivery when the route isn't a webhook. |
-| `resolveOptions` | `(tenant: string) => SlackChannelOptions` | — | Per-tenant options resolver. See [Per-tenant config](#per-tenant-config). |
+| `resolveOptions` | `(tenant: string) => SlackChannelOptions \| Promise<SlackChannelOptions>` | — | Per-tenant options resolver (may be async). See [Per-tenant config](#per-tenant-config). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
 
 ## The notification side
@@ -103,6 +103,30 @@ The channel picks its delivery mode from the options:
 
 If neither a webhook URL nor a token is available, the channel throws asking you to provide one.
 
+## Delivery result
+
+`SlackChannel.send()` resolves to a `SlackDeliveryResult`, which the core surfaces like any channel
+response: as the slack entry's `response` in the `SendResult`, as the third argument of
+`afterSending(notifiable, channel, response)`, and on the `notification.sent` event.
+
+| Mode | Result |
+| --- | --- |
+| Bot token (`chat.postMessage`) | `{ channel, ts }` — the posted message's channel id and timestamp from Slack's response. Use them to thread replies (`thread_ts`) or update the message later. |
+| Incoming webhook | `{ webhook: true }` — webhooks don't return a message id. |
+
+```ts
+const [result] = await notifications.forTenant('acme').sendNow(team, new DeployFinished('api'));
+const slack = result.results.find((r) => r.channel === 'slack');
+// slack → { channel: 'slack', status: 'sent', response: { channel: 'C0123456789', ts: '1700000000.000100' } }
+```
+
+<Callout type="warn">
+  Slack's Web API answers **HTTP 200** even when the call fails, with `{ ok: false, error }` in the
+  body. The channel checks `ok` and throws a descriptive error (e.g. `Slack chat.postMessage to
+  channel "C404" failed: channel_not_found.`), so the delivery is reported as `failed` instead of
+  silently "sent". Non-2xx responses still throw as before.
+</Callout>
+
 ## Routing
 
 `routeNotificationFor('slack')` controls the target per notifiable. What you return depends on the
@@ -144,6 +168,27 @@ SlackChannelModule.forRoot({
   resolveOptions: (tenant) => ({ webhookUrl: tenantWebhooks.get(tenant) }),
 });
 ```
+
+The resolver may be **async** — e.g. load each tenant's bot token from your database. The channel
+awaits it on every tenant-scoped delivery (cache it yourself if the lookup is expensive). Use
+`forRootAsync()` when the resolver needs injected services:
+
+```ts title="app.module.ts"
+SlackChannelModule.forRootAsync({
+  imports: [SlackInstallsModule],
+  inject: [SlackInstallsService],
+  useFactory: (installs: SlackInstallsService) => ({
+    resolveOptions: async (tenant) => {
+      const install = await installs.forTenant(tenant);
+      return { token: install.botToken, defaultChannel: install.channelId };
+    },
+  }),
+});
+```
+
+`forRootAsync({ imports?, inject?, useFactory, global? })` accepts the same options as `forRoot()`
+(`webhookUrl`, `token`, `defaultChannel`, `resolveOptions`), returned from the (optionally async)
+factory.
 
 Sends with no tenant scope keep the module defaults. See
 [Multi-tenancy](/docs/concepts/multi-tenancy) for the full picture.

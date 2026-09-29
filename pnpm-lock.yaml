@@ -220,6 +220,9 @@ importers:
       '@nestjs/core':
         specifier: 12.0.1
         version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@12.0.1)(@nestjs/websockets@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/event-emitter':
+        specifier: 12.0.0
+        version: 12.0.0(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)
       '@nestjs/testing':
         specifier: 12.0.1
         version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(@nestjs/platform-express@12.0.1)
@@ -271,6 +274,15 @@ importers:
       '@nestjs/common':
         specifier: 12.0.1
         version: 12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: 12.0.1
+        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@12.0.1)(@nestjs/websockets@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/event-emitter':
+        specifier: 12.0.0
+        version: 12.0.0(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)
+      '@nestjs/testing':
+        specifier: 12.0.1
+        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(@nestjs/platform-express@12.0.1)
       '@testcontainers/mysql':
         specifier: 10.18.0
         version: 10.18.0
@@ -298,6 +310,15 @@ importers:
       '@nestjs/common':
         specifier: 12.0.1
         version: 12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: 12.0.1
+        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@12.0.1)(@nestjs/websockets@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/event-emitter':
+        specifier: 12.0.0
+        version: 12.0.0(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)
+      '@nestjs/testing':
+        specifier: 12.0.1
+        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(@nestjs/platform-express@12.0.1)
       '@prisma/client':
         specifier: 6.19.3
         version: 6.19.3(typescript@5.9.3)
@@ -322,6 +343,15 @@ importers:
       '@nestjs/common':
         specifier: 12.0.1
         version: 12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: 12.0.1
+        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@12.0.1)(@nestjs/websockets@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/event-emitter':
+        specifier: 12.0.0
+        version: 12.0.0(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)
+      '@nestjs/testing':
+        specifier: 12.0.1
+        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(@nestjs/platform-express@12.0.1)
       '@nestjs/typeorm':
         specifier: 12.0.1
         version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(better-sqlite3@12.10.0)(ioredis@5.11.1)(mysql2@3.24.4(@types/node@22.20.2))(pg@8.23.0)(sqlite3@5.1.7))
@@ -497,6 +527,12 @@ importers:
       '@nestjs/core':
         specifier: 12.0.1
         version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@12.0.1)(@nestjs/websockets@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/event-emitter':
+        specifier: 12.0.0
+        version: 12.0.0(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)
+      '@nestjs/testing':
+        specifier: 12.0.1
+        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(@nestjs/platform-express@12.0.1)
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -591,6 +627,15 @@ importers:
       '@nestjs/common':
         specifier: 12.0.1
         version: 12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/core':
+        specifier: 12.0.1
+        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/platform-express@12.0.1)(@nestjs/websockets@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/event-emitter':
+        specifier: 12.0.0
+        version: 12.0.0(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)
+      '@nestjs/testing':
+        specifier: 12.0.1
+        version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(@nestjs/platform-express@12.0.1)
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2

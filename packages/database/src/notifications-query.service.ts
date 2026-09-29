@@ -302,6 +302,11 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
     tenant?: string,
     types?: string[],
   ): Promise<number> {
+    // Prefer the store's COUNT query; fall back to loading the unread rows for older stores.
+    if (this.store.countUnread) {
+      const ref = this.refOf(target);
+      return this.store.countUnread(ref.type, String(ref.id), tenant, types);
+    }
     return (await this.unreadScoped(target, tenant, types)).length;
   }
 

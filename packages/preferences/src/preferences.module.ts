@@ -83,7 +83,13 @@ export class PreferencesModule {
       module: PreferencesModule,
       global: options.global ?? true,
       providers,
-      exports: [NotificationPreferences, NOTIFICATION_PREFERENCE_STORE],
+      // Export the gate token: the core ChannelRunner (in NotificationsModule) injects it with
+      // @Optional(), so an unexported binding would silently resolve to undefined there.
+      exports: [
+        NotificationPreferences,
+        NOTIFICATION_PREFERENCE_STORE,
+        NOTIFICATION_PREFERENCE_GATE,
+      ],
     };
   }
 
@@ -113,6 +119,8 @@ export class PreferencesModule {
         CategoryRegistry,
         PREFERENCE_CENTER_STORE,
         PREFERENCE_CENTER_CATEGORIES,
+        // Consumed by the core ChannelRunner via @Optional() — must be exported to be seen there.
+        NOTIFICATION_PREFERENCE_GATE,
       ],
     };
   }
@@ -152,7 +160,9 @@ export class PreferencesModule {
       module: PreferencesModule,
       global: options.global ?? true,
       providers,
-      exports: [DigestCollector, PENDING_DIGEST_STORE],
+      // NOTIFICATION_DIGEST_SINK is consumed by the core ChannelRunner via @Optional() — it must be
+      // exported, or digest-cadence skips are silently dropped instead of collected.
+      exports: [DigestCollector, PENDING_DIGEST_STORE, NOTIFICATION_DIGEST_SINK],
     };
   }
 }

@@ -222,6 +222,35 @@ export function runNotificationStoreContract(
       });
     });
 
+    describe('countUnread()', () => {
+      it('counts unread rows for the notifiable, scoped by tenant and types', async () => {
+        const count = store().countUnread?.bind(store());
+        expect(count).toBeDefined();
+        if (!count) return;
+
+        const a = await store().save(make('A', 'User', 'cu'));
+        await store().save(make('B', 'User', 'cu'));
+        await store().save(make('B', 'User', 'cu'));
+        await store().save({ ...make('A', 'User', 'cu'), tenantId: 'tenant-1' });
+        await store().save(make('A', 'User', 'other'));
+        await store().markAsRead(a.id);
+
+        // undefined tenant matches all tenants; the read row is excluded
+        expect(await count('User', 'cu')).toBe(3);
+        expect(await count('User', 'cu', 'tenant-1')).toBe(1);
+        expect(await count('User', 'cu', 'tenant-2')).toBe(0);
+        expect(await count('User', 'cu', undefined, ['B'])).toBe(2);
+        expect(await count('User', 'cu', undefined, ['A'])).toBe(1);
+        // empty array behaves like absent — no filter
+        expect(await count('User', 'cu', undefined, [])).toBe(3);
+        expect(await count('User', 'nobody')).toBe(0);
+
+        await store().markAllAsRead('User', 'cu');
+        expect(await count('User', 'cu')).toBe(0);
+        expect(await count('User', 'other')).toBe(1);
+      });
+    });
+
     describe('paginateForNotifiable()', () => {
       it('pushes limit/offset down and returns the total, newest-first', async () => {
         for (let i = 0; i < 5; i++) {

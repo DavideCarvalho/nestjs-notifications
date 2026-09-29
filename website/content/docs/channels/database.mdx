@@ -143,6 +143,7 @@ feed:
 | `deleteOwned(id, owner)` | `Promise<boolean>` | Optional. Remove one notification only when it belongs to `owner` (`{ notifiableType, notifiableId, tenantId? }`); `true` when a row matched. |
 | `markAsReadOwned(id, owner)` | `Promise<boolean>` | Optional. Mark one read only when it belongs to `owner`; `true` when a row matched, including an already-read one. |
 | `findById(id)` | `Promise<StoredNotification \| null>` | Optional. Fetch one row — the ownership fallback when the two scoped mutations are absent. |
+| `countUnread(notifiableType, notifiableId, tenantId?, types?)` | `Promise<number>` | Optional. Count unread rows with a `COUNT` query (no rows loaded). `NotificationsQueryService.unreadCount` prefers it and falls back to `getUnread(...).length`. Implemented by every bundled adapter. |
 
 `types` is absent or an empty array by default, matching every type (unchanged behavior) — it's
 purely additive. `PaginateForNotifiableOptions` carries the same `types?: string[]` for the
@@ -177,7 +178,8 @@ For real persistence, pair the channel with an adapter. Each adapter provides a 
 `NOTIFICATION_STORE` token, plus the schema it needs (a `NotificationEntity` for the ORM adapters, a
 `Notification` model for Prisma). You register the adapter's store module alongside
 `DatabaseChannelModule.forFeature()` — the adapter provides the store token, `forFeature()` registers
-the channel that consumes it.
+the channel that consumes it. The adapter store modules (and pending-digest store modules) are
+**global**, so the two can be sibling imports in any module of your app.
 
 <Tabs items={['TypeORM', 'MikroORM', 'Prisma', 'Drizzle']}>
   <Tab value="TypeORM">

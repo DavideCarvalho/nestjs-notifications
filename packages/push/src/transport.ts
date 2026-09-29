@@ -16,6 +16,48 @@ export type PushTarget = unknown;
 export interface BatchSendResult {
   /** Targets the provider reported as unregistered/invalid — safe to delete. */
   invalidTargets: unknown[];
+  /**
+   * Optional: targets that failed for another (possibly transient) reason — a rate limit, a 5xx
+   * from the provider, a network error. Not pruned; surfaced in the {@link PushDeliveryResult} so
+   * the failure isn't silently swallowed. When EVERY target failed this way the channel throws.
+   */
+  failures?: PushTargetFailure[];
+}
+
+/** One target a push delivery could not reach (for a reason other than an invalid token). */
+export interface PushTargetFailure {
+  target: unknown;
+  error: unknown;
+}
+
+/**
+ * What `PushChannel.send()` resolves to — surfaced as the push `ChannelResult.response` in the
+ * `SendResult`, passed to `afterSending(notifiable, 'push', response)` and carried on the
+ * `notification.sent` event.
+ */
+export interface PushDeliveryResult {
+  /** How many targets the route resolved to (0 when the route returned an empty array). */
+  targets: number;
+  /** How many targets were delivered to (targets minus invalid minus failures). */
+  delivered: number;
+  /** Targets the transport reported as permanently invalid (also passed to `onInvalidTokens`). */
+  invalidTargets: unknown[];
+  /** Targets that failed for another reason, with the error. Empty on full success. */
+  failures: PushTargetFailure[];
+}
+
+/** Thrown by `PushChannel.send()` when no target could be delivered to. */
+export class PushDeliveryError extends Error {
+  constructor(
+    message: string,
+    /** The per-target failures (each with its original error). */
+    readonly failures: PushTargetFailure[],
+    /** Targets the provider rejected as invalid, if any. */
+    readonly invalidTargets: unknown[] = [],
+  ) {
+    super(message);
+    this.name = 'PushDeliveryError';
+  }
 }
 
 /**

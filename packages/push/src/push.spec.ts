@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { PushMessage } from './push-message';
 import { PushChannel } from './push.channel';
 import type { PushNotification } from './push.channel';
-import type { PushTransport } from './transport';
+import { PushDeliveryError, type PushTransport } from './transport';
 
 class TestUser implements Notifiable {
   constructor(public token: unknown) {}
@@ -96,6 +96,23 @@ describe('PushChannel', () => {
     expect(defaultSend).not.toHaveBeenCalled();
   });
 
+  it('uses the per-tenant transport when a tenant is in the delivery context (async resolver)', async () => {
+    const defaultSend = vi.fn().mockResolvedValue(undefined);
+    const defaultTransport: PushTransport = { send: defaultSend };
+    const tenantSend = vi.fn().mockResolvedValue(undefined);
+    const tenantTransport: PushTransport = { send: tenantSend };
+    const resolveTransport = vi.fn().mockResolvedValue(tenantTransport);
+
+    const channel = new PushChannel(defaultTransport, resolveTransport);
+    await channel.send(new TestUser('device-token-1'), new OrderShippedNotification(), {
+      tenant: 'acme',
+    });
+
+    expect(resolveTransport).toHaveBeenCalledWith('acme');
+    expect(tenantSend).toHaveBeenCalledOnce();
+    expect(defaultSend).not.toHaveBeenCalled();
+  });
+
   it('uses the default transport when no tenant is provided', async () => {
     const defaultSend = vi.fn().mockResolvedValue(undefined);
     const defaultTransport: PushTransport = { send: defaultSend };
@@ -168,7 +185,96 @@ describe('PushChannel', () => {
     const channel = new PushChannel(transport, undefined, onInvalidTokens);
     await expect(
       channel.send(new TestUser(['t1']), new OrderShippedNotification()),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ targets: 1, delivered: 0, invalidTargets: ['t1'], failures: [] });
+  });
+
+  it('returns a PushDeliveryResult for a single target', async () => {
+    const channel = new PushChannel({ send: vi.fn().mockResolvedValue(undefined) });
+    await expect(
+      channel.send(new TestUser('device-1'), new OrderShippedNotification()),
+    ).resolves.toEqual({ targets: 1, delivered: 1, invalidTargets: [], failures: [] });
+  });
+
+  it('propagates the transport error for a single target', async () => {
+    const channel = new PushChannel({ send: vi.fn().mockRejectedValue(new Error('410 Gone')) });
+    await expect(
+      channel.send(new TestUser('device-1'), new OrderShippedNotification()),
+    ).rejects.toThrow('410 Gone');
+  });
+
+  it('attempts every target without sendMany and reports partial failures in the result', async () => {
+    const boom = new Error('503 from provider');
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(boom)
+      .mockResolvedValueOnce(undefined);
+    const channel = new PushChannel({ send });
+
+    const result = await channel.send(
+      new TestUser(['t1', 't2', 't3']),
+      new OrderShippedNotification(),
+    );
+
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(result).toEqual({
+      targets: 3,
+      delivered: 2,
+      invalidTargets: [],
+      failures: [{ target: 't2', error: boom }],
+    });
+  });
+
+  it('throws PushDeliveryError (with per-target errors) when no target was delivered', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('network down'));
+    const channel = new PushChannel({ send });
+
+    const error = await channel
+      .send(new TestUser(['t1', 't2']), new OrderShippedNotification())
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(PushDeliveryError);
+    expect((error as PushDeliveryError).failures.map((f) => f.target)).toEqual(['t1', 't2']);
+    expect((error as Error).message).toMatch(/all 2 target\(s\): network down; network down/);
+  });
+
+  it('surfaces sendMany failures and invalid targets together', async () => {
+    const onInvalidTokens = vi.fn();
+    const transient = new Error('rate limited');
+    const sendMany = vi.fn().mockResolvedValue({
+      invalidTargets: ['dead'],
+      failures: [{ target: 'slow', error: transient }],
+    });
+    const channel = new PushChannel({ send: vi.fn(), sendMany }, undefined, onInvalidTokens);
+
+    const result = await channel.send(
+      new TestUser(['ok', 'dead', 'slow']),
+      new OrderShippedNotification(),
+    );
+
+    expect(result).toEqual({
+      targets: 3,
+      delivered: 1,
+      invalidTargets: ['dead'],
+      failures: [{ target: 'slow', error: transient }],
+    });
+    expect(onInvalidTokens).toHaveBeenCalledWith(
+      expect.objectContaining({ invalidTargets: ['dead'] }),
+    );
+  });
+
+  it('throws when sendMany reports every target as failed (and still prunes invalid ones)', async () => {
+    const onInvalidTokens = vi.fn();
+    const sendMany = vi.fn().mockResolvedValue({
+      invalidTargets: ['dead'],
+      failures: [{ target: 'slow', error: new Error('rate limited') }],
+    });
+    const channel = new PushChannel({ send: vi.fn(), sendMany }, undefined, onInvalidTokens);
+
+    await expect(
+      channel.send(new TestUser(['dead', 'slow']), new OrderShippedNotification()),
+    ).rejects.toBeInstanceOf(PushDeliveryError);
+    expect(onInvalidTokens).toHaveBeenCalledOnce();
   });
 
   it('falls back to per-target send when the transport has no sendMany', async () => {

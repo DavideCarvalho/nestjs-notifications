@@ -28,8 +28,32 @@ export interface SlackChannelOptions {
   defaultChannel?: string;
 }
 
-/** Resolves per-tenant {@link SlackChannelOptions} from a tenant id. */
-export type SlackOptionsResolver = (tenant: string) => SlackChannelOptions;
+/**
+ * Resolves per-tenant {@link SlackChannelOptions} from a tenant id. May be async (e.g. load the
+ * tenant's bot token from a database); the channel awaits it on every tenant-scoped delivery.
+ */
+export type SlackOptionsResolver = (
+  tenant: string,
+) => SlackChannelOptions | Promise<SlackChannelOptions>;
+
+/**
+ * What {@link SlackChannel.send} resolves to — surfaced as the `response` of the slack
+ * `ChannelResult` in the `SendResult`, passed to `afterSending(notifiable, 'slack', response)` and
+ * carried on the `notification.sent` event.
+ *
+ * - Web API (`token` configured): `{ channel, ts }` from Slack's `chat.postMessage` response — the
+ *   posted message's channel id and timestamp (use them to thread replies or update the message).
+ * - Incoming webhook: `{ webhook: true }` — webhooks don't return the message id.
+ */
+export type SlackDeliveryResult = { channel: string; ts: string } | { webhook: true };
+
+/** The subset of Slack's `chat.postMessage` JSON response the channel reads. */
+interface ChatPostMessageResponse {
+  ok?: boolean;
+  error?: string;
+  channel?: string;
+  ts?: string;
+}
 
 /** Implement this on a notification to define its Slack payload. */
 export interface SlackNotification extends Notification {
@@ -59,8 +83,13 @@ export class SlackChannel extends BaseChannel {
     notifiable: Notifiable,
     notification: Notification,
     context?: DeliveryContext,
-  ): Promise<void> {
-    const options = this.forTenant(this.options, context, this.resolveOptions);
+  ): Promise<SlackDeliveryResult> {
+    // The resolver may be async; `await` is a no-op for the sync case and the static options.
+    const options = await this.forTenant<SlackChannelOptions | Promise<SlackChannelOptions>>(
+      this.options,
+      context,
+      this.resolveOptions,
+    );
     const message = this.buildPayload<SlackMessage>(notification, notifiable, 'toSlack', context);
     const payload = message.toPayload();
     const route = routeFor(notifiable, 'slack', notification);
@@ -68,12 +97,12 @@ export class SlackChannel extends BaseChannel {
     if (options.token) {
       const channel =
         typeof route === 'string' && !isHttpsUrl(route) ? route : options.defaultChannel;
-      await postJson(
+      const response = await postJson(
         CHAT_POST_MESSAGE_URL,
         { ...payload, channel },
         { label: 'Slack', headers: { Authorization: `Bearer ${options.token}` } },
       );
-      return;
+      return parseChatPostMessage(response, channel);
     }
 
     const webhookUrl = isHttpsUrl(route) ? route : options.webhookUrl;
@@ -85,5 +114,28 @@ export class SlackChannel extends BaseChannel {
     }
 
     await postJson(webhookUrl, payload, { label: 'Slack' });
+    return { webhook: true };
   }
+}
+
+/**
+ * Slack's Web API answers HTTP 200 even on failure, with `{ ok: false, error }` in the body — so a
+ * 2xx alone isn't success. Throw a descriptive error in that case; otherwise return the posted
+ * message's `{ channel, ts }`.
+ */
+async function parseChatPostMessage(
+  response: Response,
+  requestedChannel: string | undefined,
+): Promise<SlackDeliveryResult> {
+  let body: ChatPostMessageResponse;
+  try {
+    body = (await response.json()) as ChatPostMessageResponse;
+  } catch {
+    throw new Error('Slack chat.postMessage returned a non-JSON response.');
+  }
+  if (!body || body.ok !== true) {
+    const target = requestedChannel ? ` to channel "${requestedChannel}"` : '';
+    throw new Error(`Slack chat.postMessage${target} failed: ${body?.error ?? 'unknown_error'}.`);
+  }
+  return { channel: body.channel ?? requestedChannel ?? '', ts: body.ts ?? '' };
 }

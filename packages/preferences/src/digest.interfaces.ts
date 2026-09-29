@@ -53,6 +53,20 @@ export interface PendingDigestGroup {
 }
 
 /**
+ * Optional narrowing for {@link PendingDigestStore.listGroups}, used to read (and flush) ONE
+ * recipient's pending digest — e.g. when the app runs digests on a per-recipient schedule.
+ */
+export interface PendingDigestGroupFilter {
+  /** Only groups for this recipient (matched on `type` + `String(id)`). Absent = every recipient. */
+  notifiable?: NotifiableRef;
+  /**
+   * Only groups in this tenant scope. `undefined`/absent = every tenant; `null` = only untenanted
+   * (single-tenant) entries; a string = that tenant only.
+   */
+  tenantId?: string | null;
+}
+
+/**
  * Persistence for notifications suppressed by a non-instant digest cadence. The preference gate
  * (via the core {@link DigestSink}) enqueues into it; the {@link DigestCollector} reads grouped
  * entries per cadence window, dispatches the batch, then clears the flushed entries.
@@ -67,8 +81,14 @@ export interface PendingDigestStore {
   /**
    * Return the pending entries for `cadence`, grouped by `(tenant, notifiable, category)`. Each
    * group becomes one digest. Ordered oldest-first within a group.
+   *
+   * `filter` (optional, backwards compatible) narrows the read to one recipient and/or tenant —
+   * see {@link PendingDigestGroupFilter}. Omitted = every pending group for the cadence.
    */
-  listGroups(cadence: DigestCadence): Promise<PendingDigestGroup[]>;
+  listGroups(
+    cadence: DigestCadence,
+    filter?: PendingDigestGroupFilter,
+  ): Promise<PendingDigestGroup[]>;
   /** Delete the given entries (by id) after they have been flushed into a digest. */
   clear(ids: string[]): Promise<void>;
   /**

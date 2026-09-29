@@ -49,8 +49,10 @@ Install the core, the mail channel, and the event emitter:
 
 ### Import the modules
 
-Add the modules to your root module. `EventEmitterModule.forRoot()` powers the lifecycle events;
-`NotificationsModule.forRoot()` provides the service; `MailChannelModule.forRoot()` registers the
+Add the modules to your root module. `EventEmitterModule.forRoot()` powers the lifecycle events and
+is **required**, because the core delivery engine injects `EventEmitter2`. If your app doesn't
+register it anywhere else, use `NotificationsModule.forRoot({ emitter: true })` instead and the module
+registers it for you. `NotificationsModule.forRoot()` provides the service; `MailChannelModule.forRoot()` registers the
 mail channel and is discovered automatically.
 
 ```ts title="app.module.ts"

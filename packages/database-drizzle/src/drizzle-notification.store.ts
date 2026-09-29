@@ -156,6 +156,21 @@ export class DrizzleNotificationStore implements NotificationStore {
     return rows.map(toStored);
   }
 
+  async countUnread(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+    types?: string[],
+  ): Promise<number> {
+    const [totals] = await this.db
+      .select({ total: count() })
+      .from(this.table)
+      .where(
+        and(this.scope(notifiableType, notifiableId, tenantId, types), isNull(this.table.readAt)),
+      );
+    return Number(totals?.total ?? 0);
+  }
+
   async delete(id: string): Promise<void> {
     await this.db.delete(this.table).where(eq(this.table.id, id));
   }

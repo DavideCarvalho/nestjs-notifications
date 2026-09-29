@@ -36,6 +36,9 @@ export interface PrismaNotificationStoreOptions {
  * export class AppModule {}
  * ```
  */
+// Global so a SIBLING `DatabaseChannelModule.forFeature()` (a separate module that imports
+// nothing) can resolve the NOTIFICATION_STORE token — the documented pairing. Mirrors the Drizzle
+// adapter.
 @Module({})
 export class PrismaNotificationStoreModule {
   /**
@@ -45,12 +48,13 @@ export class PrismaNotificationStoreModule {
   static forRoot(options: PrismaNotificationStoreOptions): DynamicModule {
     return {
       module: PrismaNotificationStoreModule,
+      global: true,
       providers: [
         { provide: PRISMA_CLIENT, useValue: options.client },
         PrismaNotificationStore,
         { provide: NOTIFICATION_STORE, useExisting: PrismaNotificationStore },
       ],
-      exports: [PrismaNotificationStore, NOTIFICATION_STORE],
+      exports: [PrismaNotificationStore, NOTIFICATION_STORE, PRISMA_CLIENT],
     };
   }
 
@@ -63,12 +67,13 @@ export class PrismaNotificationStoreModule {
     const providers = client ? [{ provide: PRISMA_CLIENT, useValue: client }] : [];
     return {
       module: PrismaNotificationStoreModule,
+      global: true,
       providers: [
         ...providers,
         PrismaNotificationStore,
         { provide: NOTIFICATION_STORE, useExisting: PrismaNotificationStore },
       ],
-      exports: [PrismaNotificationStore, NOTIFICATION_STORE],
+      exports: [PrismaNotificationStore, NOTIFICATION_STORE, ...(client ? [PRISMA_CLIENT] : [])],
     };
   }
 }

@@ -102,6 +102,29 @@ describe('PrismaNotificationStore', () => {
     expect(rows[0]?.readAt).toBeNull();
   });
 
+  it('countUnread() issues a COUNT with the unread/tenant/types filter (no row load)', async () => {
+    const { client, notification } = makeClient();
+    notification.count.mockResolvedValueOnce(7);
+    const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);
+
+    expect(await store.countUnread('User', '42', 'tenant-1', ['A', 'B'])).toBe(7);
+    expect(notification.count).toHaveBeenCalledWith({
+      where: {
+        notifiableType: 'User',
+        notifiableId: '42',
+        tenantId: 'tenant-1',
+        type: { in: ['A', 'B'] },
+        readAt: null,
+      },
+    });
+    expect(notification.findMany).not.toHaveBeenCalled();
+
+    await store.countUnread('User', '42');
+    expect(notification.count).toHaveBeenLastCalledWith({
+      where: { notifiableType: 'User', notifiableId: '42', readAt: null },
+    });
+  });
+
   it('markAllAsRead() updates only unread rows for the notifiable', async () => {
     const { client, notification } = makeClient();
     const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);

@@ -4,11 +4,12 @@ import type {
   NewPendingDigestEntry,
   PendingDigestEntry,
   PendingDigestGroup,
+  PendingDigestGroupFilter,
   PendingDigestStore,
 } from '@dudousxd/nestjs-notifications-preferences';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, type Repository } from 'typeorm';
+import { In, IsNull, type Repository } from 'typeorm';
 import { DigestWindowEntity, PendingDigestEntity } from './pending-digest.entity';
 import { ensurePendingDigestTables } from './pending-digest.schema';
 
@@ -67,9 +68,23 @@ export class TypeOrmPendingDigestStore implements PendingDigestStore {
     );
   }
 
-  async listGroups(cadence: DigestCadence): Promise<PendingDigestGroup[]> {
+  async listGroups(
+    cadence: DigestCadence,
+    filter: PendingDigestGroupFilter = {},
+  ): Promise<PendingDigestGroup[]> {
     const rows = await this.entries.find({
-      where: { cadence },
+      where: {
+        cadence,
+        ...(filter.notifiable
+          ? {
+              notifiableType: filter.notifiable.type,
+              notifiableId: String(filter.notifiable.id),
+            }
+          : {}),
+        ...(filter.tenantId === undefined
+          ? {}
+          : { tenantId: filter.tenantId === null ? IsNull() : filter.tenantId }),
+      },
       order: { createdAt: 'ASC' },
     });
     const groups = new Map<string, PendingDigestGroup>();

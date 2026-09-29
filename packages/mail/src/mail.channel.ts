@@ -33,6 +33,12 @@ export interface MailNotification extends Notification {
 }
 
 /**
+ * Resolves the per-tenant {@link MailTransport} from a tenant id. May be async (e.g. load the
+ * tenant's SMTP credentials from a database); the channel awaits it on tenant-scoped deliveries.
+ */
+export type MailTransportResolver = (tenant: string) => MailTransport | Promise<MailTransport>;
+
+/**
  * Renders a notification's {@link MailMessage} and sends it through the configured
  * {@link MailTransport}. The recipient comes from `routeNotificationFor('mail')`.
  */
@@ -49,7 +55,7 @@ export class MailChannel extends BaseChannel {
     private readonly options: MailChannelOptions,
     @Optional()
     @Inject(MAIL_TRANSPORT_RESOLVER)
-    private readonly resolveTransport?: (tenant: string) => MailTransport,
+    private readonly resolveTransport?: MailTransportResolver,
   ) {
     super();
   }
@@ -62,7 +68,12 @@ export class MailChannel extends BaseChannel {
     const recipient = String(routeFor(notifiable, 'mail', notification));
     const message = this.buildPayload<MailMessage>(notification, notifiable, 'toMail', context);
     const rendered = await this.renderer.render(message);
-    const transport = this.forTenant(this.defaultTransport, context, this.resolveTransport);
+    // The resolver may be async (e.g. per-tenant SMTP credentials from a database).
+    const transport = await this.forTenant<MailTransport | Promise<MailTransport>>(
+      this.defaultTransport,
+      context,
+      this.resolveTransport,
+    );
 
     await transport.send({
       to: recipient,

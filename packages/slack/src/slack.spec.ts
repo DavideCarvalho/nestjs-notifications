@@ -6,6 +6,9 @@ import type { SlackNotification } from './slack.channel';
 
 const WEBHOOK = 'https://hooks.slack.com/services/T000/B000/XXX';
 
+/** A fetch Response stand-in for Slack's Web API (HTTP 200 + JSON body). */
+const apiResponse = (body: unknown) => ({ ok: true, status: 200, json: async () => body });
+
 class TestUser implements Notifiable {
   constructor(private route: unknown) {}
   routeNotificationFor(): unknown {
@@ -56,7 +59,9 @@ describe('SlackChannel', () => {
   });
 
   it('uses the per-tenant options (token) when a tenant is in the delivery context', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(apiResponse({ ok: true, channel: 'C1', ts: '1.2' }));
     vi.stubGlobal('fetch', fetchMock);
 
     const resolveOptions = vi
@@ -94,6 +99,77 @@ describe('SlackChannel', () => {
     await expect(channel.send(new TestUser(WEBHOOK), new DeployFinished())).rejects.toThrow(
       /failed with status 500/,
     );
+  });
+
+  it('returns { webhook: true } for webhook deliveries', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    const channel = new SlackChannel({ webhookUrl: WEBHOOK });
+    await expect(channel.send(new TestUser(WEBHOOK), new DeployFinished())).resolves.toEqual({
+      webhook: true,
+    });
+  });
+
+  it('returns the posted message { channel, ts } from chat.postMessage', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(apiResponse({ ok: true, channel: 'C024BE91L', ts: '1503435956.000247' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const channel = new SlackChannel({ token: 'xoxb-1', defaultChannel: '#general' });
+    const result = await channel.send(new TestUser(undefined), new DeployFinished());
+
+    expect(result).toEqual({ channel: 'C024BE91L', ts: '1503435956.000247' });
+    expect(JSON.parse(fetchMock.mock.calls[0]?.[1].body as string).channel).toBe('#general');
+  });
+
+  it('throws a descriptive error when the Web API answers 200 with { ok: false }', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(apiResponse({ ok: false, error: 'channel_not_found' })),
+    );
+    const channel = new SlackChannel({ token: 'xoxb-1' });
+
+    await expect(channel.send(new TestUser('C404'), new DeployFinished())).rejects.toThrow(
+      'Slack chat.postMessage to channel "C404" failed: channel_not_found.',
+    );
+  });
+
+  it('throws when the Web API response is not JSON', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => {
+          throw new SyntaxError('Unexpected token');
+        },
+      }),
+    );
+    const channel = new SlackChannel({ token: 'xoxb-1' });
+    await expect(channel.send(new TestUser('C1'), new DeployFinished())).rejects.toThrow(
+      /non-JSON/,
+    );
+  });
+
+  it('awaits an async per-tenant resolver', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(apiResponse({ ok: true, channel: 'C9', ts: '9.9' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const resolveOptions = vi.fn(async (tenant: string) => ({
+      token: `xoxb-${tenant}`,
+      defaultChannel: 'C9',
+    }));
+    const channel = new SlackChannel({ webhookUrl: WEBHOOK }, resolveOptions);
+
+    const result = await channel.send(new TestUser(undefined), new DeployFinished(), {
+      tenant: 'acme',
+    });
+
+    expect(resolveOptions).toHaveBeenCalledWith('acme');
+    expect(fetchMock.mock.calls[0]?.[1].headers.Authorization).toBe('Bearer xoxb-acme');
+    expect(result).toEqual({ channel: 'C9', ts: '9.9' });
   });
 
   it('throws MissingChannelMethodError when toSlack is absent', async () => {

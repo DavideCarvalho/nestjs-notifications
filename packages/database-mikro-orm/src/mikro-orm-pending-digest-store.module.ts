@@ -2,7 +2,6 @@ import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { MikroOrmPendingDigestStore } from './mikro-orm-pending-digest.store';
 import { DigestWindowEntity, PendingDigestEntity } from './pending-digest.entity';
-import { DigestWindowRepository, PendingDigestRepository } from './pending-digest.repository';
 
 /**
  * `@dudousxd/nestjs-notifications-preferences`'s PENDING_DIGEST_STORE token, inlined via the
@@ -34,22 +33,25 @@ const PENDING_DIGEST_STORE = Symbol.for('nestjs-notifications:pending-digest-sto
  * export class AppModule {}
  * ```
  */
+// Global so SIBLING modules (e.g. `PreferencesModule.forDigest({ store: X })`, which constructs
+// the store class in its own scope) can resolve the store, its tokens and its dependencies — the
+// documented pairing. Mirrors the Drizzle adapter.
 @Module({})
 export class MikroOrmPendingDigestStoreModule {
   static forFeature(): DynamicModule {
+    // Registers `PendingDigestRepository` + `DigestWindowRepository` as providers.
+    const repositories = MikroOrmModule.forFeature([PendingDigestEntity, DigestWindowEntity]);
     return {
       module: MikroOrmPendingDigestStoreModule,
-      imports: [MikroOrmModule.forFeature([PendingDigestEntity, DigestWindowEntity])],
+      global: true,
+      imports: [repositories],
       providers: [
         MikroOrmPendingDigestStore,
         { provide: PENDING_DIGEST_STORE, useExisting: MikroOrmPendingDigestStore },
       ],
-      exports: [
-        MikroOrmPendingDigestStore,
-        PENDING_DIGEST_STORE,
-        PendingDigestRepository,
-        DigestWindowRepository,
-      ],
+      // The repositories are provided by the imported forFeature module, so re-export that module
+      // (Nest refuses to export a provider token the module doesn't own itself).
+      exports: [MikroOrmPendingDigestStore, PENDING_DIGEST_STORE, repositories],
     };
   }
 }

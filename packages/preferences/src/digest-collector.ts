@@ -1,5 +1,6 @@
 import {
   type Notifiable,
+  type NotifiableRef,
   type Notification,
   NotificationSerializer,
   NotificationService,
@@ -22,7 +23,10 @@ import { PreferenceCenterService } from './preference-center.service';
 import { evaluateQuietHours } from './quiet-hours';
 import { DIGEST_OPTIONS, PENDING_DIGEST_STORE } from './tokens';
 
-/** Result of one {@link DigestCollector.flushDigests} run, for logging/testing. */
+/**
+ * Result of one {@link DigestCollector.flushDigests} / {@link DigestCollector.flushDigestsFor} run,
+ * for logging/testing. `alreadyRun` is always false for `flushDigestsFor` (it takes no window lock).
+ */
 export interface DigestFlushResult {
   cadence: DigestCadence;
   /** Digests actually dispatched. */
@@ -93,6 +97,38 @@ export class DigestCollector {
     }
 
     const groups = await this.store.listGroups(cadence);
+    return this.flushGroups(cadence, groups, now);
+  }
+
+  /**
+   * Flush ONE recipient's pending `cadence` digests — for apps that run digests on a per-recipient
+   * schedule (each user's own delivery time/timezone) instead of one global window.
+   *
+   * Reads only that recipient's groups (via {@link PendingDigestStore.listGroups}'s filter) and
+   * reuses the same dispatch / quiet-hours / clear logic as {@link flushDigests}, but takes NO
+   * global window lock: the app owns the per-recipient schedule, and flushed entries are cleared so
+   * a re-run only picks up what arrived since. `opts.tenantId`: absent = every tenant the recipient
+   * has pending entries in; `null` = only untenanted entries; a string = that tenant only. `now`
+   * (default: current time) is used for the quiet-hours check.
+   */
+  async flushDigestsFor(
+    notifiable: NotifiableRef,
+    cadence: DigestCadence,
+    opts: { tenantId?: string | null; now?: Date } = {},
+  ): Promise<DigestFlushResult> {
+    const groups = await this.store.listGroups(cadence, {
+      notifiable: { type: notifiable.type, id: notifiable.id },
+      ...(opts.tenantId !== undefined ? { tenantId: opts.tenantId } : {}),
+    });
+    return this.flushGroups(cadence, groups, opts.now ?? new Date());
+  }
+
+  /** Dispatch each group (respecting quiet hours), then clear the flushed entries. */
+  private async flushGroups(
+    cadence: DigestCadence,
+    groups: PendingDigestGroup[],
+    now: Date,
+  ): Promise<DigestFlushResult> {
     let sent = 0;
     let deferred = 0;
     const toClear: string[] = [];

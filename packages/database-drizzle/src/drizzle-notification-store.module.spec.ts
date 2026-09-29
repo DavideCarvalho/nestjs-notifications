@@ -1,13 +1,19 @@
 import 'reflect-metadata';
+import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
 import {
   DatabaseChannel,
   DatabaseChannelModule,
   NOTIFICATION_STORE,
   NotificationsQueryService,
 } from '@dudousxd/nestjs-notifications-database';
-import { PENDING_DIGEST_STORE } from '@dudousxd/nestjs-notifications-preferences';
+import {
+  DigestCollector,
+  PENDING_DIGEST_STORE,
+  PreferencesModule,
+} from '@dudousxd/nestjs-notifications-preferences';
 import { PGlite } from '@electric-sql/pglite';
 import { Global, Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { drizzle } from 'drizzle-orm/pglite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -147,5 +153,20 @@ describe('Drizzle store modules (Nest wiring, pglite)', () => {
     expect(await (store as DrizzlePendingDigestStore).tryLockWindow('daily', '2026-01-01')).toBe(
       false,
     );
+  });
+
+  it('DrizzlePendingDigestStoreModule pairs with a SIBLING PreferencesModule.forDigest({ store })', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        EventEmitterModule.forRoot(),
+        NotificationsModule.forRoot({ global: true }),
+        DrizzlePendingDigestStoreModule.forRoot({ db }),
+        PreferencesModule.forDigest({ store: DrizzlePendingDigestStore }),
+      ],
+    }).compile();
+    await moduleRef.init();
+    expect(moduleRef.get(DigestCollector)).toBeInstanceOf(DigestCollector);
+    expect(moduleRef.get(PENDING_DIGEST_STORE)).toBeInstanceOf(DrizzlePendingDigestStore);
+    await moduleRef.close();
   });
 });

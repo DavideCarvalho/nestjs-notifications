@@ -130,6 +130,40 @@ describe('NotificationsQueryService', () => {
     expect(page.meta).toEqual({ page: 1, perPage: 2, total: 50, lastPage: 25 });
   });
 
+  it('unreadCount() prefers the store COUNT query (tenant + types passed through)', async () => {
+    const store: NotificationStore = {
+      save: vi.fn(),
+      markAsRead: vi.fn(),
+      markAllAsRead: vi.fn(),
+      getForNotifiable: vi.fn(),
+      getUnread: vi.fn(async () => {
+        throw new Error('getUnread must not be called when countUnread exists');
+      }),
+      delete: vi.fn(),
+      countUnread: vi.fn(async () => 12),
+    };
+    const svc = new NotificationsQueryService(store);
+
+    expect(await svc.forTenant('ws-1').unreadCount(ref, { types: ['A'] })).toBe(12);
+    expect(store.countUnread).toHaveBeenCalledWith('User', '42', 'ws-1', ['A']);
+    expect(store.getUnread).not.toHaveBeenCalled();
+  });
+
+  it('unreadCount() falls back to getUnread().length for stores without countUnread', async () => {
+    const store: NotificationStore = {
+      save: vi.fn(),
+      markAsRead: vi.fn(),
+      markAllAsRead: vi.fn(),
+      getForNotifiable: vi.fn(),
+      getUnread: vi.fn(async () => [{ id: 'r1' } as never, { id: 'r2' } as never]),
+      delete: vi.fn(),
+    };
+    const svc = new NotificationsQueryService(store);
+
+    expect(await svc.unreadCount(ref)).toBe(2);
+    expect(store.getUnread).toHaveBeenCalledWith('User', '42', undefined, undefined);
+  });
+
   it('paginate() falls back to in-memory slicing for stores without pushdown', async () => {
     // A legacy store that only implements the required methods.
     const rows = [

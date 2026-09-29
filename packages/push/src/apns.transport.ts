@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import apn from '@parse/node-apn';
+import type apn from '@parse/node-apn';
+import { loadOptionalPeer } from './optional-peer';
 import type { PushMessage } from './push-message';
 import { APNS_OPTIONS } from './tokens';
 import type { PushTransport } from './transport';
@@ -58,25 +59,41 @@ function resolveTarget(target: unknown): { deviceToken: string; topic?: string }
  * A {@link PushTransport} backed by Apple Push Notification service (`@parse/node-apn`).
  *
  * The target is an APNs device token string (or `{ deviceToken, topic }`). The
- * provider is constructed lazily from the injected {@link ApnsOptions}.
+ * provider is constructed lazily (on first send) from the injected {@link ApnsOptions}.
+ *
+ * `@parse/node-apn` is an optional peer, loaded on first send (a missing install throws a clear
+ * error then, not at import time).
  */
 @Injectable()
 export class ApnsTransport implements PushTransport {
-  private readonly provider: apn.Provider;
+  private client?: Promise<{ apn: typeof apn; provider: apn.Provider }>;
 
   constructor(
     @Inject(APNS_OPTIONS)
     private readonly options: ApnsOptions,
-  ) {
-    this.provider = new apn.Provider({
-      token: this.options.token,
-      cert: this.options.cert,
-      key: this.options.key,
-      production: this.options.production,
-    } as apn.ProviderOptions);
+  ) {}
+
+  /** Load `@parse/node-apn` once and construct the provider. */
+  private sdk(): Promise<{ apn: typeof apn; provider: apn.Provider }> {
+    this.client ??= loadOptionalPeer<typeof apn>(
+      () => import('@parse/node-apn'),
+      '@parse/node-apn',
+      'ApnsTransport',
+      'Provider',
+    ).then((sdk) => ({
+      apn: sdk,
+      provider: new sdk.Provider({
+        token: this.options.token,
+        cert: this.options.cert,
+        key: this.options.key,
+        production: this.options.production,
+      } as apn.ProviderOptions),
+    }));
+    return this.client;
   }
 
   async send(target: unknown, message: PushMessage): Promise<void> {
+    const { apn, provider } = await this.sdk();
     const { deviceToken, topic } = resolveTarget(target);
     const { title, body, data, url } = message.toObject();
 
@@ -86,10 +103,7 @@ export class ApnsTransport implements PushTransport {
     notification.topic = topic ?? this.options.topic ?? '';
     notification.sound = 'default';
 
-    const result = await this.provider.send(
-      notification as unknown as apn.Notification,
-      deviceToken,
-    );
+    const result = await provider.send(notification as unknown as apn.Notification, deviceToken);
 
     if (result.failed.length > 0) {
       const reasons = result.failed

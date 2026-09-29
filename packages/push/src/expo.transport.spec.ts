@@ -63,5 +63,18 @@ describe('ExpoTransport.sendMany', () => {
     const transport = new ExpoTransport({});
     const result = await transport.sendMany(['ExponentPushToken[a]'], new PushMessage().title('x'));
     expect(result.invalidTargets).toEqual([]);
+    expect(result.failures).toEqual([]);
+  });
+
+  it('returns non-DeviceNotRegistered ticket errors as failures (not invalid)', async () => {
+    sendPushNotificationsAsync.mockResolvedValue([
+      { status: 'error', message: 'Too many requests', details: { error: 'MessageRateExceeded' } },
+    ]);
+    const transport = new ExpoTransport({});
+    const result = await transport.sendMany(['ExponentPushToken[a]'], new PushMessage().title('x'));
+    expect(result.invalidTargets).toEqual([]);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures?.[0]?.target).toBe('ExponentPushToken[a]');
+    expect((result.failures?.[0]?.error as Error).message).toBe('Too many requests');
   });
 });

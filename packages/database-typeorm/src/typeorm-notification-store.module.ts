@@ -22,17 +22,24 @@ import { TypeOrmNotificationStore } from './typeorm-notification.store';
  * export class AppModule {}
  * ```
  */
+// Global so a SIBLING `DatabaseChannelModule.forFeature()` (a separate module that imports
+// nothing) can resolve the NOTIFICATION_STORE token — the documented pairing. Mirrors the Drizzle
+// adapter.
 @Module({})
 export class TypeOrmNotificationStoreModule {
   static forFeature(): DynamicModule {
+    const repositories = TypeOrmModule.forFeature([NotificationEntity]);
     return {
       module: TypeOrmNotificationStoreModule,
-      imports: [TypeOrmModule.forFeature([NotificationEntity])],
+      global: true,
+      imports: [repositories],
       providers: [
         TypeOrmNotificationStore,
         { provide: NOTIFICATION_STORE, useExisting: TypeOrmNotificationStore },
       ],
-      exports: [TypeOrmNotificationStore, NOTIFICATION_STORE],
+      // Re-export the repository so `DatabaseChannelModule.forRoot({ store: TypeOrmNotificationStore })`
+      // can construct the store too.
+      exports: [TypeOrmNotificationStore, NOTIFICATION_STORE, repositories],
     };
   }
 }

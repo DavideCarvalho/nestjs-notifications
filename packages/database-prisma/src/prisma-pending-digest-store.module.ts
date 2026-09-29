@@ -48,6 +48,9 @@ export interface PrismaPendingDigestStoreOptions {
  * export class AppModule {}
  * ```
  */
+// Global so SIBLING modules (e.g. `PreferencesModule.forDigest({ store: X })`, which constructs
+// the store class in its own scope) can resolve the store, its tokens and its dependencies — the
+// documented pairing. Mirrors the Drizzle adapter.
 @Module({})
 export class PrismaPendingDigestStoreModule {
   /**
@@ -57,12 +60,13 @@ export class PrismaPendingDigestStoreModule {
   static forRoot(options: PrismaPendingDigestStoreOptions): DynamicModule {
     return {
       module: PrismaPendingDigestStoreModule,
+      global: true,
       providers: [
         { provide: PRISMA_PENDING_DIGEST_CLIENT, useValue: options.client },
         PrismaPendingDigestStore,
         { provide: PENDING_DIGEST_STORE, useExisting: PrismaPendingDigestStore },
       ],
-      exports: [PrismaPendingDigestStore, PENDING_DIGEST_STORE],
+      exports: [PrismaPendingDigestStore, PENDING_DIGEST_STORE, PRISMA_PENDING_DIGEST_CLIENT],
     };
   }
 
@@ -75,12 +79,17 @@ export class PrismaPendingDigestStoreModule {
     const providers = client ? [{ provide: PRISMA_PENDING_DIGEST_CLIENT, useValue: client }] : [];
     return {
       module: PrismaPendingDigestStoreModule,
+      global: true,
       providers: [
         ...providers,
         PrismaPendingDigestStore,
         { provide: PENDING_DIGEST_STORE, useExisting: PrismaPendingDigestStore },
       ],
-      exports: [PrismaPendingDigestStore, PENDING_DIGEST_STORE],
+      exports: [
+        PrismaPendingDigestStore,
+        PENDING_DIGEST_STORE,
+        ...(client ? [PRISMA_PENDING_DIGEST_CLIENT] : []),
+      ],
     };
   }
 }
