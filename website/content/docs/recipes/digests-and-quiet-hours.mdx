@@ -90,6 +90,25 @@ honor preferences.
   `@nestjs/schedule` is absent it's a no-op; call `flushDigests` yourself, as above.
 </Callout>
 
+### Per-recipient schedules
+
+If each recipient gets their digest at their own time (their preferred hour, in their timezone),
+drive it per person instead of with one global window. `flushDigestsFor(notifiable, cadence, opts?)`
+reads and flushes just that recipient's pending groups, reusing the same dispatch, quiet-hours and
+clear logic — but it takes **no** global window lock, since your app owns the per-recipient
+schedule (flushed entries are cleared, so a re-run only picks up what arrived since):
+
+```ts
+// e.g. from your own scheduler, when it's 9am in this user's timezone
+await this.digests.flushDigestsFor({ type: 'User', id: user.id }, 'daily');
+// narrow to one tenant (a string), or only untenanted entries (null); default = every tenant
+await this.digests.flushDigestsFor({ type: 'User', id: user.id }, 'daily', { tenantId: workspaceId });
+```
+
+It returns the same `DigestFlushResult` (`alreadyRun` is always `false`). Under the hood it calls
+`PendingDigestStore.listGroups(cadence, { notifiable, tenantId })` — the optional filter every bundled
+store implements; you can call it directly to preview a recipient's pending digest.
+
 ### 3. Customize the summary
 
 By default each group becomes a generic `DefaultDigestNotification` (a `{ digest, category, cadence,

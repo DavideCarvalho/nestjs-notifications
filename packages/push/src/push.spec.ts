@@ -96,6 +96,23 @@ describe('PushChannel', () => {
     expect(defaultSend).not.toHaveBeenCalled();
   });
 
+  it('uses the per-tenant transport when a tenant is in the delivery context (async resolver)', async () => {
+    const defaultSend = vi.fn().mockResolvedValue(undefined);
+    const defaultTransport: PushTransport = { send: defaultSend };
+    const tenantSend = vi.fn().mockResolvedValue(undefined);
+    const tenantTransport: PushTransport = { send: tenantSend };
+    const resolveTransport = vi.fn().mockResolvedValue(tenantTransport);
+
+    const channel = new PushChannel(defaultTransport, resolveTransport);
+    await channel.send(new TestUser('device-token-1'), new OrderShippedNotification(), {
+      tenant: 'acme',
+    });
+
+    expect(resolveTransport).toHaveBeenCalledWith('acme');
+    expect(tenantSend).toHaveBeenCalledOnce();
+    expect(defaultSend).not.toHaveBeenCalled();
+  });
+
   it('uses the default transport when no tenant is provided', async () => {
     const defaultSend = vi.fn().mockResolvedValue(undefined);
     const defaultTransport: PushTransport = { send: defaultSend };

@@ -41,8 +41,8 @@ const storeProviders = [
  * export class AppModule {}
  * ```
  */
-// Global so a SIBLING `DatabaseChannelModule.forFeature()` (a separate module that imports
-// nothing) can resolve the store token — the documented pairing.
+// Global so SIBLING modules (e.g. `PreferencesModule.forDigest({ store: DrizzlePendingDigestStore })`)
+// can resolve the store token and the db/tables tokens — the documented pairing.
 @Module({})
 export class DrizzlePendingDigestStoreModule {
   static forRoot(options: DrizzleStoreModuleOptions): DynamicModule {

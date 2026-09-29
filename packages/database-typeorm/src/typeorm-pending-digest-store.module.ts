@@ -33,17 +33,22 @@ const PENDING_DIGEST_STORE = Symbol.for('nestjs-notifications:pending-digest-sto
  * export class AppModule {}
  * ```
  */
+// Global so SIBLING modules (e.g. `PreferencesModule.forDigest({ store: X })`, which constructs
+// the store class in its own scope) can resolve the store, its tokens and its dependencies — the
+// documented pairing. Mirrors the Drizzle adapter.
 @Module({})
 export class TypeOrmPendingDigestStoreModule {
   static forFeature(): DynamicModule {
+    const repositories = TypeOrmModule.forFeature([PendingDigestEntity, DigestWindowEntity]);
     return {
       module: TypeOrmPendingDigestStoreModule,
-      imports: [TypeOrmModule.forFeature([PendingDigestEntity, DigestWindowEntity])],
+      global: true,
+      imports: [repositories],
       providers: [
         TypeOrmPendingDigestStore,
         { provide: PENDING_DIGEST_STORE, useExisting: TypeOrmPendingDigestStore },
       ],
-      exports: [TypeOrmPendingDigestStore, PENDING_DIGEST_STORE],
+      exports: [TypeOrmPendingDigestStore, PENDING_DIGEST_STORE, repositories],
     };
   }
 }

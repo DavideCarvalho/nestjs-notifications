@@ -13,7 +13,7 @@ import { SMS_OPTIONS, SMS_TRANSPORT, SMS_TRANSPORT_RESOLVER } from './tokens';
 import type { SmsTransport } from './transport';
 
 /** Resolves a per-tenant {@link SmsTransport} from a tenant id. */
-export type SmsTransportResolver = (tenant: string) => SmsTransport;
+export type SmsTransportResolver = (tenant: string) => SmsTransport | Promise<SmsTransport>;
 
 /** Channel handle: use as `@Sms()` on a payload method, or as a token in `via()`. */
 export const Sms = createChannel('sms');
@@ -54,7 +54,12 @@ export class SmsChannel extends BaseChannel {
     notification: Notification,
     context?: DeliveryContext,
   ): Promise<void> {
-    const transport = this.forTenant(this.transport, context, this.resolveTransport);
+    // The resolver may be async (e.g. per-tenant credentials from a database).
+    const transport = await this.forTenant<SmsTransport | Promise<SmsTransport>>(
+      this.transport,
+      context,
+      this.resolveTransport,
+    );
     const recipient = String(routeFor(notifiable, 'sms', notification));
     const result = this.buildPayload<SmsMessage | string>(
       notification,

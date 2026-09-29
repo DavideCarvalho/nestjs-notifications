@@ -5,6 +5,7 @@ import type {
   NewPendingDigestEntry,
   PendingDigestEntry,
   PendingDigestGroup,
+  PendingDigestGroupFilter,
   PendingDigestStore,
 } from './digest.interfaces';
 
@@ -42,10 +43,21 @@ export class InMemoryPendingDigestStore implements PendingDigestStore {
     });
   }
 
-  async listGroups(cadence: DigestCadence): Promise<PendingDigestGroup[]> {
+  async listGroups(
+    cadence: DigestCadence,
+    filter: PendingDigestGroupFilter = {},
+  ): Promise<PendingDigestGroup[]> {
     const groups = new Map<string, PendingDigestGroup>();
     for (const entry of this.entries.values()) {
       if (entry.cadence !== cadence) continue;
+      if (
+        filter.notifiable &&
+        (entry.notifiable.type !== filter.notifiable.type ||
+          String(entry.notifiable.id) !== String(filter.notifiable.id))
+      ) {
+        continue;
+      }
+      if (filter.tenantId !== undefined && entry.tenantId !== filter.tenantId) continue;
       const key = groupKey(entry);
       let group = groups.get(key);
       if (!group) {

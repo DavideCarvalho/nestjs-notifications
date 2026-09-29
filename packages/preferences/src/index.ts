@@ -26,6 +26,7 @@ export type {
   NewPendingDigestEntry,
   PendingDigestEntry,
   PendingDigestGroup,
+  PendingDigestGroupFilter,
   PendingDigestStore,
 } from './digest.interfaces';
 export { InMemoryPendingDigestStore } from './in-memory.pending-digest.store';

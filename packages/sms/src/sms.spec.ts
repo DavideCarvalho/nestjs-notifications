@@ -79,6 +79,24 @@ describe('SmsChannel', () => {
     expect(defaultSend).not.toHaveBeenCalled();
   });
 
+  it('uses the per-tenant transport when a tenant is in the delivery context (async resolver)', async () => {
+    const defaultSend = vi.fn().mockResolvedValue(undefined);
+    const defaultTransport: SmsTransport = { send: defaultSend };
+    const tenantSend = vi.fn().mockResolvedValue(undefined);
+    const tenantTransport: SmsTransport = { send: tenantSend };
+    const resolveTransport = vi.fn().mockResolvedValue(tenantTransport);
+
+    const channel = new SmsChannel(defaultTransport, { from: '+15555550100' }, resolveTransport);
+
+    await channel.send(new TestUser('+15555551234'), new StringNotification(), {
+      tenant: 'acme',
+    });
+
+    expect(resolveTransport).toHaveBeenCalledWith('acme');
+    expect(tenantSend).toHaveBeenCalledOnce();
+    expect(defaultSend).not.toHaveBeenCalled();
+  });
+
   it('uses the default transport when no tenant is provided', async () => {
     const defaultSend = vi.fn().mockResolvedValue(undefined);
     const defaultTransport: SmsTransport = { send: defaultSend };

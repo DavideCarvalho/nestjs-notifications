@@ -146,6 +146,23 @@ export class PrismaNotificationStore implements NotificationStore {
     return rows.map(toStored);
   }
 
+  async countUnread(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+    types?: string[],
+  ): Promise<number> {
+    return this.client.notification.count({
+      where: {
+        notifiableType,
+        notifiableId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
+        ...typeFilter(types),
+        readAt: null,
+      },
+    });
+  }
+
   async delete(id: string): Promise<void> {
     await this.client.notification.delete({ where: { id } });
   }

@@ -21,7 +21,13 @@ export {
   type SesV2Client,
   type SesTransportOptions,
 } from './ses.transport';
-export { Mail, MailChannel, type MailChannelOptions, type MailNotification } from './mail.channel';
+export {
+  Mail,
+  MailChannel,
+  type MailChannelOptions,
+  type MailNotification,
+  type MailTransportResolver,
+} from './mail.channel';
 export {
   MailChannelModule,
   type MailChannelModuleOptions,

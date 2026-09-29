@@ -306,4 +306,119 @@ describe('digest', () => {
       expect(rebuilt.invoice).toBe('inv-99');
     });
   });
+
+  describe('DigestCollector.flushDigestsFor', () => {
+    async function seed(sink: DigestSinkAdapter): Promise<void> {
+      for (const [id, tenant] of [
+        ['1', undefined],
+        ['1', undefined],
+        ['1', 'acme'],
+        ['2', undefined],
+      ] as const) {
+        await sink.collect({
+          notifiable: new User(id),
+          notification: new BillingNotification(`${id}-${tenant ?? 'none'}`),
+          channel: 'mail',
+          cadence: 'daily',
+          category: 'billing',
+          ...(tenant ? { tenant } : {}),
+        });
+      }
+    }
+
+    it("flushes only the given recipient's groups (every tenant) and leaves others pending", async () => {
+      const { service, sent } = makeNotifications();
+      const collector = new DigestCollector(store, service, serializer);
+      await seed(new DigestSinkAdapter(store, serializer));
+
+      const result = await collector.flushDigestsFor({ type: 'User', id: 1 }, 'daily');
+
+      expect(result).toEqual({
+        cadence: 'daily',
+        sent: 2,
+        deferred: 0,
+        cleared: 3,
+        alreadyRun: false,
+      });
+      expect(sent.map((s) => (s.notifiable as User).id)).toEqual(['1', '1']);
+      expect(sent.map((s) => s.tenant).sort()).toEqual(['acme', undefined].sort());
+      const remaining = await store.listGroups('daily');
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0]?.notifiable).toEqual({ type: 'User', id: '2' });
+    });
+
+    it('narrows to one tenant (or untenanted with null) when tenantId is given', async () => {
+      const { service, sent } = makeNotifications();
+      const collector = new DigestCollector(store, service, serializer);
+      await seed(new DigestSinkAdapter(store, serializer));
+
+      const acme = await collector.flushDigestsFor({ type: 'User', id: '1' }, 'daily', {
+        tenantId: 'acme',
+      });
+      expect(acme.sent).toBe(1);
+      expect(acme.cleared).toBe(1);
+      expect(sent[0]?.tenant).toBe('acme');
+
+      const untenanted = await collector.flushDigestsFor({ type: 'User', id: '1' }, 'daily', {
+        tenantId: null,
+      });
+      expect(untenanted.sent).toBe(1);
+      expect(untenanted.cleared).toBe(2);
+      expect(sent[1]?.tenant).toBeUndefined();
+    });
+
+    it('takes no window lock — the global flush and repeated per-recipient flushes still run', async () => {
+      const { service, sent } = makeNotifications();
+      const collector = new DigestCollector(store, service, serializer);
+      const sink = new DigestSinkAdapter(store, serializer);
+      const lock = vi.spyOn(store, 'tryLockWindow');
+      const now = new Date('2026-06-17T09:00:00Z');
+
+      await seed(sink);
+      await collector.flushDigestsFor({ type: 'User', id: '1' }, 'daily', { now });
+      expect(lock).not.toHaveBeenCalled();
+
+      // More entries arrive later the same day — a second per-recipient flush picks them up.
+      await sink.collect({
+        notifiable: new User('1'),
+        notification: new BillingNotification('late'),
+        channel: 'mail',
+        cadence: 'daily',
+        category: 'billing',
+      });
+      const again = await collector.flushDigestsFor({ type: 'User', id: '1' }, 'daily', { now });
+      expect(again.sent).toBe(1);
+
+      // The global window is still available for everyone else.
+      const global = await collector.flushDigests('daily', now);
+      expect(global.alreadyRun).toBe(false);
+      expect(global.sent).toBe(1);
+      expect(sent).toHaveLength(4);
+    });
+
+    it('respects quiet hours, keeping the group pending', async () => {
+      const prefs = new PreferenceCenterService(
+        new InMemoryPreferenceCenterStore(),
+        new CategoryRegistry(categories),
+      );
+      await prefs.setQuietHours(
+        { type: 'User', id: '1' },
+        { enabled: true, start: '00:00', end: '23:59', timezone: 'UTC' },
+      );
+      const { service, sent } = makeNotifications();
+      const collector = new DigestCollector(store, service, serializer, prefs);
+      await seed(new DigestSinkAdapter(store, serializer));
+
+      const result = await collector.flushDigestsFor({ type: 'User', id: '1' }, 'daily', {
+        tenantId: null,
+        now: new Date('2026-06-17T12:00:00Z'),
+      });
+      expect(result.sent).toBe(0);
+      expect(result.deferred).toBe(1);
+      expect(sent).toHaveLength(0);
+      expect(
+        await store.listGroups('daily', { notifiable: { type: 'User', id: '1' } }),
+      ).toHaveLength(2);
+    });
+  });
 });

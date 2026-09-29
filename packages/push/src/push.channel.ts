@@ -13,7 +13,7 @@ import { PUSH_INVALID_TOKEN_CALLBACK, PUSH_TRANSPORT, PUSH_TRANSPORT_RESOLVER } 
 import type { InvalidTokenCallback, PushTransport } from './transport';
 
 /** Resolves a per-tenant {@link PushTransport} from a tenant id. */
-export type PushTransportResolver = (tenant: string) => PushTransport;
+export type PushTransportResolver = (tenant: string) => PushTransport | Promise<PushTransport>;
 
 /** Channel handle: use as `@Push()` on a payload method, or as a token in `via()`. */
 export const Push = createChannel('push');
@@ -51,7 +51,12 @@ export class PushChannel extends BaseChannel {
     notification: Notification,
     context?: DeliveryContext,
   ): Promise<void> {
-    const transport = this.forTenant(this.transport, context, this.resolveTransport);
+    // The resolver may be async (e.g. per-tenant credentials from a database).
+    const transport = await this.forTenant<PushTransport | Promise<PushTransport>>(
+      this.transport,
+      context,
+      this.resolveTransport,
+    );
     const target = routeFor(notifiable, 'push', notification);
     const message = this.buildPayload<PushMessage>(notification, notifiable, 'toPush', context);
 

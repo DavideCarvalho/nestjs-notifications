@@ -122,6 +122,30 @@ describe('MailChannel', () => {
     expect(defaultSend).not.toHaveBeenCalled();
   });
 
+  it('uses the resolved per-tenant transport when context.tenant is set (async resolver)', async () => {
+    const defaultSend = vi.fn().mockResolvedValue(undefined);
+    const tenantSend = vi.fn().mockResolvedValue(undefined);
+    const defaultTransport: MailTransport = { send: defaultSend };
+    const tenantTransport: MailTransport = { send: tenantSend };
+
+    const resolveTransport = vi.fn().mockResolvedValue(tenantTransport);
+
+    const channel = new MailChannel(
+      defaultTransport,
+      new DefaultMailRenderer(),
+      { from: 'no-reply@example.com' },
+      resolveTransport,
+    );
+
+    await channel.send(new TestUser('user@example.com'), new WelcomeNotification(), {
+      tenant: 'acme',
+    });
+
+    expect(resolveTransport).toHaveBeenCalledWith('acme');
+    expect(tenantSend).toHaveBeenCalledOnce();
+    expect(defaultSend).not.toHaveBeenCalled();
+  });
+
   it('uses the default transport when no tenant is in the context', async () => {
     const defaultSend = vi.fn().mockResolvedValue(undefined);
     const tenantSend = vi.fn().mockResolvedValue(undefined);

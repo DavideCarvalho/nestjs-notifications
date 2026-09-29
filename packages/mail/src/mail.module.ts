@@ -1,5 +1,5 @@
 import { type DynamicModule, Module, type Provider, type Type } from '@nestjs/common';
-import { MailChannel, type MailChannelOptions } from './mail.channel';
+import { MailChannel, type MailChannelOptions, type MailTransportResolver } from './mail.channel';
 import { DefaultMailRenderer, type MailRenderer } from './renderer';
 import {
   MAIL_OPTIONS,
@@ -34,7 +34,7 @@ export interface MailChannelModuleOptions {
    * channel uses the returned transport instead of the default. Lets each tenant use
    * its own SMTP/provider.
    */
-  resolveTransport?: (tenant: string) => MailTransport;
+  resolveTransport?: MailTransportResolver;
   /** Register globally so the channel is discoverable app-wide. Default true. */
   global?: boolean;
 }

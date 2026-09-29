@@ -106,6 +106,18 @@ export interface NotificationStore {
     tenantId?: string,
     types?: string[],
   ): Promise<StoredNotification[]>;
+  /**
+   * Optionally count a notifiable's unread notifications with a `COUNT` query instead of loading the
+   * rows. Same `tenantId`/`types` semantics as {@link getUnread}. Preferred by
+   * {@link NotificationsQueryService.unreadCount}; stores that don't implement it fall back to
+   * `getUnread(...).length`.
+   */
+  countUnread?(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+    types?: string[],
+  ): Promise<number>;
   delete(id: string): Promise<void>;
   /**
    * Optionally delete a notification only when it belongs to `owner`, pushing the ownership

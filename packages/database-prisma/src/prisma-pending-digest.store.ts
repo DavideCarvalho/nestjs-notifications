@@ -4,6 +4,7 @@ import type {
   NewPendingDigestEntry,
   PendingDigestEntry,
   PendingDigestGroup,
+  PendingDigestGroupFilter,
   PendingDigestStore,
 } from '@dudousxd/nestjs-notifications-preferences';
 import { Inject, Injectable, Logger } from '@nestjs/common';
@@ -66,9 +67,22 @@ export class PrismaPendingDigestStore implements PendingDigestStore {
     });
   }
 
-  async listGroups(cadence: DigestCadence): Promise<PendingDigestGroup[]> {
+  async listGroups(
+    cadence: DigestCadence,
+    filter: PendingDigestGroupFilter = {},
+  ): Promise<PendingDigestGroup[]> {
     const rows = await this.client.pendingDigest.findMany({
-      where: { cadence },
+      where: {
+        cadence,
+        ...(filter.notifiable
+          ? {
+              notifiableType: filter.notifiable.type,
+              notifiableId: String(filter.notifiable.id),
+            }
+          : {}),
+        // Prisma matches `tenantId: null` as IS NULL.
+        ...(filter.tenantId === undefined ? {} : { tenantId: filter.tenantId }),
+      },
       orderBy: { createdAt: 'asc' },
     });
     const groups = new Map<string, PendingDigestGroup>();

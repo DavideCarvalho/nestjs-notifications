@@ -51,7 +51,9 @@ export interface WebhookNotification extends Notification {
 }
 
 /** Resolves per-tenant {@link WebhookChannelOptions} from a tenant id. */
-export type WebhookOptionsResolver = (tenant: string) => WebhookChannelOptions;
+export type WebhookOptionsResolver = (
+  tenant: string,
+) => WebhookChannelOptions | Promise<WebhookChannelOptions>;
 
 /**
  * Delivers a notification by sending an HTTP request (JSON body) to a webhook endpoint.
@@ -77,7 +79,12 @@ export class WebhookChannel extends BaseChannel {
     notification: Notification,
     context?: DeliveryContext,
   ): Promise<void> {
-    const options = this.forTenant(this.options, context, this.resolveOptions);
+    // The resolver may be async (e.g. per-tenant secrets from a database).
+    const options = await this.forTenant<WebhookChannelOptions | Promise<WebhookChannelOptions>>(
+      this.options,
+      context,
+      this.resolveOptions,
+    );
     const result = this.buildPayload<WebhookMessage | Record<string, unknown>>(
       notification,
       notifiable,

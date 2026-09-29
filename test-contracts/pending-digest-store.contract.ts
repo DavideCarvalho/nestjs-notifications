@@ -153,6 +153,87 @@ export function runPendingDigestStoreContract(
       expect((await store().listGroups('daily')).flatMap((g) => g.entries)).toHaveLength(1);
     });
 
+    it('listGroups() filter narrows to one notifiable and/or tenant', async () => {
+      const add = (id: string, tenantId: string | null, name: string, category = 'billing') =>
+        store().enqueue({
+          notifiable: { type: 'User', id },
+          tenantId,
+          category,
+          cadence: 'daily',
+          notification: serialized(name),
+        });
+      await add('1', null, 'Mine');
+      await ms();
+      await add('1', null, 'Mine2');
+      await add('1', null, 'MineSocial', 'social');
+      await add('1', 'acme', 'MineAcme');
+      await add('2', null, 'Theirs');
+      await add('2', 'acme', 'TheirsAcme');
+      await store().enqueue({
+        notifiable: { type: 'Team', id: '1' },
+        category: 'billing',
+        cadence: 'daily',
+        notification: serialized('TeamOne'),
+      });
+      await store().enqueue({
+        notifiable: { type: 'User', id: '1' },
+        category: 'billing',
+        cadence: 'weekly',
+        notification: serialized('MineWeekly'),
+      });
+
+      const names = (groups: Awaited<ReturnType<PendingDigestStore['listGroups']>>) =>
+        groups.flatMap((g) => g.entries.map((e) => e.notification.name)).sort();
+
+      // no filter / empty filter = every group (back-compat)
+      expect(await store().listGroups('daily')).toHaveLength(6);
+      expect(await store().listGroups('daily', {})).toHaveLength(6);
+
+      // notifiable only → all of that recipient's tenants + categories; type must match too
+      const mine = await store().listGroups('daily', { notifiable: { type: 'User', id: '1' } });
+      expect(mine).toHaveLength(3);
+      expect(names(mine)).toEqual(['Mine', 'Mine2', 'MineAcme', 'MineSocial']);
+      const billing = mine.find((g) => g.category === 'billing' && g.tenantId == null);
+      expect(billing?.entries.map((e) => e.notification.name)).toEqual(['Mine', 'Mine2']);
+
+      // a numeric id matches the stored string id
+      expect(
+        names(await store().listGroups('daily', { notifiable: { type: 'User', id: 1 } })),
+      ).toEqual(['Mine', 'Mine2', 'MineAcme', 'MineSocial']);
+
+      // notifiable + tenant
+      expect(
+        names(
+          await store().listGroups('daily', {
+            notifiable: { type: 'User', id: '1' },
+            tenantId: 'acme',
+          }),
+        ),
+      ).toEqual(['MineAcme']);
+      // notifiable + null tenant = only untenanted entries
+      expect(
+        names(
+          await store().listGroups('daily', {
+            notifiable: { type: 'User', id: '1' },
+            tenantId: null,
+          }),
+        ),
+      ).toEqual(['Mine', 'Mine2', 'MineSocial']);
+      // tenant only
+      expect(names(await store().listGroups('daily', { tenantId: 'acme' }))).toEqual([
+        'MineAcme',
+        'TheirsAcme',
+      ]);
+      // a recipient with nothing pending
+      expect(
+        await store().listGroups('daily', { notifiable: { type: 'User', id: 'nobody' } }),
+      ).toEqual([]);
+      // the cadence still applies
+      expect(
+        names(await store().listGroups('weekly', { notifiable: { type: 'User', id: '1' } })),
+      ).toEqual(['MineWeekly']);
+    });
+
     describe('tryLockWindow() idempotency', () => {
       it('returns true once per (cadence, windowKey), false on repeats', async () => {
         expect(await store().tryLockWindow?.('daily', '2026-06-17')).toBe(true);
