@@ -46,7 +46,7 @@
     "@dudousxd/nestjs-notifications-database": "workspace:^",
     "@dudousxd/nestjs-notifications-preferences": "workspace:^",
     "@nestjs/common": "12.0.1",
-    "@nestjs/typeorm": "12.0.1",
+    "@nestjs/typeorm": "12.0.2",
     "@testcontainers/mysql": "10.18.0",
     "@testcontainers/postgresql": "10.18.0",
     "mysql2": "3.24.4",
