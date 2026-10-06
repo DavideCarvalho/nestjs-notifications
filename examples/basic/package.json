@@ -18,7 +18,7 @@
     "@dudousxd/nestjs-notifications-mail": "workspace:^",
     "@nestjs/common": "12.0.1",
     "@nestjs/core": "12.0.1",
-    "@nestjs/event-emitter": "12.0.0",
+    "@nestjs/event-emitter": "12.0.1",
     "@nestjs/platform-express": "12.0.1",
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2"
