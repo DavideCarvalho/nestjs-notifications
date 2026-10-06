@@ -21,11 +21,11 @@ importers:
         specifier: 1.16.13
         version: 1.16.13
       '@testcontainers/mysql':
-        specifier: 10.18.0
-        version: 10.18.0
+        specifier: 10.28.0
+        version: 10.28.0
       '@testcontainers/postgresql':
-        specifier: 10.18.0
-        version: 10.18.0
+        specifier: 10.28.0
+        version: 10.28.0
       '@types/node':
         specifier: 22.20.2
         version: 22.20.2
@@ -224,8 +224,8 @@ importers:
         specifier: 12.0.1
         version: 12.0.1(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(@nestjs/platform-express@12.0.1)
       '@testcontainers/postgresql':
-        specifier: 10.18.0
-        version: 10.18.0
+        specifier: 10.28.0
+        version: 10.28.0
       drizzle-orm:
         specifier: 0.45.3
         version: 0.45.3(@electric-sql/pglite@0.4.6)(@opentelemetry/api@1.9.1)(@prisma/client@6.19.3(typescript@5.9.3))(better-sqlite3@12.10.0)(kysely@0.29.2)(mysql2@3.24.5(@types/node@22.20.2))(pg@8.23.1)(sqlite3@5.1.7)
@@ -272,11 +272,11 @@ importers:
         specifier: 12.0.1
         version: 12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@testcontainers/mysql':
-        specifier: 10.18.0
-        version: 10.18.0
+        specifier: 10.28.0
+        version: 10.28.0
       '@testcontainers/postgresql':
-        specifier: 10.18.0
-        version: 10.18.0
+        specifier: 10.28.0
+        version: 10.28.0
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -326,11 +326,11 @@ importers:
         specifier: 12.0.2
         version: 12.0.2(@nestjs/common@12.0.1(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.0.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(typeorm@0.3.31(better-sqlite3@12.10.0)(ioredis@5.11.1)(mysql2@3.24.5(@types/node@22.20.2))(pg@8.23.1)(sqlite3@5.1.7))
       '@testcontainers/mysql':
-        specifier: 10.18.0
-        version: 10.18.0
+        specifier: 10.28.0
+        version: 10.28.0
       '@testcontainers/postgresql':
-        specifier: 10.18.0
-        version: 10.18.0
+        specifier: 10.28.0
+        version: 10.28.0
       mysql2:
         specifier: 3.24.5
         version: 3.24.5(@types/node@22.20.2)
@@ -2998,11 +2998,11 @@ packages:
   '@tailwindcss/postcss@4.3.3':
     resolution: {integrity: sha512-JTSZZGQi1AyKirbLN3azmjVzef92tcX7h+iSqPdaeStyFpGpDlKvvpxeOE8njhbUanbRwr3z8DyzhICWnMtQeg==}
 
-  '@testcontainers/mysql@10.18.0':
-    resolution: {integrity: sha512-btR1f1T3stQi6rrrivoG7cZTkVEC8rml6RWG91ExJYtLJNezPNeHFLwbZDqKfvA4ASw+2LUX5dZ4XISpHhiuAg==}
+  '@testcontainers/mysql@10.28.0':
+    resolution: {integrity: sha512-yZKe86Esg8mPyr957aSwdkmDqXH17vab5aUcDqwR/E2fZpZxLetwfvmoVP+V6TpQQNTYrVTyP5T+HPMgaZeIkA==}
 
-  '@testcontainers/postgresql@10.18.0':
-    resolution: {integrity: sha512-WxkE/tBlBpoKvqDEqL3i/mL6BOBWnXb8FXKtLhEeZ3lSt0zlldkTozMmewNsKJtFTBZdv7uFwMzWyXP12t0sxQ==}
+  '@testcontainers/postgresql@10.28.0':
+    resolution: {integrity: sha512-NN25rruG5D4Q7pCNIJuHwB+G85OSeJ3xHZ2fWx0O6sPoPEfCYwvpj8mq99cyn68nxFkFYZeyrZJtSFO+FnydiA==}
 
   '@tokenizer/inflate@0.4.1':
     resolution: {integrity: sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA==}
@@ -8236,14 +8236,14 @@ snapshots:
       lodash.camelcase: 4.3.0
       long: 5.3.2
       protobufjs: 7.6.2
-      yargs: 17.7.2
+      yargs: 17.7.3
 
   '@grpc/proto-loader@0.8.1':
     dependencies:
       lodash.camelcase: 4.3.0
       long: 5.3.2
       protobufjs: 7.6.2
-      yargs: 17.7.2
+      yargs: 17.7.3
 
   '@img/colour@1.1.0':
     optional: true
@@ -9397,7 +9397,7 @@ snapshots:
       postcss: 8.5.28
       tailwindcss: 4.3.3
 
-  '@testcontainers/mysql@10.18.0':
+  '@testcontainers/mysql@10.28.0':
     dependencies:
       testcontainers: 10.28.0
     transitivePeerDependencies:
@@ -9406,7 +9406,7 @@ snapshots:
       - react-native-b4a
       - supports-color
 
-  '@testcontainers/postgresql@10.18.0':
+  '@testcontainers/postgresql@10.28.0':
     dependencies:
       testcontainers: 10.28.0
     transitivePeerDependencies:
@@ -9473,7 +9473,7 @@ snapshots:
   '@types/dockerode@3.3.47':
     dependencies:
       '@types/docker-modem': 3.0.6
-      '@types/node': 22.20.2
+      '@types/node': 25.9.9
       '@types/ssh2': 1.15.5
 
   '@types/estree-jsx@1.0.5':
