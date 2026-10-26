@@ -96,4 +96,24 @@ describe('PreferencesModule wired into NotificationsModule', () => {
       .listGroups('daily');
     expect(groups.map((g) => g.notifiable.id)).toEqual(['1']);
   });
+
+  for (const order of ['forRoot() first', 'forCenter() first'] as const) {
+    it(`forRoot() + forCenter(), ${order}: the preference center decides`, async () => {
+      const root = PreferencesModule.forRoot();
+      const center = PreferencesModule.forCenter({ categories });
+      const { moduleRef, notifications, mail, sms } = await bootstrap(
+        ...(order === 'forRoot() first' ? [root, center] : [center, root]),
+      );
+      await moduleRef
+        .get(PreferenceCenterService)
+        .setChannel({ type: 'User', id: '1' }, 'billing', 'sms', false);
+      // The opt-out gate is replaced, so its mute no longer applies.
+      await moduleRef.get(NotificationPreferences).mute({ type: 'User', id: '1' }, 'mail');
+
+      await notifications.sendNow(new User('1'), new Billing());
+
+      expect(sms.sent).toEqual([]);
+      expect(mail.sent).toEqual(['1']);
+    });
+  }
 });

@@ -13,6 +13,7 @@ import { InMemoryPreferenceCenterStore } from './in-memory.preference-center.sto
 import { InMemoryPreferenceStore } from './in-memory.store';
 import type { PreferenceStore } from './interfaces';
 import { NotificationPreferences } from './notification-preferences';
+import { OptOutGateBinding } from './opt-out-gate.binding';
 import { PreferenceCenterGate } from './preference-center.gate';
 import type { CategoryDefinition, PreferenceCenterStore } from './preference-center.interfaces';
 import { PreferenceCenterService } from './preference-center.service';
@@ -77,7 +78,8 @@ export class PreferencesModule {
       { provide: NOTIFICATION_PREFERENCE_STORE, useExisting: storeClass },
       NotificationPreferences,
       PreferenceGateAdapter,
-      { provide: NOTIFICATION_PREFERENCE_GATE, useExisting: PreferenceGateAdapter },
+      OptOutGateBinding,
+      { provide: NOTIFICATION_PREFERENCE_GATE, useExisting: OptOutGateBinding },
     ];
     return {
       module: PreferencesModule,
