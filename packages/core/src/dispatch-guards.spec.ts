@@ -31,6 +31,27 @@ describe('InMemoryIdempotencyStore', () => {
     vi.advanceTimersByTime(1001);
     expect(store.reserve('k', 1000)).toBe(true);
   });
+
+  it('keeps dedup exact when keys carry different TTLs', () => {
+    const store = new InMemoryIdempotencyStore();
+    expect(store.reserve('long', 10_000)).toBe(true);
+    for (let i = 0; i < 3000; i++) store.reserve(`short-${i}`, 100);
+    vi.advanceTimersByTime(101);
+    expect(store.reserve('short-0', 100)).toBe(true);
+    expect(store.reserve('long', 10_000)).toBe(false);
+    for (let i = 0; i < 3000; i++) store.reserve(`next-${i}`, 100);
+    // The expired short keys behind `long` are swept, not retained forever.
+    expect(sizeOf(store, 'seen')).toBeLessThan(3000 + 1000);
+  });
+
+  it('reserves many distinct keys in linear time', () => {
+    vi.useRealTimers();
+    const store = new InMemoryIdempotencyStore();
+    const startedAt = performance.now();
+    for (let i = 0; i < 40_000; i++) store.reserve(`User#${i}:invoice`, 60_000);
+    // A full-map walk per insert takes several seconds here; eviction from the front takes ms.
+    expect(performance.now() - startedAt).toBeLessThan(1000);
+  });
 });
 
 describe('InMemoryThrottleStore', () => {
@@ -57,7 +78,20 @@ describe('InMemoryThrottleStore', () => {
     expect(store.increment('a', 1000)).toBe(1);
     expect(store.increment('b', 1000)).toBe(1);
   });
+
+  it('evicts elapsed windows instead of retaining every key forever', () => {
+    const store = new InMemoryThrottleStore();
+    for (let i = 0; i < 5000; i++) store.increment(`k-${i}`, 1000);
+    vi.advanceTimersByTime(1001);
+    expect(store.increment('fresh', 1000)).toBe(1);
+    expect(sizeOf(store, 'windows')).toBe(1);
+  });
 });
+
+/** Number of keys an in-memory store currently retains. */
+function sizeOf(store: object, field: string): number {
+  return (store as unknown as Record<string, { size: number }>)[field]?.size ?? Number.NaN;
+}
 
 describe('key builders', () => {
   it('scopes idempotency keys per notifiable by default', () => {

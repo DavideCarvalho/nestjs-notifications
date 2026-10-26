@@ -7,6 +7,7 @@ import {
   type NotificationService,
   type SerializedNotification,
 } from '@dudousxd/nestjs-notifications-core';
+import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CategoryRegistry } from './category-registry';
 import { DigestCollector } from './digest-collector';
@@ -304,6 +305,83 @@ describe('digest', () => {
       const rebuilt = captured?.items[0]?.notification as BillingNotification;
       expect(rebuilt).toBeInstanceOf(BillingNotification);
       expect(rebuilt.invoice).toBe('inv-99');
+    });
+  });
+
+  describe('large backlogs', () => {
+    /** Resolves every notifiable except ids starting with `ghost`, which stay pending. */
+    function serializerWithGhosts(): NotificationSerializer {
+      return new NotificationSerializer({
+        notifications: [BillingNotification as unknown as NotificationClass],
+        resolveNotifiable: (ref) => {
+          if (String(ref.id).startsWith('ghost')) throw new Error('gone');
+          return new User(String(ref.id));
+        },
+      });
+    }
+
+    async function enqueue(id: string, count = 1): Promise<void> {
+      for (let i = 0; i < count; i++) {
+        await store.enqueue({
+          notifiable: { type: 'User', id },
+          category: 'billing',
+          cadence: 'daily',
+          notification: { name: 'BillingNotification', data: { invoice: `${id}-${i}` } },
+        });
+      }
+    }
+
+    it('reads groups a page at a time and sends each once, keeping unresolvable groups', async () => {
+      for (let i = 0; i < 250; i++) await enqueue(`u${String(i).padStart(3, '0')}`);
+      for (let i = 0; i < 5; i++) await enqueue(`ghost${i}`);
+      const listGroups = vi.spyOn(store, 'listGroups');
+      const listGroupsPage = vi.spyOn(store, 'listGroupsPage');
+      const { service, sent } = makeNotifications();
+      vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      const collector = new DigestCollector(store, service, serializerWithGhosts());
+      const result = await collector.flushDigests('daily', new Date('2026-06-17T09:00:00Z'));
+
+      expect(result).toMatchObject({ sent: 250, deferred: 5, cleared: 250 });
+      expect(listGroups).not.toHaveBeenCalled();
+      expect(listGroupsPage.mock.calls.every(([, page]) => page.limit === 100)).toBe(true);
+      const recipients = sent.map((s) => (s.notifiable as User).id);
+      expect(new Set(recipients).size).toBe(250);
+      const left = await store.listGroups('daily');
+      expect(left.map((g) => g.notifiable.id).sort()).toEqual([
+        'ghost0',
+        'ghost1',
+        'ghost2',
+        'ghost3',
+        'ghost4',
+      ]);
+    });
+
+    it('clears flushed entries in chunks of at most 1000 ids', async () => {
+      await enqueue('big', 2500);
+      const plain = Object.assign(Object.create(store) as InMemoryPendingDigestStore, {
+        listGroupsPage: undefined,
+      });
+      const clear = vi.spyOn(store, 'clear');
+      const { service } = makeNotifications();
+
+      const collector = new DigestCollector(plain, service, serializer);
+      const result = await collector.flushDigests('daily', new Date('2026-06-17T09:00:00Z'));
+
+      expect(result.cleared).toBe(2500);
+      expect(clear.mock.calls.map(([ids]) => ids.length)).toEqual([1000, 1000, 500]);
+      expect(await store.listGroups('daily')).toHaveLength(0);
+    });
+
+    it('terminates and sends each group once even when clear() removes nothing', async () => {
+      for (let i = 0; i < 230; i++) await enqueue(`u${String(i).padStart(3, '0')}`);
+      vi.spyOn(store, 'clear').mockResolvedValue(undefined);
+      const { service, sent } = makeNotifications();
+
+      const collector = new DigestCollector(store, service, serializer);
+      await collector.flushDigests('daily', new Date('2026-06-17T09:00:00Z'));
+
+      expect(sent).toHaveLength(230);
     });
   });
 });

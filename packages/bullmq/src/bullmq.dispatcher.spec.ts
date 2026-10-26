@@ -11,7 +11,10 @@ const serialized = {
 };
 
 function makeDeps(options?: BullmqDispatcherOptions) {
-  const queue = { add: vi.fn().mockResolvedValue(undefined) } as unknown as Queue;
+  const queue = {
+    add: vi.fn().mockResolvedValue(undefined),
+    addBulk: vi.fn().mockResolvedValue([]),
+  } as unknown as Queue;
   const serializer = {
     serialize: vi.fn().mockReturnValue(serialized),
   } as unknown as NotificationSerializer;
@@ -80,6 +83,26 @@ describe('BullmqNotificationDispatcher', () => {
       attempts: 2,
       backoff: { type: 'exponential', delay: 1000 },
       delay: 5000,
+    });
+  });
+
+  it('dispatchMany() enqueues a large send in a few addBulk calls instead of one add per job', async () => {
+    const { queue, dispatcher } = makeDeps({ attempts: 2 });
+    const jobs = Array.from({ length: 1200 }, (_, i) => ({ ...job, delay: i === 0 ? 5000 : 0 }));
+
+    await dispatcher.dispatchMany(jobs);
+
+    expect(queue.add).not.toHaveBeenCalled();
+    const calls = vi.mocked(queue.addBulk).mock.calls.map(([bulk]) => bulk);
+    expect(calls.map((bulk) => bulk.length)).toEqual([500, 500, 200]);
+    expect(calls[0]?.[0]).toEqual({
+      name: 'send',
+      data: serialized,
+      opts: { attempts: 2, backoff: { type: 'exponential', delay: 1000 }, delay: 5000 },
+    });
+    expect(calls[0]?.[1]?.opts).toEqual({
+      attempts: 2,
+      backoff: { type: 'exponential', delay: 1000 },
     });
   });
 });

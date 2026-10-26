@@ -55,6 +55,34 @@ describe('evaluateQuietHours', () => {
     expect(evaluateQuietHours(tokyo, utcAt(3)).active).toBe(false);
   });
 
+  it('builds one Intl formatter per timezone, not one per evaluation', () => {
+    const original = Intl.DateTimeFormat;
+    let constructed = 0;
+    Intl.DateTimeFormat = new Proxy(original, {
+      construct(target, args) {
+        constructed++;
+        return Reflect.construct(target, args);
+      },
+    });
+    try {
+      const quiet: QuietHours = {
+        enabled: true,
+        start: '22:00',
+        end: '07:00',
+        timezone: 'Asia/Kathmandu',
+      };
+      const results = Array.from({ length: 200 }, (_, i) =>
+        evaluateQuietHours(quiet, new Date(Date.UTC(2026, 0, 1, i % 24, 0))),
+      );
+      expect(constructed).toBeLessThanOrEqual(1);
+      // Kathmandu is UTC+5:45: 17:00Z is 22:45 local (quiet), 02:00Z is 07:45 local (not).
+      expect(results[17]?.active).toBe(true);
+      expect(results[2]?.active).toBe(false);
+    } finally {
+      Intl.DateTimeFormat = original;
+    }
+  });
+
   it('treats a malformed window as inactive', () => {
     const q: QuietHours = { enabled: true, start: 'nope', end: '07:00', timezone: 'UTC' };
     expect(evaluateQuietHours(q, utcAt(3)).active).toBe(false);

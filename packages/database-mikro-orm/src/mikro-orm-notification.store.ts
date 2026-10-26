@@ -164,6 +164,21 @@ export class MikroOrmNotificationStore implements NotificationStore {
     return rows.map(toStored);
   }
 
+  async countUnread(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+    types?: string[],
+  ): Promise<number> {
+    return this.em.fork().count(NotificationEntity, {
+      notifiableType,
+      notifiableId,
+      ...(tenantId !== undefined ? { tenantId } : {}),
+      ...typeFilter(types),
+      readAt: null,
+    });
+  }
+
   async delete(id: string): Promise<void> {
     await this.em.nativeDelete(NotificationEntity, { id });
   }

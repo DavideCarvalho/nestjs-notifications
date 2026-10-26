@@ -8,12 +8,44 @@ import type {
 } from '@dudousxd/nestjs-notifications-preferences';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, type Repository } from 'typeorm';
+import { type FindOptionsWhere, In, IsNull, type Repository } from 'typeorm';
 import { DigestWindowEntity, PendingDigestEntity } from './pending-digest.entity';
 import { ensurePendingDigestTables } from './pending-digest.schema';
 
+/** Ids per `DELETE … IN (…)`, well under every engine's bind-parameter limit. */
+const CLEAR_CHUNK = 1000;
+
+/** The columns that identify a digest group within one cadence. */
+interface GroupKeyRow {
+  tenantId: string | null;
+  notifiableType: string;
+  notifiableId: string;
+  category: string;
+}
+
+/** Group rows (already ordered oldest-first) by their `(tenant, notifiable, category, cadence)`. */
+function groupRows(rows: PendingDigestEntity[]): Map<string, PendingDigestGroup> {
+  const groups = new Map<string, PendingDigestGroup>();
+  for (const row of rows) {
+    const key = groupKey(row);
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        notifiable: { type: row.notifiableType, id: row.notifiableId },
+        tenantId: row.tenantId ?? null,
+        category: row.category,
+        cadence: row.cadence as DigestCadence,
+        entries: [],
+      };
+      groups.set(key, group);
+    }
+    group.entries.push(toEntry(row));
+  }
+  return groups;
+}
+
 /** Stable group key for a `(tenant, notifiable, category, cadence)`. */
-function groupKey(row: PendingDigestEntity): string {
+function groupKey(row: GroupKeyRow & { cadence: string }): string {
   return JSON.stringify([
     row.tenantId ?? null,
     row.notifiableType,
@@ -72,28 +104,52 @@ export class TypeOrmPendingDigestStore implements PendingDigestStore {
       where: { cadence },
       order: { createdAt: 'ASC' },
     });
-    const groups = new Map<string, PendingDigestGroup>();
-    for (const row of rows) {
-      const key = groupKey(row);
-      let group = groups.get(key);
-      if (!group) {
-        group = {
-          notifiable: { type: row.notifiableType, id: row.notifiableId },
-          tenantId: row.tenantId ?? null,
-          category: row.category,
-          cadence: row.cadence as DigestCadence,
-          entries: [],
-        };
-        groups.set(key, group);
-      }
-      group.entries.push(toEntry(row));
-    }
-    return [...groups.values()];
+    return [...groupRows(rows).values()];
+  }
+
+  async listGroupsPage(
+    cadence: DigestCadence,
+    page: { limit: number; offset: number },
+  ): Promise<PendingDigestGroup[]> {
+    const keys: GroupKeyRow[] = await this.entries
+      .createQueryBuilder('d')
+      .select('d.tenantId', 'tenantId')
+      .addSelect('d.notifiableType', 'notifiableType')
+      .addSelect('d.notifiableId', 'notifiableId')
+      .addSelect('d.category', 'category')
+      .where('d.cadence = :cadence', { cadence })
+      .groupBy('d.tenantId')
+      .addGroupBy('d.notifiableType')
+      .addGroupBy('d.notifiableId')
+      .addGroupBy('d.category')
+      .orderBy('d.tenantId')
+      .addOrderBy('d.notifiableType')
+      .addOrderBy('d.notifiableId')
+      .addOrderBy('d.category')
+      .offset(page.offset)
+      .limit(page.limit)
+      .getRawMany();
+    if (keys.length === 0) return [];
+    const rows = await this.entries.find({
+      where: keys.map(
+        (key): FindOptionsWhere<PendingDigestEntity> => ({
+          cadence,
+          tenantId: key.tenantId ?? IsNull(),
+          notifiableType: key.notifiableType,
+          notifiableId: key.notifiableId,
+          category: key.category,
+        }),
+      ),
+      order: { createdAt: 'ASC' },
+    });
+    const groups = groupRows(rows);
+    return keys.flatMap((key) => groups.get(groupKey({ ...key, cadence })) ?? []);
   }
 
   async clear(ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
-    await this.entries.delete({ id: In(ids) });
+    for (let start = 0; start < ids.length; start += CLEAR_CHUNK) {
+      await this.entries.delete({ id: In(ids.slice(start, start + CLEAR_CHUNK)) });
+    }
   }
 
   async tryLockWindow(cadence: DigestCadence, windowKey: string): Promise<boolean> {

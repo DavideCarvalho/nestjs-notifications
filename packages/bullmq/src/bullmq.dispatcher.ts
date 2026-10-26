@@ -13,6 +13,9 @@ const SEND_JOB = 'send';
 const DEFAULT_ATTEMPTS = 3;
 const DEFAULT_BACKOFF = { type: 'exponential', delay: 1000 } as const;
 
+/** Jobs per `addBulk` call, so one huge send doesn't become a single giant Redis pipeline. */
+const BULK_CHUNK = 500;
+
 /**
  * Enqueues notifications onto a BullMQ queue for out-of-process delivery, reusing the
  * application's existing `@nestjs/bullmq` setup.
@@ -35,8 +38,24 @@ export class BullmqNotificationDispatcher implements DispatchDriver {
   ) {}
 
   async dispatch(job: NotificationJob): Promise<void> {
-    const payload = this.serializer.serialize(job);
-    const jobOptions: JobsOptions = {
+    await this.queue.add(SEND_JOB, this.serializer.serialize(job), this.jobOptions(job));
+  }
+
+  /** Enqueue a whole send with `addBulk`: one Redis round trip per {@link BULK_CHUNK} jobs. */
+  async dispatchMany(jobs: NotificationJob[]): Promise<void> {
+    for (let start = 0; start < jobs.length; start += BULK_CHUNK) {
+      await this.queue.addBulk(
+        jobs.slice(start, start + BULK_CHUNK).map((job) => ({
+          name: SEND_JOB,
+          data: this.serializer.serialize(job),
+          opts: this.jobOptions(job),
+        })),
+      );
+    }
+  }
+
+  private jobOptions(job: NotificationJob): JobsOptions {
+    return {
       attempts: this.options?.attempts ?? DEFAULT_ATTEMPTS,
       backoff: this.options?.backoff ?? DEFAULT_BACKOFF,
       ...(this.options?.removeOnComplete !== undefined
@@ -48,6 +67,5 @@ export class BullmqNotificationDispatcher implements DispatchDriver {
       // Scheduled delivery: BullMQ holds the job until the delay elapses.
       ...(job.delay && job.delay > 0 ? { delay: job.delay } : {}),
     };
-    await this.queue.add(SEND_JOB, payload, jobOptions);
   }
 }

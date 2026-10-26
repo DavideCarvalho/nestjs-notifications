@@ -142,6 +142,18 @@ export interface NotificationStore {
     options: PaginateForNotifiableOptions,
   ): Promise<PaginatedStoredNotifications>;
   /**
+   * Optionally count a notifiable's unread notifications in the data store (a `COUNT(*)` instead
+   * of loading every unread row and its payload). `tenantId`/`types` follow
+   * {@link getUnread}. Stores that don't implement it make
+   * {@link NotificationsQueryService.unreadCount} fall back to `getUnread(...).length`.
+   */
+  countUnread?(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+    types?: string[],
+  ): Promise<number>;
+  /**
    * Optionally create the backing schema if it's missing — non-destructively (never drops).
    * Called on bootstrap when `autoCreateSchema` is enabled. Stores that don't manage schema
    * (in-memory, or schema-first ORMs like Prisma) may omit it or make it a no-op.

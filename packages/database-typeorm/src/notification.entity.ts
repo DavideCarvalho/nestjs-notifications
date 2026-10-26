@@ -1,11 +1,19 @@
-import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
+
+/** Name of the inbox index, shared by the entity and the schema repair. */
+export const NOTIFIABLE_INDEX = 'notifications_notifiable_idx';
 
 /**
  * TypeORM entity mirroring Laravel's `notifications` table. Column types are chosen to be
  * portable across SQLite, MySQL and Postgres: `Date` lets TypeORM pick the driver's
  * datetime/timestamp type, and `simple-json` stores the payload as text everywhere.
+ *
+ * The `(notifiableType, notifiableId, createdAt)` index backs the inbox reads (`WHERE
+ * notifiable_type = ? AND notifiable_id = ? … ORDER BY created_at DESC`) and the unread count. Two
+ * 255-char utf8mb4 keys plus a `datetime(3)` stay under MySQL's 3072-byte index limit.
  */
 @Entity('notifications')
+@Index(NOTIFIABLE_INDEX, ['notifiableType', 'notifiableId', 'createdAt'])
 export class NotificationEntity {
   @PrimaryColumn({ type: 'varchar', length: 36 })
   id!: string;

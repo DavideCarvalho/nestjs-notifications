@@ -24,8 +24,8 @@
  *   createdAt      DateTime  @default(now())
  *   updatedAt      DateTime  @updatedAt
  *
- *   // An index on the tenant + notifiable lookup keys is wise for scoped reads.
- *   @@index([tenantId, notifiableType, notifiableId])
+ *   // Backs the inbox reads and the unread count (filter by notifiable, newest first).
+ *   @@index([notifiableType, notifiableId, createdAt])
  * }
  * ```
  *

@@ -153,6 +153,79 @@ export function runPendingDigestStoreContract(
       expect((await store().listGroups('daily')).flatMap((g) => g.entries)).toHaveLength(1);
     });
 
+    it('clear() deletes more ids than one SQL statement can bind', async () => {
+      for (const name of ['A', 'B', 'C']) {
+        await store().enqueue({
+          notifiable: { type: 'User', id: '1' },
+          category: 'billing',
+          cadence: 'daily',
+          notification: serialized(name),
+        });
+      }
+      const ids = (await store().listGroups('daily')).flatMap((g) => g.entries.map((e) => e.id));
+      // Past Postgres' 65,535 bind parameters and SQLite's 32,766 variables.
+      const unknown = Array.from({ length: 70_000 }, (_, i) => `missing-${i}`);
+
+      await store().clear([...unknown.slice(0, 35_000), ...ids, ...unknown.slice(35_000)]);
+
+      expect(await store().listGroups('daily')).toHaveLength(0);
+    });
+
+    it('listGroupsPage() returns whole groups in a stable order, a page at a time', async () => {
+      const keys: [string | null, string, string][] = [
+        [null, '1', 'billing'],
+        [null, '1', 'social'],
+        [null, '2', 'billing'],
+        ['acme', '1', 'billing'],
+        ['acme', '3', 'billing'],
+      ];
+      for (const [tenantId, id, category] of keys) {
+        for (const name of ['First', 'Second']) {
+          await store().enqueue({
+            notifiable: { type: 'User', id },
+            tenantId,
+            category,
+            cadence: 'daily',
+            notification: serialized(`${name}-${tenantId}-${id}-${category}`),
+          });
+          await ms(2);
+        }
+      }
+      await store().enqueue({
+        notifiable: { type: 'User', id: '1' },
+        category: 'billing',
+        cadence: 'weekly',
+        notification: serialized('Weekly'),
+      });
+
+      expect(store().listGroupsPage).toBeTypeOf('function');
+      const page = (offset: number) =>
+        store().listGroupsPage?.('daily', { limit: 2, offset }) ?? Promise.resolve([]);
+      const pages = [await page(0), await page(2), await page(4), await page(6)];
+      expect(pages.map((p) => p.length)).toEqual([2, 2, 1, 0]);
+
+      const label = (g: {
+        tenantId: string | null;
+        notifiable: { id: string | number };
+        category: string;
+      }) => `${g.tenantId}-${g.notifiable.id}-${g.category}`;
+      const paged = pages.flat();
+      expect(paged.map(label).sort()).toEqual(keys.map(([t, id, c]) => `${t}-${id}-${c}`).sort());
+      for (const group of paged) {
+        expect(group.cadence).toBe('daily');
+        expect(group.entries.map((e) => e.notification.name)).toEqual([
+          `First-${label(group)}`,
+          `Second-${label(group)}`,
+        ]);
+      }
+      // Same order on a repeat read.
+      expect((await page(0)).map(label)).toEqual(pages[0]?.map(label));
+
+      // Clearing the first page's groups shifts the rest forward.
+      await store().clear(pages[0]?.flatMap((g) => g.entries.map((e) => e.id)) ?? []);
+      expect((await page(0)).map(label)).toEqual(pages[1]?.map(label));
+    });
+
     describe('tryLockWindow() idempotency', () => {
       it('returns true once per (cadence, windowKey), false on repeats', async () => {
         expect(await store().tryLockWindow?.('daily', '2026-06-17')).toBe(true);

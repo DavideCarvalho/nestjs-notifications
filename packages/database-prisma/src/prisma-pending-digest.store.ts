@@ -12,6 +12,12 @@ import {
   type PrismaPendingDigestClientLike,
 } from './prisma-pending-digest-client';
 
+/** Ids per `deleteMany({ id: { in } })`, well under every engine's bind-parameter limit. */
+const CLEAR_CHUNK = 1000;
+
+/** The columns that identify a digest group within one cadence. */
+const GROUP_COLUMNS = ['tenantId', 'notifiableType', 'notifiableId', 'category'];
+
 /** Stable group key for a `(tenant, notifiable, category, cadence)`. */
 function groupKey(row: any): string {
   return JSON.stringify([
@@ -21,6 +27,42 @@ function groupKey(row: any): string {
     row.category,
     row.cadence,
   ]);
+}
+
+/** The group-key columns of a {@link PendingDigestGroup}. */
+function keyOf(group: PendingDigestGroup): Record<string, unknown> {
+  return {
+    tenantId: group.tenantId,
+    notifiableType: group.notifiable.type,
+    notifiableId: group.notifiable.id,
+    category: group.category,
+    cadence: group.cadence,
+  };
+}
+
+function compareKeys(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** Group rows (already ordered oldest-first) by their `(tenant, notifiable, category, cadence)`. */
+function groupRows(rows: any[]): Map<string, PendingDigestGroup> {
+  const groups = new Map<string, PendingDigestGroup>();
+  for (const row of rows) {
+    const key = groupKey(row);
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        notifiable: { type: row.notifiableType, id: row.notifiableId },
+        tenantId: row.tenantId ?? null,
+        category: row.category,
+        cadence: row.cadence as DigestCadence,
+        entries: [],
+      };
+      groups.set(key, group);
+    }
+    group.entries.push(toEntry(row));
+  }
+  return groups;
 }
 
 /** Map a Prisma `PendingDigest` row to the channel-agnostic {@link PendingDigestEntry}. */
@@ -67,32 +109,50 @@ export class PrismaPendingDigestStore implements PendingDigestStore {
   }
 
   async listGroups(cadence: DigestCadence): Promise<PendingDigestGroup[]> {
-    const rows = await this.client.pendingDigest.findMany({
-      where: { cadence },
-      orderBy: { createdAt: 'asc' },
-    });
-    const groups = new Map<string, PendingDigestGroup>();
-    for (const row of rows) {
-      const key = groupKey(row);
-      let group = groups.get(key);
-      if (!group) {
-        group = {
-          notifiable: { type: row.notifiableType, id: row.notifiableId },
-          tenantId: row.tenantId ?? null,
-          category: row.category,
-          cadence: row.cadence as DigestCadence,
-          entries: [],
-        };
-        groups.set(key, group);
-      }
-      group.entries.push(toEntry(row));
+    return [...groupRows(await this.findPending({ cadence })).values()];
+  }
+
+  async listGroupsPage(
+    cadence: DigestCadence,
+    page: { limit: number; offset: number },
+  ): Promise<PendingDigestGroup[]> {
+    const delegate = this.client.pendingDigest;
+    if (typeof delegate.groupBy !== 'function') {
+      const groups = [...groupRows(await this.findPending({ cadence })).values()];
+      groups.sort((a, b) => compareKeys(groupKey(keyOf(a)), groupKey(keyOf(b))));
+      return groups.slice(page.offset, page.offset + page.limit);
     }
-    return [...groups.values()];
+    const keys = await delegate.groupBy({
+      by: GROUP_COLUMNS,
+      where: { cadence },
+      orderBy: GROUP_COLUMNS.map((column) => ({ [column]: 'asc' })),
+      skip: page.offset,
+      take: page.limit,
+    });
+    if (keys.length === 0) return [];
+    const rows = await this.findPending({
+      cadence,
+      OR: keys.map((key) => ({
+        tenantId: key.tenantId ?? null,
+        notifiableType: key.notifiableType,
+        notifiableId: key.notifiableId,
+        category: key.category,
+      })),
+    });
+    const groups = groupRows(rows);
+    return keys.flatMap((key) => groups.get(groupKey({ ...key, cadence })) ?? []);
   }
 
   async clear(ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
-    await this.client.pendingDigest.deleteMany({ where: { id: { in: ids } } });
+    for (let start = 0; start < ids.length; start += CLEAR_CHUNK) {
+      await this.client.pendingDigest.deleteMany({
+        where: { id: { in: ids.slice(start, start + CLEAR_CHUNK) } },
+      });
+    }
+  }
+
+  private findPending(where: Record<string, unknown>): Promise<any[]> {
+    return this.client.pendingDigest.findMany({ where, orderBy: { createdAt: 'asc' } });
   }
 
   async tryLockWindow(cadence: DigestCadence, windowKey: string): Promise<boolean> {
