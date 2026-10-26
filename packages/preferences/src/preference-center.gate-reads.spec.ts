@@ -1,7 +1,6 @@
 import {
   type ChannelDriver,
   ChannelRegistry,
-  NOTIFICATION_PREFERENCE_GATE,
   Notifiable,
   NotifiableId,
   type Notification,
@@ -11,9 +10,7 @@ import {
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { CategoryRegistry } from './category-registry';
 import { InMemoryPreferenceCenterStore } from './in-memory.preference-center.store';
-import { PreferenceCenterGate } from './preference-center.gate';
 import { PreferenceCenterService } from './preference-center.service';
 import { PreferencesModule } from './preferences.module';
 
@@ -44,18 +41,7 @@ async function bootstrap() {
   const moduleRef = await Test.createTestingModule({
     imports: [
       EventEmitterModule.forRoot(),
-      NotificationsModule.forRoot({
-        global: true,
-        // Binds the center's gate inside NotificationsModule, where the ChannelRunner resolves it.
-        providers: [
-          {
-            provide: NOTIFICATION_PREFERENCE_GATE,
-            useFactory: (service: PreferenceCenterService, registry: CategoryRegistry) =>
-              new PreferenceCenterGate(service, registry),
-            inject: [PreferenceCenterService, CategoryRegistry],
-          },
-        ],
-      }),
+      NotificationsModule.forRoot(),
       PreferencesModule.forCenter({
         categories: [{ key: 'billing', label: 'Billing', defaultChannels: CHANNELS }],
       }),

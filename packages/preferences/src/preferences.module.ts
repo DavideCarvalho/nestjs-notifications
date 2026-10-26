@@ -83,7 +83,11 @@ export class PreferencesModule {
       module: PreferencesModule,
       global: options.global ?? true,
       providers,
-      exports: [NotificationPreferences, NOTIFICATION_PREFERENCE_STORE],
+      exports: [
+        NotificationPreferences,
+        NOTIFICATION_PREFERENCE_STORE,
+        NOTIFICATION_PREFERENCE_GATE,
+      ],
     };
   }
 
@@ -113,6 +117,7 @@ export class PreferencesModule {
         CategoryRegistry,
         PREFERENCE_CENTER_STORE,
         PREFERENCE_CENTER_CATEGORIES,
+        NOTIFICATION_PREFERENCE_GATE,
       ],
     };
   }
@@ -152,7 +157,7 @@ export class PreferencesModule {
       module: PreferencesModule,
       global: options.global ?? true,
       providers,
-      exports: [DigestCollector, PENDING_DIGEST_STORE],
+      exports: [DigestCollector, PENDING_DIGEST_STORE, NOTIFICATION_DIGEST_SINK],
     };
   }
 }
