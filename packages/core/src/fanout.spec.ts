@@ -3,6 +3,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 import { ChannelRegistry } from './channel-registry';
+import type { IdempotencyStore } from './dispatch-guards';
 import type {
   ChannelDriver,
   DispatchDriver,
@@ -72,12 +73,21 @@ class BatchDispatcher implements DispatchDriver {
   }
 }
 
-async function bootstrap(dispatcher?: new (...args: never[]) => DispatchDriver) {
+async function bootstrap(
+  dispatcher?: new (...args: never[]) => DispatchDriver,
+  idempotencyStore?: IdempotencyStore,
+) {
   const channel = new SlowMail();
   const moduleRef = await Test.createTestingModule({
     imports: [
       EventEmitterModule.forRoot(),
-      NotificationsModule.forRoot({ global: false, ...(dispatcher ? { dispatcher } : {}) }),
+      NotificationsModule.forRoot({
+        global: false,
+        ...(dispatcher ? { dispatcher } : {}),
+        ...(idempotencyStore
+          ? { dispatchGuards: { idempotency: { store: idempotencyStore } } }
+          : {}),
+      }),
     ],
   }).compile();
   moduleRef.get(ChannelRegistry).register(channel);
@@ -118,5 +128,49 @@ describe('NotificationService fan-out', () => {
     ).toEqual(users().map((_, i) => i));
     expect(batches[0]?.[0]?.channels).toEqual(['mail']);
     expect(results.every((r) => r.results[0]?.status === 'queued')).toBe(true);
+  });
+
+  describe('when the guard check throws for one recipient', () => {
+    class Deduped extends Welcome {
+      idempotencyKey(): string {
+        return 'welcome';
+      }
+    }
+    /** Fails for user 2 only; every other key is reserved normally. */
+    const flakyStore = (): IdempotencyStore & { reserved: string[] } => {
+      const reserved: string[] = [];
+      return {
+        reserved,
+        reserve(key: string): boolean {
+          if (key.startsWith('User#2:')) throw new Error('guard store down');
+          reserved.push(key);
+          return true;
+        },
+      };
+    };
+    const five = (): Notifiable[] => [1, 2, 3, 4, 5].map(user);
+    const ids = (jobs: NotificationJob[] | undefined) =>
+      jobs?.map((job) => (job.notifiable as Notifiable).toNotifiableRef?.()?.id);
+
+    it('still hands every other recipient to dispatchMany(), then reports the error', async () => {
+      batches.length = 0;
+      const store = flakyStore();
+      const { service } = await bootstrap(BatchDispatcher, store);
+
+      await expect(service.sendAsync(five(), new Deduped())).rejects.toThrow('guard store down');
+
+      expect(batches).toHaveLength(1);
+      expect(ids(batches[0])).toEqual([1, 3, 4, 5]);
+      expect(store.reserved).toHaveLength(4);
+    });
+
+    it('still dispatches every other recipient one by one, then reports the error', async () => {
+      perJobDispatched.length = 0;
+      const { service } = await bootstrap(PerJobDispatcher, flakyStore());
+
+      await expect(service.sendAsync(five(), new Deduped())).rejects.toThrow('guard store down');
+
+      expect(ids(perJobDispatched)?.sort()).toEqual([1, 3, 4, 5]);
+    });
   });
 });

@@ -253,13 +253,25 @@ export class NotificationService {
       for (const tenant of tenants) units.push({ notifiable, tenant });
     }
 
+    // A recipient whose guard check or delivery throws fails the send, but only after every other
+    // recipient has been handled: the rest have already reserved their dedupe keys and throttle
+    // slots, so their jobs must still reach the dispatcher.
+    let failure: { error: unknown } | undefined;
     const queued: (NotificationJob | undefined)[] = new Array(units.length);
     const results = await mapConcurrent(units, FANOUT_CONCURRENCY, (unit, index) =>
       this.guardedDispatch(unit.notifiable, n, unit.tenant, scope, captured, async, (job) => {
         queued[index] = job;
+      }).catch((error: unknown) => {
+        failure ??= { error };
+        return undefined as unknown as SendResult;
       }),
     );
-    await this.dispatchJobs(queued.filter((job): job is NotificationJob => job !== undefined));
+    try {
+      await this.dispatchJobs(queued.filter((job): job is NotificationJob => job !== undefined));
+    } catch (error) {
+      failure ??= { error };
+    }
+    if (failure) throw failure.error;
     return results;
   }
 

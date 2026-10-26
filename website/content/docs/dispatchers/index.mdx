@@ -86,7 +86,9 @@ delegate to inline delivery if it wants. Use `forRootAsync` when the configurati
 One `send()` to many recipients (or to many tenants with `forTenants`) runs at most **50**
 deliveries at a time — one per `(recipient, tenant)` pair — and returns the `SendResult`s in input
 order. This keeps a big recipient list from opening every connection, or hitting a provider's rate
-limit, all at once. Like `Promise.all`, a delivery that throws rejects the `send()`.
+limit, all at once. If one recipient's guard check or delivery throws, the `send()` rejects with
+that error, but only after every other recipient has been handled and their async jobs have reached
+the dispatcher. One failing recipient never stops the others.
 
 Async jobs from one send are collected and handed to the dispatcher together, after the dispatch
 guards have run for every recipient:
