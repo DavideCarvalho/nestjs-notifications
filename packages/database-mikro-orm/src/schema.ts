@@ -17,7 +17,7 @@ async function notificationsStatements(em: EntityManager): Promise<string[]> {
 
 /**
  * Returns the non-destructive SQL needed to bring only the `notifications` table up to date
- * (creates it / adds missing columns). Use it inside a MikroORM migration:
+ * (creates it / adds missing columns and indexes). Use it inside a MikroORM migration:
  *
  * ```ts
  * import { notificationsSchemaSql } from '@dudousxd/nestjs-notifications-database-mikro-orm';

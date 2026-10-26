@@ -84,6 +84,12 @@ logging — it's idempotent per window (the `alreadyRun` flag), and groups whose
 quiet hours are deferred to the next run. Groups dispatch through the normal pipeline, so they still
 honor preferences.
 
+A flush reads the backlog 100 groups at a time when the store implements `listGroupsPage` (every
+bundled store does), so a large backlog is never loaded into memory at once. Flushed entries are
+cleared in chunks of 1,000 ids, and each SQL adapter's `clear()` splits its `DELETE … IN (…)` the same
+way, so a backlog larger than the database's bind-parameter limit is still cleared. A group is sent at
+most once per flush, even if new entries arrive for it while the flush is running.
+
 <Callout type="info" title="Auto-cron (optional)">
   If `@nestjs/schedule` is installed and you set `dailyCron` / `weeklyCron` in `forDigest()`, the
   bundled `DigestScheduler` registers the cron jobs for you — no `@Cron` controller needed. When
@@ -127,6 +133,12 @@ export class AppModule {}
 
 The TypeORM adapter needs its `PendingDigestEntity` / `DigestWindowEntity` registered on the
 `DataSource`, exactly like the notification entities.
+
+A custom `PendingDigestStore` must let `clear(ids)` take any number of ids. `listGroupsPage(cadence,
+{ limit, offset })` is optional: it returns up to `limit` whole groups after skipping `offset`, in an
+order that stays the same between calls (by tenant, notifiable, category). Implement it for any store
+that can hold a large backlog; without it the collector loads every pending entry for the cadence
+through `listGroups(cadence)` in one read.
 
 <Callout type="info">
   Neither adapter fits your schema? Implement `PendingDigestStore` yourself and bind it to the

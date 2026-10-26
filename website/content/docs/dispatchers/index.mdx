@@ -10,11 +10,12 @@ A **dispatcher** is one of the two pluggable abstractions in the library. Channe
 notification leaves; dispatchers decide *where and when* it runs. They are independent — see
 [Channels & Dispatchers](/docs/concepts/channels-and-dispatchers).
 
-A dispatcher is small. One method:
+A dispatcher is small. One required method, plus an optional bulk one:
 
 ```ts
 interface DispatchDriver {
   dispatch(job: NotificationJob): Promise<void>;
+  dispatchMany?(jobs: NotificationJob[]): Promise<void>;
 }
 ```
 
@@ -79,6 +80,21 @@ delegate to inline delivery if it wants. Use `forRootAsync` when the configurati
   just a provider that implements `DispatchDriver` and is passed as the `dispatcher` option — wire
   any transport you like.
 </Callout>
+
+## Large sends
+
+One `send()` to many recipients (or to many tenants with `forTenants`) runs at most **50**
+deliveries at a time — one per `(recipient, tenant)` pair — and returns the `SendResult`s in input
+order. This keeps a big recipient list from opening every connection, or hitting a provider's rate
+limit, all at once. Like `Promise.all`, a delivery that throws rejects the `send()`.
+
+Async jobs from one send are collected and handed to the dispatcher together, after the dispatch
+guards have run for every recipient:
+
+- If the dispatcher implements `dispatchMany(jobs)`, it gets every job of the send in one call, in
+  recipient order. Implement it in a custom dispatcher when the transport has a bulk enqueue (the
+  [BullMQ dispatcher](/docs/dispatchers/bullmq) does, with `addBulk`).
+- Otherwise each job goes through `dispatch(job)`, at most 50 calls at a time.
 
 ## Choosing a dispatcher
 

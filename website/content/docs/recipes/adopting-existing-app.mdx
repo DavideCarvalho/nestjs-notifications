@@ -37,7 +37,7 @@ export class MyNotificationStore implements NotificationStore {
   async getForNotifiable(notifiableType: string, notifiableId: string, tenantId?: string): Promise<StoredNotification[]> { /* ... */ }
   async getUnread(notifiableType: string, notifiableId: string, tenantId?: string): Promise<StoredNotification[]> { /* ... */ }
   async delete(id: string): Promise<void> { /* ... */ }
-  // optional: prune(options), ensureSchema()
+  // optional: countUnread(...) for a COUNT-backed unread badge, prune(options), ensureSchema()
 }
 
 // register it:

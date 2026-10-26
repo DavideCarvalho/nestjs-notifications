@@ -72,6 +72,11 @@ The queue name is the fixed constant `NOTIFICATIONS_QUEUE` (`'nestjs-notificatio
 from the package. It registers the queue against the connection you configured with
 `BullModule.forRoot()`, so the dispatcher and the app share one Redis connection.
 
+A send to many recipients reaches the queue through `dispatchMany`: the jobs go out with
+`queue.addBulk`, 500 per call, so a 1,200-recipient send costs three Redis round trips. Every job
+carries the same options as a single `add` (attempts, backoff, retention, per-job `delay`). See
+[Large sends](/docs/dispatchers#large-sends).
+
 ## Retry, backoff & dead-letter
 
 Jobs are added with retry built in — by default `3` attempts with exponential backoff starting at

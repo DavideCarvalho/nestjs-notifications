@@ -192,3 +192,8 @@ const PreferenceCenterController = createPreferenceCenterController({
   The center is additive — the simple `forRoot` opt-out API above still works unchanged. Pick `forRoot`
   for a single mute switch, `forCenter` when users need the full grid.
 </Callout>
+
+If an app imports both `forRoot()` and `forCenter()`, the preference center's gate decides every
+delivery, whichever module is imported first. The opt-out mutes set through
+`NotificationPreferences` are then not consulted by the gate, so store the user's choices in the
+center's matrix.

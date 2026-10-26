@@ -105,6 +105,25 @@ On the worker it looks `name` up in `notifications: [...]`, rebuilds the instanc
 `resolveNotifiable` to reload the recipient. The in-process `EventEmitterDispatcher` passes live
 objects through and needs none of this.
 
+### 4. A custom dispatcher
+
+Implement `DispatchDriver` and pass the class as `dispatcher`. `dispatch(job)` is required;
+`dispatchMany(jobs)` is optional and receives every async job of one send in a single call, in
+recipient order (the BullMQ dispatcher uses it for chunked `addBulk`). Implement it when your
+transport has a bulk enqueue; without it the core calls `dispatch()` once per job, at most 50 at a
+time.
+
+```ts
+@Injectable()
+export class SqsDispatcher implements DispatchDriver {
+  async dispatch(job: NotificationJob) { /* send one message */ }
+  async dispatchMany(jobs: NotificationJob[]) { /* SendMessageBatch, 10 per call */ }
+}
+```
+
+A send's async jobs reach the dispatcher only after the dispatch guards ran for every recipient.
+Source: packages/core/src/interfaces.ts (`DispatchDriver`), packages/core/src/notification.service.ts.
+
 ## Common mistakes
 
 ### Queuing across processes without the rehydration registry

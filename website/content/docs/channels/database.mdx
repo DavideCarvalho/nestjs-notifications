@@ -143,12 +143,16 @@ feed:
 | `deleteOwned(id, owner)` | `Promise<boolean>` | Optional. Remove one notification only when it belongs to `owner` (`{ notifiableType, notifiableId, tenantId? }`); `true` when a row matched. |
 | `markAsReadOwned(id, owner)` | `Promise<boolean>` | Optional. Mark one read only when it belongs to `owner`; `true` when a row matched, including an already-read one. |
 | `findById(id)` | `Promise<StoredNotification \| null>` | Optional. Fetch one row — the ownership fallback when the two scoped mutations are absent. |
+| `countUnread(notifiableType, notifiableId, tenantId?, types?)` | `Promise<number>` | Optional. Count unread rows in the database (a `COUNT`, no rows loaded). `unreadCount()` uses it when present and otherwise counts the rows `getUnread` returns. |
 
 `types` is absent or an empty array by default, matching every type (unchanged behavior) — it's
 purely additive. `PaginateForNotifiableOptions` carries the same `types?: string[]` for the
 paginated read path. Every bundled adapter (in-memory, TypeORM, MikroORM, Prisma, Drizzle) implements the
 filter; see [In-app notifications](/docs/recipes/in-app-notifications) for the higher-level
 `NotificationsQueryService` and REST `?type=` query param this powers.
+
+Every bundled store implements `countUnread`. A custom store should implement it too: the React
+inbox polls the unread count, and without it each poll loads every unread row and its payload.
 
 The store is bound to the `NOTIFICATION_STORE` token, so inject it to build your feed endpoints:
 
@@ -283,9 +287,13 @@ the channel that consumes it.
       notifiableType String
       notifiableId   String
       data           Json
+      tenantId       String?
       readAt         DateTime?
       createdAt      DateTime  @default(now())
       updatedAt      DateTime  @updatedAt
+
+      // Backs the inbox reads and the unread count (filter by notifiable, newest first).
+      @@index([notifiableType, notifiableId, createdAt])
     }
     ```
 
@@ -368,8 +376,8 @@ missing, non-destructively — it only adds what's absent and never drops anythi
 first run with no migration step.
 
 <Callout type="info">
-  Auto-create is non-destructive — it only creates missing tables and columns, so it's safe to leave
-  on. Turn it off (`autoCreateSchema: false`) for strict, migration-only environments where the app
+  Auto-create is non-destructive — it only creates missing tables, columns and indexes, so it's safe
+  to leave on. Turn it off (`autoCreateSchema: false`) for strict, migration-only environments where the app
   must never touch DDL.
 </Callout>
 
@@ -385,7 +393,8 @@ DatabaseChannelModule.forFeature({ autoCreateSchema: false }),
 
     Call `createNotificationsTable(queryRunner)` inside a TypeORM migration. It's non-destructive
     (creates the table only if it doesn't exist) and driver-portable — the column types come from the
-    entity metadata.
+    entity metadata. It leaves an existing table alone; see [the inbox index](#the-inbox-index) for
+    adding the index to one.
 
     ```ts title="migrations/1700000000000-AddNotifications.ts"
     import { createNotificationsTable } from '@dudousxd/nestjs-notifications-database-typeorm';
@@ -407,7 +416,7 @@ DatabaseChannelModule.forFeature({ autoCreateSchema: false }),
 
     Get the non-destructive SQL with `notificationsSchemaSql(em)` and add it to a MikroORM
     `Migration`. It returns only the statements needed to bring the `notifications` table up to date
-    (create it, add missing columns).
+    (create it, add missing columns and indexes).
 
     ```ts title="migrations/AddNotifications.ts"
     import { notificationsSchemaSql } from '@dudousxd/nestjs-notifications-database-mikro-orm';
@@ -459,6 +468,56 @@ DatabaseChannelModule.forFeature({ autoCreateSchema: false }),
 
   </Tab>
 </Tabs>
+
+### The inbox index
+
+Every adapter declares `notifications_notifiable_idx` on `(notifiable_type, notifiable_id,
+created_at)`. It serves the inbox reads (`WHERE notifiable = ? ORDER BY created_at DESC`) and the
+unread count. The tenant column is not part of it, so reads without a tenant keep the
+`created_at` ordering from the index.
+
+How an existing `notifications` table gets it:
+
+- **`autoCreateSchema` on (TypeORM, MikroORM, Drizzle):** the next boot creates it. TypeORM matches
+  indexes by name and only adds missing ones; MikroORM's schema fingerprint changes, so the table is
+  healed once; Drizzle's `ensureSchema()` runs `CREATE INDEX IF NOT EXISTS`.
+- **TypeORM migrations:** `createNotificationsTable()` does nothing when the table exists, so add
+  the index in a new migration. Building it from the entity metadata keeps the column names right
+  under any naming strategy:
+
+  ```ts title="migrations/1730000000000-AddNotificationsInboxIndex.ts"
+  import { NotificationEntity } from '@dudousxd/nestjs-notifications-database-typeorm';
+  import { type MigrationInterface, type QueryRunner, TableIndex } from 'typeorm';
+
+  const INDEX = 'notifications_notifiable_idx';
+
+  export class AddNotificationsInboxIndex1730000000000 implements MigrationInterface {
+    async up(queryRunner: QueryRunner): Promise<void> {
+      const metadata = queryRunner.connection.getMetadata(NotificationEntity);
+      const index = metadata.indices.find((i) => i.name === INDEX);
+      if (index) await queryRunner.createIndex('notifications', TableIndex.create(index));
+    }
+
+    async down(queryRunner: QueryRunner): Promise<void> {
+      await queryRunner.dropIndex('notifications', INDEX);
+    }
+  }
+  ```
+
+- **MikroORM migrations:** a new migration with `this.addSql(await
+  notificationsSchemaSql(this.getEntityManager()))` emits the `CREATE INDEX`, as does MikroORM's own
+  `migration:create` when `NotificationEntity` is discovered.
+- **Prisma:** add the `@@index` line to the model above and run `prisma migrate dev`.
+- **Drizzle with drizzle-kit:** the index is part of `createNotificationTables()` (named
+  `<table>_notifiable_idx` when you pass custom `tableNames`), so drizzle-kit migrations include it.
+
+<Callout type="warn">
+  Building the index locks writes on a large table for the duration of the build (a plain
+  `CREATE INDEX` on Postgres), and with `autoCreateSchema` on it runs during boot. On a big table,
+  create it yourself beforehand, for example with `CREATE INDEX CONCURRENTLY` on Postgres, using the
+  same name `notifications_notifiable_idx` and your table's actual column names; the boot then finds
+  it and skips it.
+</Callout>
 
 <Callout type="info" title="Managed tables (schema-diff tooling)">
   The MikroORM, TypeORM and Drizzle adapters export `notificationsManagedTables()` — the table name(s) this
