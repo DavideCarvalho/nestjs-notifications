@@ -1,5 +1,26 @@
 # @dudousxd/nestjs-notifications-preferences
 
+## 0.6.0
+
+### Minor Changes
+
+- [#121](https://github.com/DavideCarvalho/nestjs-notifications/pull/121) [`c9d63a6`](https://github.com/DavideCarvalho/nestjs-notifications/commit/c9d63a665ffdb6ae3fba4657cf4feaa246c20564) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - **Bug fix that changes which notifications are delivered.** `PreferencesModule.forRoot()`, `forCenter()` and `forDigest()` bound the core `NOTIFICATION_PREFERENCE_GATE` / `NOTIFICATION_DIGEST_SINK` tokens without exporting them, so the `ChannelRunner` inside `NotificationsModule` never saw them: muted channels, preference-center toggles, `off`/digest cadences and quiet hours were all ignored and every channel was delivered. The modules now export those tokens, so deliveries honour the stored preferences as documented: a channel a user turned off is skipped, and a `daily`/`weekly` category is collected into its digest.
+
+### Patch Changes
+
+- [#121](https://github.com/DavideCarvalho/nestjs-notifications/pull/121) [`c60fe8a`](https://github.com/DavideCarvalho/nestjs-notifications/commit/c60fe8ae739c9163e5d2d792f445db1ac4c9c54b) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - Performance fixes for large sends and busy inboxes.
+
+  - A send to many recipients keeps at most 50 deliveries in flight instead of starting all of them at once. Async sends hand all their jobs to the dispatcher together: the new optional `DispatchDriver.dispatchMany`, which the BullMQ dispatcher implements with chunked `addBulk`. If one recipient's guard check or delivery throws, every other recipient is still dispatched before the `send()` rejects with that error.
+  - The in-memory idempotency store no longer walks its whole map on every reservation, and the in-memory throttle store evicts elapsed windows.
+  - `unreadCount()` runs a `COUNT` through the new optional `NotificationStore.countUnread`, implemented by the in-memory, TypeORM, MikroORM, Drizzle and Prisma stores.
+  - The TypeORM and MikroORM `notifications` tables get a `(notifiable_type, notifiable_id, created_at)` index, which `ensureSchema()` adds to existing tables.
+  - The preference-center gate reads a recipient's stored preferences once per delivery instead of once per channel.
+  - The digest collector reads pending groups a page at a time (new optional `PendingDigestStore.listGroupsPage`) and clears flushed entries in chunks. Every SQL `clear()` splits large id lists, so a backlog past the engine's bind-parameter limit is no longer left uncleared.
+  - The in-memory delivery-tracking store indexes provider message ids and keeps only the most recent 10,000 records.
+  - Quiet-hours evaluation reuses one `Intl.DateTimeFormat` per timezone.
+
+- [#121](https://github.com/DavideCarvalho/nestjs-notifications/pull/121) [`92b8c41`](https://github.com/DavideCarvalho/nestjs-notifications/commit/92b8c415c6edce839ecad87c49a338368272d811) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - When an app imports both `PreferencesModule.forRoot()` and `PreferencesModule.forCenter()`, the preference center's gate now decides deliveries whichever module is imported first, as documented ("forCenter replaces the simple opt-out gate"). Before, the module imported first provided the gate, so importing `forRoot()` first left the opt-out gate in charge and preference-center toggles were ignored. Apps that import only one of the two are unaffected.
+
 ## 0.5.2
 
 ### Patch Changes

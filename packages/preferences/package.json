@@ -1,7 +1,7 @@
 {
   "name": "@dudousxd/nestjs-notifications-preferences",
-  "version": "0.5.2",
-  "description": "Per-user, per-tenant channel preferences for nestjs-notifications \u2014 opt-out muting enforced via the core PreferenceGate",
+  "version": "0.6.0",
+  "description": "Per-user, per-tenant channel preferences for nestjs-notifications — opt-out muting enforced via the core PreferenceGate",
   "license": "MIT",
   "author": "Davide Carvalho",
   "repository": {
