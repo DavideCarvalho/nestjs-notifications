@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { ForbiddenException } from '@nestjs/common';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DeliveryTrackingService } from './delivery-tracking.service';
 import { InMemoryDeliveryTrackingStore } from './in-memory.store';
 import { createSesNotificationController, mapSesNotificationType } from './inbound/ses.controller';
@@ -58,6 +58,62 @@ describe('InMemoryDeliveryTrackingStore', () => {
 
     const miss = await store.updateStatusByProviderMessageId('UNKNOWN', 'delivered');
     expect(miss).toBeNull();
+  });
+
+  it('looks provider message ids up without scanning every record', async () => {
+    const store = new InMemoryDeliveryTrackingStore();
+    for (let i = 0; i < 2000; i++) {
+      await store.record({
+        channel: 'sms',
+        notificationType: 'A',
+        status: 'sent',
+        providerMessageId: `SM${i}`,
+      });
+    }
+    const values = vi.spyOn(Map.prototype, 'values');
+    try {
+      for (let i = 0; i < 500; i++) {
+        expect((await store.updateStatusByProviderMessageId(`SM${i}`, 'delivered'))?.status).toBe(
+          'delivered',
+        );
+      }
+      expect(values).not.toHaveBeenCalled();
+    } finally {
+      values.mockRestore();
+    }
+  });
+
+  it('matches the oldest record for a shared provider id and follows reassignment', async () => {
+    const store = new InMemoryDeliveryTrackingStore();
+    const first = await store.record({ channel: 'sms', notificationType: 'A', status: 'sent' });
+    const second = await store.record({
+      channel: 'sms',
+      notificationType: 'A',
+      status: 'sent',
+      providerMessageId: 'SHARED',
+    });
+    await store.setProviderMessageId(first.id, 'SHARED');
+    expect((await store.updateStatusByProviderMessageId('SHARED', 'delivered'))?.id).toBe(first.id);
+
+    await store.setProviderMessageId(first.id, 'OTHER');
+    expect((await store.updateStatusByProviderMessageId('SHARED', 'failed'))?.id).toBe(second.id);
+    expect((await store.updateStatusByProviderMessageId('OTHER', 'failed'))?.id).toBe(first.id);
+  });
+
+  it('keeps a bounded number of records, dropping the oldest first', async () => {
+    const store = new InMemoryDeliveryTrackingStore();
+    const oldest = await store.record({
+      channel: 'sms',
+      notificationType: 'A',
+      status: 'sent',
+      providerMessageId: 'OLDEST',
+    });
+    for (let i = 0; i < 10_100; i++) {
+      await store.record({ channel: 'sms', notificationType: 'A', status: 'sent' });
+    }
+    expect(await store.list()).toHaveLength(10_000);
+    expect(await store.get(oldest.id)).toBeNull();
+    expect(await store.updateStatusByProviderMessageId('OLDEST', 'delivered')).toBeNull();
   });
 
   it('filters in list()', async () => {

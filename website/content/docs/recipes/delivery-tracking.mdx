@@ -54,9 +54,11 @@ const failures = await tracking.list({ status: 'failed', tenantId: 'acme' });
 ```
 
 <Callout type="info">
-  The default store keeps records in memory — great for development and tests. For production, supply
-  a persistent `store` implementing `DeliveryTrackingStore` (the same pattern as the database
-  channel's store), backed by your own table.
+  The default store keeps records in memory — great for development and tests. It holds only the
+  most recent 10,000 records and drops the oldest first, so older records (and webhooks for them)
+  are no longer matched. For production, supply a persistent `store` implementing
+  `DeliveryTrackingStore` (the same pattern as the database channel's store), backed by your own
+  table.
 </Callout>
 
 ## Close the loop with inbound webhooks

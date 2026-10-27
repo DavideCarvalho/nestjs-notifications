@@ -29,18 +29,30 @@ function parseHHmm(value: string): number | null {
   return hours * 60 + minutes;
 }
 
+/** One 24h `HH:mm` formatter per timezone: building an `Intl.DateTimeFormat` is the slow part. */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatterFor(timezone: string): Intl.DateTimeFormat {
+  let formatter = formatters.get(timezone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    formatters.set(timezone, formatter);
+  }
+  return formatter;
+}
+
 /**
  * Read the wall-clock minute-of-day for `now` in `timezone` using `Intl` (no external deps). The
  * `en-GB` locale yields a 24h `HH:mm`. Falls back to UTC if the zone is unknown.
  */
 function minutesOfDayInZone(now: Date, timezone: string): number {
   try {
-    const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone: timezone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).formatToParts(now);
+    const parts = formatterFor(timezone).formatToParts(now);
     const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
     const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
     // Intl can render "24" for midnight in some engines; normalize to 0.

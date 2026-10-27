@@ -49,6 +49,18 @@
 export interface PrismaPendingDigestDelegate {
   create(args: { data: any }): Promise<any>;
   findMany(args: { where: any; orderBy?: any }): Promise<any[]>;
+  /**
+   * Present on every generated client; optional here so hand-written test doubles may omit it.
+   * Used to page digest groups; without it {@link PrismaPendingDigestStore.listGroupsPage} pages
+   * over a full {@link PrismaPendingDigestStore.listGroups} read.
+   */
+  groupBy?(args: {
+    by: string[];
+    where: any;
+    orderBy: any;
+    skip: number;
+    take: number;
+  }): Promise<any[]>;
   deleteMany(args: { where: any }): Promise<{ count: number }>;
 }
 

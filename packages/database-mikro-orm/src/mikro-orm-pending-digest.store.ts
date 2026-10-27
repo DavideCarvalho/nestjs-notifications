@@ -11,8 +11,33 @@ import { Injectable } from '@nestjs/common';
 import { DigestWindowEntity, PendingDigestEntity } from './pending-digest.entity';
 import { ensurePendingDigestTables } from './pending-digest.schema';
 
+/** Ids per `DELETE … IN (…)`, well under every engine's bind-parameter limit. */
+const CLEAR_CHUNK = 1000;
+
+/** The columns that identify a digest group within one cadence. */
+interface GroupKeyRow {
+  tenantId?: string | null;
+  notifiableType: string;
+  notifiableId: string;
+  category: string;
+}
+
+/**
+ * The slice of the SQL drivers' query builder used to page group keys. Every driver this adapter
+ * supports runs on an SQL `EntityManager`, which provides `createQueryBuilder`.
+ */
+interface GroupKeyQueryBuilder {
+  select(fields: string[]): GroupKeyQueryBuilder;
+  where(cond: object): GroupKeyQueryBuilder;
+  groupBy(fields: string[]): GroupKeyQueryBuilder;
+  orderBy(order: object): GroupKeyQueryBuilder;
+  limit(limit: number): GroupKeyQueryBuilder;
+  offset(offset: number): GroupKeyQueryBuilder;
+  execute(mode: 'all'): Promise<GroupKeyRow[]>;
+}
+
 /** Stable group key for a `(tenant, notifiable, category, cadence)`. */
-function groupKey(row: PendingDigestEntity): string {
+function groupKey(row: GroupKeyRow & { cadence: string }): string {
   return JSON.stringify([
     row.tenantId ?? null,
     row.notifiableType,
@@ -20,6 +45,27 @@ function groupKey(row: PendingDigestEntity): string {
     row.category,
     row.cadence,
   ]);
+}
+
+/** Group rows (already ordered oldest-first) by their `(tenant, notifiable, category, cadence)`. */
+function groupRows(rows: PendingDigestEntity[]): Map<string, PendingDigestGroup> {
+  const groups = new Map<string, PendingDigestGroup>();
+  for (const row of rows) {
+    const key = groupKey(row);
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        notifiable: { type: row.notifiableType, id: row.notifiableId },
+        tenantId: row.tenantId ?? null,
+        category: row.category,
+        cadence: row.cadence as DigestCadence,
+        entries: [],
+      };
+      groups.set(key, group);
+    }
+    group.entries.push(toEntry(row));
+  }
+  return groups;
 }
 
 /** Map a row to the channel-agnostic {@link PendingDigestEntry}. */
@@ -66,28 +112,50 @@ export class MikroOrmPendingDigestStore implements PendingDigestStore {
     const rows = await this.em
       .fork()
       .find(PendingDigestEntity, { cadence }, { orderBy: { createdAt: 'ASC' } });
-    const groups = new Map<string, PendingDigestGroup>();
-    for (const row of rows) {
-      const key = groupKey(row);
-      let group = groups.get(key);
-      if (!group) {
-        group = {
-          notifiable: { type: row.notifiableType, id: row.notifiableId },
-          tenantId: row.tenantId ?? null,
-          category: row.category,
-          cadence: row.cadence as DigestCadence,
-          entries: [],
-        };
-        groups.set(key, group);
-      }
-      group.entries.push(toEntry(row));
-    }
-    return [...groups.values()];
+    return [...groupRows(rows).values()];
+  }
+
+  async listGroupsPage(
+    cadence: DigestCadence,
+    page: { limit: number; offset: number },
+  ): Promise<PendingDigestGroup[]> {
+    const em = this.em.fork() as EntityManager & {
+      createQueryBuilder(entity: typeof PendingDigestEntity): GroupKeyQueryBuilder;
+    };
+    const fields = ['tenantId', 'notifiableType', 'notifiableId', 'category'];
+    const keys = await em
+      .createQueryBuilder(PendingDigestEntity)
+      .select(fields)
+      .where({ cadence })
+      .groupBy(fields)
+      .orderBy({ tenantId: 'asc', notifiableType: 'asc', notifiableId: 'asc', category: 'asc' })
+      .limit(page.limit)
+      .offset(page.offset)
+      .execute('all');
+    if (keys.length === 0) return [];
+    const rows = await em.find(
+      PendingDigestEntity,
+      {
+        cadence,
+        $or: keys.map((key) => ({
+          tenantId: key.tenantId ?? null,
+          notifiableType: key.notifiableType,
+          notifiableId: key.notifiableId,
+          category: key.category,
+        })),
+      },
+      { orderBy: { createdAt: 'ASC' } },
+    );
+    const groups = groupRows(rows);
+    return keys.flatMap((key) => groups.get(groupKey({ ...key, cadence })) ?? []);
   }
 
   async clear(ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
-    await this.em.nativeDelete(PendingDigestEntity, { id: { $in: ids } });
+    for (let start = 0; start < ids.length; start += CLEAR_CHUNK) {
+      await this.em.nativeDelete(PendingDigestEntity, {
+        id: { $in: ids.slice(start, start + CLEAR_CHUNK) },
+      });
+    }
   }
 
   async tryLockWindow(cadence: DigestCadence, windowKey: string): Promise<boolean> {

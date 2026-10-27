@@ -289,6 +289,12 @@ export interface NotificationJob {
 /** Decides where/when a job is processed: inline, in-process events, Redis, BullMQ. */
 export interface DispatchDriver {
   dispatch(job: NotificationJob): Promise<void>;
+  /**
+   * Optionally hand over every job of one send in a single call (e.g. one bulk enqueue instead
+   * of a round trip per recipient). Jobs arrive in recipient order. When absent, each job goes
+   * through {@link dispatch}.
+   */
+  dispatchMany?(jobs: NotificationJob[]): Promise<void>;
 }
 
 /** Context handed to a {@link PreferenceGate} before a channel is delivered. */

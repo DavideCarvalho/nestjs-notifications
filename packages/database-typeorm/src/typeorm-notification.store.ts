@@ -137,6 +137,23 @@ export class TypeOrmNotificationStore implements NotificationStore {
     return rows.map(toStored);
   }
 
+  async countUnread(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+    types?: string[],
+  ): Promise<number> {
+    return this.repo.count({
+      where: {
+        notifiableType,
+        notifiableId,
+        ...(tenantId !== undefined ? { tenantId } : {}),
+        ...typeFilter(types),
+        readAt: IsNull(),
+      },
+    });
+  }
+
   async delete(id: string): Promise<void> {
     await this.repo.delete(id);
   }

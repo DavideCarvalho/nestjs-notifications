@@ -1,4 +1,4 @@
-import { type DataSource, type QueryRunner, Table, TableColumn } from 'typeorm';
+import { type DataSource, type QueryRunner, Table, TableColumn, TableIndex } from 'typeorm';
 import { TableUtils } from 'typeorm/schema-builder/util/TableUtils.js';
 import { NotificationEntity } from './notification.entity';
 
@@ -86,15 +86,32 @@ async function addMissingColumns(queryRunner: QueryRunner): Promise<void> {
 }
 
 /**
+ * Create any index declared on {@link NotificationEntity} that the live table lacks (matched by
+ * name). Non-destructive: existing indexes are never dropped or altered.
+ */
+async function addMissingIndices(queryRunner: QueryRunner): Promise<void> {
+  const metadata = queryRunner.connection.getMetadata(NotificationEntity);
+  const table = await queryRunner.getTable(TABLE);
+  if (!table) return;
+  const existing = new Set(table.indices.map((index) => index.name));
+  for (const index of metadata.indices) {
+    if (index.name && existing.has(index.name)) continue;
+    await queryRunner.createIndex(TABLE, TableIndex.create(index));
+  }
+}
+
+/**
  * Ensure the table is up to date via a DataSource (used by the store's `ensureSchema` on
- * bootstrap). Creates the table if missing; otherwise non-destructively adds any columns that
- * exist in the entity metadata but not yet in the live table (see {@link addMissingColumns}).
+ * bootstrap). Creates the table if missing; otherwise non-destructively adds any columns and
+ * indexes that exist in the entity metadata but not yet in the live table (see
+ * {@link addMissingColumns}).
  */
 export async function ensureNotificationsTable(dataSource: DataSource): Promise<void> {
   const queryRunner = dataSource.createQueryRunner();
   try {
     if (await queryRunner.hasTable(TABLE)) {
       await addMissingColumns(queryRunner);
+      await addMissingIndices(queryRunner);
     } else {
       await createNotificationsTable(queryRunner);
     }

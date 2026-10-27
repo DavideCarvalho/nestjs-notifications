@@ -48,6 +48,36 @@ describe('TypeOrmNotificationStore.ensureSchema (integration, sqlite)', () => {
     expect(rows[0]?.data).toEqual({ hi: true });
   });
 
+  it('creates the inbox index with the table, and the inbox query uses it', async () => {
+    const qr = dataSource.createQueryRunner();
+    const index = (await qr.getTable('notifications'))?.indices.find(
+      (i) => i.name === 'notifications_notifiable_idx',
+    );
+    expect(index?.columnNames).toEqual(['notifiableType', 'notifiableId', 'createdAt']);
+    const plan: { detail: string }[] = await qr.query(
+      `EXPLAIN QUERY PLAN SELECT * FROM notifications WHERE notifiableType = 'User' AND notifiableId = '1' ORDER BY createdAt DESC`,
+    );
+    expect(plan.map((row) => row.detail).join('\n')).toContain('notifications_notifiable_idx');
+    await qr.release();
+  });
+
+  it('adds the inbox index to an existing table that lacks it, keeping data intact', async () => {
+    const qr = dataSource.createQueryRunner();
+    await qr.dropIndex('notifications', 'notifications_notifiable_idx');
+    const before = await qr.query('SELECT COUNT(*) as count FROM notifications');
+    await qr.release();
+
+    await store.ensureSchema();
+    await store.ensureSchema();
+
+    const check = dataSource.createQueryRunner();
+    const indices = (await check.getTable('notifications'))?.indices ?? [];
+    expect(indices.filter((i) => i.name === 'notifications_notifiable_idx')).toHaveLength(1);
+    const after = await check.query('SELECT COUNT(*) as count FROM notifications');
+    expect(Number(after[0].count)).toBe(Number(before[0].count));
+    await check.release();
+  });
+
   it('non-destructively adds a column missing from an existing table, keeping data intact', async () => {
     // The previous test left the fully-shaped table populated with one row. Simulate an
     // older deployment by dropping a nullable column the entity expects ("tenantId").

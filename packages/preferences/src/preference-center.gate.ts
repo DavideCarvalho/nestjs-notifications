@@ -6,6 +6,7 @@ import {
 } from '@dudousxd/nestjs-notifications-core';
 import { Injectable } from '@nestjs/common';
 import { CategoryRegistry } from './category-registry';
+import type { PreferenceMatrix } from './preference-center.interfaces';
 import { PreferenceCenterService } from './preference-center.service';
 
 /**
@@ -30,6 +31,16 @@ import { PreferenceCenterService } from './preference-center.service';
  */
 @Injectable()
 export class PreferenceCenterGate implements PreferenceGate {
+  /**
+   * Stored-matrix reads in flight, per (notification, notifiable, tenant). The runner gates every
+   * channel of one delivery at once, so they share one store read instead of one per channel.
+   * An entry lives only until its read settles, so later deliveries always read fresh values.
+   */
+  private readonly inFlight = new WeakMap<
+    object,
+    WeakMap<object, Map<string | undefined, Promise<PreferenceMatrix>>>
+  >();
+
   constructor(
     private readonly service: PreferenceCenterService,
     private readonly registry: CategoryRegistry,
@@ -60,11 +71,13 @@ export class PreferenceCenterGate implements PreferenceGate {
     }
 
     const category = this.registry.resolve(notification);
-    const { allowed, deferUntil, digest, digestEligible } = await this.service.resolve(
-      { type: ref.type, id: String(ref.id) },
+    const { allowed, deferUntil, digest, digestEligible } = await this.service.resolveWith(
+      () =>
+        this.sharedRead(notification, notifiable, tenant, () =>
+          this.service.storedMatrix({ type: ref.type, id: String(ref.id) }, tenant),
+        ),
       category,
       channel,
-      tenant,
     );
     if (allowed) return { action: 'allow' };
     if (deferUntil !== undefined) return { action: 'defer', deferUntil };
@@ -76,5 +89,33 @@ export class PreferenceCenterGate implements PreferenceGate {
       return { action: 'skip', digest: { cadence: digest, category } };
     }
     return { action: 'skip' };
+  }
+
+  /** Join the in-flight read for this (notification, notifiable, tenant), or start one. */
+  private sharedRead(
+    notification: object,
+    notifiable: object,
+    tenant: string | undefined,
+    read: () => Promise<PreferenceMatrix>,
+  ): Promise<PreferenceMatrix> {
+    let byNotifiable = this.inFlight.get(notification);
+    if (!byNotifiable) {
+      byNotifiable = new WeakMap();
+      this.inFlight.set(notification, byNotifiable);
+    }
+    let byTenant = byNotifiable.get(notifiable);
+    if (!byTenant) {
+      byTenant = new Map();
+      byNotifiable.set(notifiable, byTenant);
+    }
+    const pending = byTenant.get(tenant);
+    if (pending) return pending;
+    const started = read();
+    byTenant.set(tenant, started);
+    const forget = (): void => {
+      if (byTenant.get(tenant) === started) byTenant.delete(tenant);
+    };
+    started.then(forget, forget);
+    return started;
   }
 }

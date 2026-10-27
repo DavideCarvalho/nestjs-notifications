@@ -1,6 +1,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ChannelRunner } from './channel-runner';
+import { mapConcurrent } from './concurrency';
 import { type ContextAccessor, captureContext } from './context-accessor';
 import { resolveChannels, resolveTenants } from './decorators';
 import { DispatchGuards } from './dispatch-guard.service';
@@ -19,6 +20,7 @@ import type {
   NotifiableInput,
   Notification,
   NotificationInput,
+  NotificationJob,
   SendResult,
 } from './interfaces';
 import { PendingNotification } from './pending-notification';
@@ -29,6 +31,16 @@ import {
 } from './tokens';
 
 type Mode = 'auto' | 'sync' | 'async';
+
+/**
+ * How many (notifiable, tenant) deliveries — and, without `dispatchMany`, how many dispatcher
+ * calls — one send keeps in flight, so a large recipient list can't exhaust connection pools or
+ * trip provider rate limits by starting everything at once.
+ */
+const FANOUT_CONCURRENCY = 50;
+
+/** Collects the async jobs of one send so they reach the dispatcher together, in input order. */
+type Enqueue = (job: NotificationJob) => void;
 
 /** A delivery scope: which tenants to fan out to, and which channels to keep/drop. */
 export interface SendScope {
@@ -219,7 +231,7 @@ export class NotificationService {
     return this.dispatchAll(notifiables, notification, 'auto', scope);
   }
 
-  private dispatchAll(
+  private async dispatchAll(
     notifiables: NotifiableInput | NotifiableInput[],
     notification: NotificationInput,
     mode: Mode,
@@ -233,16 +245,44 @@ export class NotificationService {
     // boundary. Undefined when nestjs-context is absent → fully unchanged behavior.
     const captured = captureContext(this.resolveContextAccessor());
 
-    const jobs: Promise<SendResult>[] = [];
+    const units: { notifiable: Notifiable; tenant: string | undefined }[] = [];
     for (const target of targets) {
       const notifiable = target as Notifiable;
       // explicit forTenant(s) wins; else @Tenant() on the notification/notifiable; else single.
       const tenants = scope.tenants ?? resolveTenants(n, notifiable) ?? [undefined];
-      for (const tenant of tenants) {
-        jobs.push(this.guardedDispatch(notifiable, n, tenant, scope, captured, async));
-      }
+      for (const tenant of tenants) units.push({ notifiable, tenant });
     }
-    return Promise.all(jobs);
+
+    // A recipient whose guard check or delivery throws fails the send, but only after every other
+    // recipient has been handled: the rest have already reserved their dedupe keys and throttle
+    // slots, so their jobs must still reach the dispatcher.
+    let failure: { error: unknown } | undefined;
+    const queued: (NotificationJob | undefined)[] = new Array(units.length);
+    const results = await mapConcurrent(units, FANOUT_CONCURRENCY, (unit, index) =>
+      this.guardedDispatch(unit.notifiable, n, unit.tenant, scope, captured, async, (job) => {
+        queued[index] = job;
+      }).catch((error: unknown) => {
+        failure ??= { error };
+        return undefined as unknown as SendResult;
+      }),
+    );
+    try {
+      await this.dispatchJobs(queued.filter((job): job is NotificationJob => job !== undefined));
+    } catch (error) {
+      failure ??= { error };
+    }
+    if (failure) throw failure.error;
+    return results;
+  }
+
+  /** Hand a send's async jobs to the dispatcher: one batch when it supports it, else bounded. */
+  private async dispatchJobs(jobs: NotificationJob[]): Promise<void> {
+    if (jobs.length === 0) return;
+    if (typeof this.dispatcher.dispatchMany === 'function') {
+      await this.dispatcher.dispatchMany(jobs);
+      return;
+    }
+    await mapConcurrent(jobs, FANOUT_CONCURRENCY, (job) => this.dispatcher.dispatch(job));
   }
 
   /**
@@ -257,32 +297,34 @@ export class NotificationService {
     scope: SendScope,
     captured: CapturedContext | undefined,
     async: boolean,
+    enqueue: Enqueue,
   ): Promise<SendResult> {
     const decision = await this.guards.check(notifiable, notification, tenant);
     if (!decision.proceed) {
       if (decision.reason === 'throttled' && decision.overflow === 'defer') {
-        return this.deferThrottled(notifiable, notification, tenant, scope, captured);
+        return this.deferThrottled(notifiable, notification, tenant, scope, captured, enqueue);
       }
       const status = decision.reason === 'duplicate' ? 'suppressed' : 'throttled';
       const channels = this.filterChannels(resolveChannels(notification, notifiable), scope);
       return { notifiable, results: channels.map((channel) => ({ channel, status })), tenant };
     }
     return async
-      ? this.sendAsyncTo(notifiable, notification, tenant, scope, captured)
+      ? this.sendAsyncTo(notifiable, notification, tenant, scope, captured, enqueue)
       : this.sendNowTo(notifiable, notification, tenant, scope, captured);
   }
 
   /** Re-queue a throttled-but-deferred delivery through the async dispatcher. */
-  private async deferThrottled(
+  private deferThrottled(
     notifiable: Notifiable,
     notification: Notification,
     tenant: string | undefined,
     scope: SendScope,
     captured: CapturedContext | undefined,
-  ): Promise<SendResult> {
+    enqueue: Enqueue,
+  ): SendResult {
     const channels = this.filterChannels(resolveChannels(notification, notifiable), scope);
     if (channels.length === 0) return { notifiable, results: [], tenant };
-    await this.dispatcher.dispatch({
+    enqueue({
       notifiable,
       notification,
       channels,
@@ -382,17 +424,18 @@ export class NotificationService {
     return results;
   }
 
-  private async sendAsyncTo(
+  private sendAsyncTo(
     notifiable: Notifiable,
     notification: Notification,
     tenant: string | undefined,
     scope: SendScope,
     captured: CapturedContext | undefined,
-  ): Promise<SendResult> {
+    enqueue: Enqueue,
+  ): SendResult {
     const channels = this.filterChannels(resolveChannels(notification, notifiable), scope);
     if (channels.length === 0) return { notifiable, results: [], tenant };
     // Pass live objects through; cross-process dispatchers serialize via NotificationSerializer.
-    await this.dispatcher.dispatch({
+    enqueue({
       notifiable,
       notification,
       channels,

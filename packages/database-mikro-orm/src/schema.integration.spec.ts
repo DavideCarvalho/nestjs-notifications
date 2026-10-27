@@ -43,4 +43,26 @@ describe('MikroOrmNotificationStore.ensureSchema (integration, sqlite)', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.data).toEqual({ hi: true });
   });
+
+  it('creates the inbox index, and adds it on a deployment whose schema predates it', async () => {
+    const connection = orm.em.getConnection();
+    const indexNames = async (): Promise<string[]> =>
+      ((await connection.execute(`PRAGMA index_list('notifications')`)) as { name: string }[]).map(
+        (row) => row.name,
+      );
+    expect(await indexNames()).toContain('notifications_notifiable_idx');
+    const columns = (await connection.execute(
+      `PRAGMA index_info('notifications_notifiable_idx')`,
+    )) as { name: string }[];
+    expect(columns.map((c) => c.name)).toEqual(['notifiable_type', 'notifiable_id', 'created_at']);
+
+    // An older deployment: no index, and a fingerprint recorded from the older metadata.
+    await connection.execute('DROP INDEX notifications_notifiable_idx');
+    await connection.execute(`UPDATE notifications_schema_meta SET fingerprint = 'stale'`);
+
+    await store.ensureSchema();
+
+    expect(await indexNames()).toContain('notifications_notifiable_idx');
+    expect(await store.getForNotifiable('User', '7')).toHaveLength(1);
+  });
 });

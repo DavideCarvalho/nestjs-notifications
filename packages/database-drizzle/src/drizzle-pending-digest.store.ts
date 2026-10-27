@@ -7,7 +7,7 @@ import type {
   PendingDigestStore,
 } from '@dudousxd/nestjs-notifications-preferences';
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { asc, eq, inArray, sql } from 'drizzle-orm';
+import { type SQL, and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { type NotificationTables, notificationTables, pendingDigestSchemaDdl } from './schema';
 import {
   DRIZZLE_NOTIFICATIONS_DB,
@@ -17,8 +17,14 @@ import {
 
 type Row = NotificationTables['pendingDigests']['$inferSelect'];
 
+/** Ids per `DELETE … IN (…)`, well under Postgres' 65,535 bind parameters. */
+const CLEAR_CHUNK = 1000;
+
+/** The columns that identify a digest group within one cadence. */
+type GroupKeyRow = Pick<Row, 'tenantId' | 'notifiableType' | 'notifiableId' | 'category'>;
+
 /** Stable group key for a `(tenant, notifiable, category, cadence)`. */
-function groupKey(row: Row): string {
+function groupKey(row: GroupKeyRow & Pick<Row, 'cadence'>): string {
   return JSON.stringify([
     row.tenantId ?? null,
     row.notifiableType,
@@ -29,6 +35,27 @@ function groupKey(row: Row): string {
 }
 
 /** Map a row to the channel-agnostic {@link PendingDigestEntry}. */
+/** Group rows (already ordered oldest-first) by their `(tenant, notifiable, category, cadence)`. */
+function groupRows(rows: Row[]): Map<string, PendingDigestGroup> {
+  const groups = new Map<string, PendingDigestGroup>();
+  for (const row of rows) {
+    const key = groupKey(row);
+    let group = groups.get(key);
+    if (!group) {
+      group = {
+        notifiable: { type: row.notifiableType, id: row.notifiableId },
+        tenantId: row.tenantId ?? null,
+        category: row.category,
+        cadence: row.cadence as DigestCadence,
+        entries: [],
+      };
+      groups.set(key, group);
+    }
+    group.entries.push(toEntry(row));
+  }
+  return groups;
+}
+
 function toEntry(row: Row): PendingDigestEntry {
   return {
     id: row.id,
@@ -81,29 +108,56 @@ export class DrizzlePendingDigestStore implements PendingDigestStore {
       .from(t)
       .where(eq(t.cadence, cadence))
       .orderBy(asc(t.createdAt), asc(t.id));
-    const groups = new Map<string, PendingDigestGroup>();
-    for (const row of rows) {
-      const key = groupKey(row);
-      let group = groups.get(key);
-      if (!group) {
-        group = {
-          notifiable: { type: row.notifiableType, id: row.notifiableId },
-          tenantId: row.tenantId ?? null,
-          category: row.category,
-          cadence: row.cadence as DigestCadence,
-          entries: [],
-        };
-        groups.set(key, group);
-      }
-      group.entries.push(toEntry(row));
-    }
-    return [...groups.values()];
+    return [...groupRows(rows).values()];
+  }
+
+  async listGroupsPage(
+    cadence: DigestCadence,
+    page: { limit: number; offset: number },
+  ): Promise<PendingDigestGroup[]> {
+    const t = this.tables.pendingDigests;
+    const keys = await this.db
+      .selectDistinct({
+        tenantId: t.tenantId,
+        notifiableType: t.notifiableType,
+        notifiableId: t.notifiableId,
+        category: t.category,
+      })
+      .from(t)
+      .where(eq(t.cadence, cadence))
+      .orderBy(asc(t.tenantId), asc(t.notifiableType), asc(t.notifiableId), asc(t.category))
+      .limit(page.limit)
+      .offset(page.offset);
+    if (keys.length === 0) return [];
+    const rows = await this.db
+      .select()
+      .from(t)
+      .where(
+        and(
+          eq(t.cadence, cadence),
+          or(
+            ...keys.map(
+              (key) =>
+                and(
+                  key.tenantId === null ? isNull(t.tenantId) : eq(t.tenantId, key.tenantId),
+                  eq(t.notifiableType, key.notifiableType),
+                  eq(t.notifiableId, key.notifiableId),
+                  eq(t.category, key.category),
+                ) as SQL,
+            ),
+          ),
+        ),
+      )
+      .orderBy(asc(t.createdAt), asc(t.id));
+    const groups = groupRows(rows);
+    return keys.flatMap((key) => groups.get(groupKey({ ...key, cadence })) ?? []);
   }
 
   async clear(ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
     const t = this.tables.pendingDigests;
-    await this.db.delete(t).where(inArray(t.id, ids));
+    for (let start = 0; start < ids.length; start += CLEAR_CHUNK) {
+      await this.db.delete(t).where(inArray(t.id, ids.slice(start, start + CLEAR_CHUNK)));
+    }
   }
 
   async tryLockWindow(cadence: DigestCadence, windowKey: string): Promise<boolean> {

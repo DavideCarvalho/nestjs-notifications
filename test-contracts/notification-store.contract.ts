@@ -222,6 +222,26 @@ export function runNotificationStoreContract(
       });
     });
 
+    describe('countUnread()', () => {
+      it('counts unread rows scoped by notifiable, tenant and types', async () => {
+        const a = await store().save(make('A', 'User', 'cu'));
+        await store().save(make('B', 'User', 'cu'));
+        await store().save(make('B', 'User', 'cu'));
+        await store().save(make('A', 'User', 'other'));
+        await store().save({ ...make('A', 'User', 'cu'), tenantId: 'tenant-1' });
+        await store().markAsRead(a.id);
+
+        expect(store().countUnread).toBeTypeOf('function');
+        expect(await store().countUnread?.('User', 'cu')).toBe(3);
+        expect(await store().countUnread?.('User', 'cu', 'tenant-1')).toBe(1);
+        expect(await store().countUnread?.('User', 'cu', undefined, ['A'])).toBe(1);
+        expect(await store().countUnread?.('User', 'cu', undefined, [])).toBe(3);
+        expect(await store().countUnread?.('User', 'nobody')).toBe(0);
+        await store().markAllAsRead('User', 'cu');
+        expect(await store().countUnread?.('User', 'cu')).toBe(0);
+      });
+    });
+
     describe('paginateForNotifiable()', () => {
       it('pushes limit/offset down and returns the total, newest-first', async () => {
         for (let i = 0; i < 5; i++) {

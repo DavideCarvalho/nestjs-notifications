@@ -1,4 +1,4 @@
-import { Entity, PrimaryKey, Property } from '@mikro-orm/decorators/legacy';
+import { Entity, Index, PrimaryKey, Property } from '@mikro-orm/decorators/legacy';
 import { NotificationRepository } from './notification.repository';
 
 /**
@@ -8,8 +8,16 @@ import { NotificationRepository } from './notification.repository';
  * `emitDecoratorMetadata` reflection, so the entity discovers correctly even
  * when the consuming app compiles with SWC/esbuild/Vite (which don't emit
  * decorator metadata).
+ *
+ * The `(notifiableType, notifiableId, createdAt)` index backs the inbox reads (`WHERE
+ * notifiable_type = ? AND notifiable_id = ? … ORDER BY created_at DESC`) and the unread count. Two
+ * 255-char utf8mb4 keys plus a `datetime(3)` stay under MySQL's 3072-byte index limit.
  */
 @Entity({ tableName: 'notifications', repository: () => NotificationRepository })
+@Index({
+  name: 'notifications_notifiable_idx',
+  properties: ['notifiableType', 'notifiableId', 'createdAt'],
+})
 export class NotificationEntity {
   @PrimaryKey({ type: 'string' })
   id!: string;

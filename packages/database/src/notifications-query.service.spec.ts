@@ -64,6 +64,25 @@ describe('NotificationsQueryService', () => {
     expect(await service.unreadCount(ref)).toBe(2);
   });
 
+  it('unreadCount() asks the store for a count instead of loading the unread rows', async () => {
+    await seed(store);
+    const getUnread = vi.spyOn(store, 'getUnread');
+    const countUnread = vi.spyOn(store, 'countUnread');
+
+    expect(await service.forTenant('t').unreadCount(ref, { types: ['A'] })).toBe(0);
+    expect(await service.unreadCount(ref, { types: ['A', 'B'] })).toBe(2);
+
+    expect(getUnread).not.toHaveBeenCalled();
+    expect(countUnread).toHaveBeenLastCalledWith('User', '42', undefined, ['A', 'B']);
+  });
+
+  it('unreadCount() falls back to getUnread().length for a store without countUnread', async () => {
+    await seed(store);
+    const bare = Object.assign(Object.create(store) as InMemoryStore, { countUnread: undefined });
+    const fallback = new NotificationsQueryService(bare);
+    expect(await fallback.unreadCount(ref)).toBe(3);
+  });
+
   it('paginate() slices over all() with totals', async () => {
     await seed(store);
     const page1 = await service.paginate(ref, { page: 1, perPage: 2 });

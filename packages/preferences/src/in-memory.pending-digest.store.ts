@@ -43,6 +43,21 @@ export class InMemoryPendingDigestStore implements PendingDigestStore {
   }
 
   async listGroups(cadence: DigestCadence): Promise<PendingDigestGroup[]> {
+    return [...this.groupsFor(cadence).values()];
+  }
+
+  async listGroupsPage(
+    cadence: DigestCadence,
+    page: { limit: number; offset: number },
+  ): Promise<PendingDigestGroup[]> {
+    return [...this.groupsFor(cadence)]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .slice(page.offset, page.offset + page.limit)
+      .map(([, group]) => group);
+  }
+
+  /** Pending entries for `cadence` by group key, oldest-first within each group. */
+  private groupsFor(cadence: DigestCadence): Map<string, PendingDigestGroup> {
     const groups = new Map<string, PendingDigestGroup>();
     for (const entry of this.entries.values()) {
       if (entry.cadence !== cadence) continue;
@@ -63,7 +78,7 @@ export class InMemoryPendingDigestStore implements PendingDigestStore {
     for (const group of groups.values()) {
       group.entries.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
     }
-    return [...groups.values()];
+    return groups;
   }
 
   async clear(ids: string[]): Promise<void> {

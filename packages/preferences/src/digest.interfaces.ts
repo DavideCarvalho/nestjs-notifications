@@ -69,7 +69,20 @@ export interface PendingDigestStore {
    * group becomes one digest. Ordered oldest-first within a group.
    */
   listGroups(cadence: DigestCadence): Promise<PendingDigestGroup[]>;
-  /** Delete the given entries (by id) after they have been flushed into a digest. */
+  /**
+   * Optionally return one page of {@link listGroups}: up to `limit` whole groups, skipping the
+   * first `offset`, in an order that is stable across calls (by tenant, notifiable, category).
+   * Lets the collector flush a large backlog a page at a time instead of loading every pending
+   * entry at once; without it the collector reads everything through {@link listGroups}.
+   */
+  listGroupsPage?(
+    cadence: DigestCadence,
+    page: { limit: number; offset: number },
+  ): Promise<PendingDigestGroup[]>;
+  /**
+   * Delete the given entries (by id) after they have been flushed into a digest. Must accept any
+   * number of ids (SQL stores split them across statements to stay under bind-parameter limits).
+   */
   clear(ids: string[]): Promise<void>;
   /**
    * Idempotency lock for a flush window. Returns `true` exactly once per `(cadence, windowKey)`;

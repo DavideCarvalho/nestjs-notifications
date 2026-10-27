@@ -22,6 +22,12 @@ import { PreferenceCenterService } from './preference-center.service';
 import { evaluateQuietHours } from './quiet-hours';
 import { DIGEST_OPTIONS, PENDING_DIGEST_STORE } from './tokens';
 
+/** Groups read per {@link PendingDigestStore.listGroupsPage} call. */
+const GROUP_PAGE = 100;
+
+/** Flushed entry ids handed to one {@link PendingDigestStore.clear} call. */
+const CLEAR_CHUNK = 1000;
+
 /** Result of one {@link DigestCollector.flushDigests} run, for logging/testing. */
 export interface DigestFlushResult {
   cadence: DigestCadence;
@@ -60,11 +66,12 @@ export interface DigestOptions {
  * (wired to `@nestjs/schedule` when present), from an external scheduler, or directly in tests. It:
  *
  * 1. takes a per-window idempotency lock (so re-running a window doesn't double-send),
- * 2. reads pending entries grouped by `(tenant, notifiable, category)`,
+ * 2. reads pending entries grouped by `(tenant, notifiable, category)`, a page at a time when
+ *    the store supports {@link PendingDigestStore.listGroupsPage},
  * 3. rebuilds each suppressed notification, builds one {@link DigestNotification} per group,
  * 4. dispatches it instantly through the normal pipeline (to the recipient's enabled channels),
  *    while RESPECTING quiet hours (a group inside the window is left pending for the next run),
- * 5. clears the flushed entries.
+ * 5. clears the flushed entries, in chunks of {@link CLEAR_CHUNK} ids.
  */
 @Injectable()
 export class DigestCollector {
@@ -92,28 +99,57 @@ export class DigestCollector {
       }
     }
 
-    const groups = await this.store.listGroups(cadence);
     let sent = 0;
     let deferred = 0;
+    let cleared = 0;
     const toClear: string[] = [];
+    const clearFlushed = async (all: boolean): Promise<void> => {
+      while (toClear.length >= CLEAR_CHUNK || (all && toClear.length > 0)) {
+        const chunk = toClear.splice(0, CLEAR_CHUNK);
+        await this.store.clear(chunk);
+        cleared += chunk.length;
+      }
+    };
+    /** Dispatch one group's digest, or keep it pending; resolves whether it was flushed. */
+    const flushGroup = async (group: PendingDigestGroup): Promise<boolean> => {
+      if ((await this.isInQuietHours(group, now)) || !(await this.dispatchGroup(group))) {
+        deferred++;
+        return false;
+      }
+      sent++;
+      for (const entry of group.entries) toClear.push(entry.id);
+      return true;
+    };
 
-    for (const group of groups) {
-      const heldForQuietHours = await this.isInQuietHours(group, now);
-      if (heldForQuietHours) {
-        deferred++;
-        continue;
+    if (this.store.listGroupsPage) {
+      // Flushed groups are cleared before the next read, so the groups still pending ahead of the
+      // next page are exactly the ones kept so far: that count is the next offset. A group seen
+      // twice (its entries weren't removed, or new ones arrived) is left for the next window.
+      const seen = new Set<string>();
+      let kept = 0;
+      for (;;) {
+        const page = await this.store.listGroupsPage(cadence, { limit: GROUP_PAGE, offset: kept });
+        for (const group of page) {
+          const key = groupIdentity(group);
+          if (seen.has(key)) {
+            kept++;
+            continue;
+          }
+          seen.add(key);
+          if (!(await flushGroup(group))) kept++;
+        }
+        await clearFlushed(true);
+        if (page.length < GROUP_PAGE) break;
       }
-      const dispatched = await this.dispatchGroup(group);
-      if (dispatched) {
-        sent++;
-        for (const entry of group.entries) toClear.push(entry.id);
-      } else {
-        deferred++;
+    } else {
+      for (const group of await this.store.listGroups(cadence)) {
+        await flushGroup(group);
+        await clearFlushed(false);
       }
+      await clearFlushed(true);
     }
 
-    if (toClear.length > 0) await this.store.clear(toClear);
-    return { cadence, sent, deferred, cleared: toClear.length, alreadyRun: false };
+    return { cadence, sent, deferred, cleared, alreadyRun: false };
   }
 
   /** Build and dispatch one group's digest. Returns false (group kept) if the recipient can't be resolved. */
@@ -195,6 +231,16 @@ export class DigestCollector {
       return false;
     }
   }
+}
+
+/** Identifies a group within one cadence: `(tenant, notifiable, category)`. */
+function groupIdentity(group: PendingDigestGroup): string {
+  return JSON.stringify([
+    group.tenantId,
+    group.notifiable.type,
+    String(group.notifiable.id),
+    group.category,
+  ]);
 }
 
 /** The calendar-day (daily) or ISO-week (weekly) bucket key for idempotency, computed in UTC. */

@@ -31,13 +31,54 @@ export interface ThrottleStore {
   increment(key: string, windowMs: number): number | Promise<number>;
 }
 
+/** Floor for the size at which an in-memory guard store sweeps every entry for expired ones. */
+const MIN_SWEEP_SIZE = 1024;
+
+/**
+ * Expiry bookkeeping shared by the in-memory guard stores. Entries live in a `Map` in insertion
+ * order, and a refreshed key is re-inserted at the back, so with a common TTL the front of the map
+ * is always the next entry to expire: each write drops expired entries from the front in O(1)
+ * amortized. Entries with differing TTLs can leave an expired entry behind a live one, so a full
+ * sweep also runs whenever the map has doubled since the previous one.
+ */
+class ExpiringMap<V> {
+  private readonly entries = new Map<string, V>();
+  private sweepAt = MIN_SWEEP_SIZE;
+
+  constructor(private readonly expiresAt: (value: V) => number) {}
+
+  get(key: string): V | undefined {
+    return this.entries.get(key);
+  }
+
+  get size(): number {
+    return this.entries.size;
+  }
+
+  /** Insert `value` at the back (moving an existing key), then evict expired entries. */
+  set(key: string, value: V, now: number): void {
+    this.entries.delete(key);
+    this.entries.set(key, value);
+    for (const [k, v] of this.entries) {
+      if (this.expiresAt(v) > now) break;
+      this.entries.delete(k);
+    }
+    if (this.entries.size >= this.sweepAt) {
+      for (const [k, v] of this.entries) {
+        if (this.expiresAt(v) <= now) this.entries.delete(k);
+      }
+      this.sweepAt = Math.max(MIN_SWEEP_SIZE, this.entries.size * 2);
+    }
+  }
+}
+
 /**
  * In-memory {@link IdempotencyStore}. Default when no store is bound. Single-process only —
  * for multi-instance dedup bind a Redis-backed store (documented as a follow-up). Expired
- * entries are pruned lazily on access.
+ * entries are evicted as new keys are reserved.
  */
 export class InMemoryIdempotencyStore implements IdempotencyStore {
-  private readonly seen = new Map<string, number>();
+  private readonly seen = new ExpiringMap<number>((expiresAt) => expiresAt);
 
   reserve(key: string, ttlMs: number): boolean {
     const now = Date.now();
@@ -45,31 +86,26 @@ export class InMemoryIdempotencyStore implements IdempotencyStore {
     if (expiresAt !== undefined && expiresAt > now) {
       return false;
     }
-    this.seen.set(key, now + ttlMs);
-    // Opportunistic prune so the map can't grow unbounded under high-cardinality keys.
-    if (this.seen.size > 1) this.prune(now);
+    this.seen.set(key, now + ttlMs, now);
     return true;
-  }
-
-  private prune(now: number): void {
-    for (const [k, exp] of this.seen) {
-      if (exp <= now) this.seen.delete(k);
-    }
   }
 }
 
 /**
  * In-memory {@link ThrottleStore} using a fixed-window counter. Default when no store is bound.
- * Single-process only — bind a Redis-backed store for cross-instance limits.
+ * Single-process only — bind a Redis-backed store for cross-instance limits. Elapsed windows are
+ * evicted as new windows open.
  */
 export class InMemoryThrottleStore implements ThrottleStore {
-  private readonly windows = new Map<string, { count: number; resetAt: number }>();
+  private readonly windows = new ExpiringMap<{ count: number; resetAt: number }>(
+    (entry) => entry.resetAt,
+  );
 
   increment(key: string, windowMs: number): number {
     const now = Date.now();
     const entry = this.windows.get(key);
     if (!entry || entry.resetAt <= now) {
-      this.windows.set(key, { count: 1, resetAt: now + windowMs });
+      this.windows.set(key, { count: 1, resetAt: now + windowMs }, now);
       return 1;
     }
     entry.count += 1;

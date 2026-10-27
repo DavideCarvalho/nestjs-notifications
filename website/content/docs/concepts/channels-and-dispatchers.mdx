@@ -41,6 +41,7 @@ A **dispatcher** decides how the work is processed: inline now, or somewhere els
 ```ts
 interface DispatchDriver {
   dispatch(job: NotificationJob): Promise<void>;
+  dispatchMany?(jobs: NotificationJob[]): Promise<void>; // optional bulk hand-off
 }
 ```
 

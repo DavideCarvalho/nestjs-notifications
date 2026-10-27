@@ -87,6 +87,27 @@ export class InMemoryStore implements NotificationStore {
     );
   }
 
+  async countUnread(
+    notifiableType: string,
+    notifiableId: string,
+    tenantId?: string,
+    types?: string[],
+  ): Promise<number> {
+    let count = 0;
+    for (const r of this.rows.values()) {
+      if (
+        !r.readAt &&
+        r.notifiableType === notifiableType &&
+        r.notifiableId === notifiableId &&
+        (tenantId === undefined || r.tenantId === tenantId) &&
+        matchesTypes(r.type, types)
+      ) {
+        count++;
+      }
+    }
+    return count;
+  }
+
   async delete(id: string): Promise<void> {
     this.rows.delete(id);
   }

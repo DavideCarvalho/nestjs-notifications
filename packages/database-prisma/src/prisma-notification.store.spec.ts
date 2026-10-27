@@ -76,6 +76,25 @@ describe('PrismaNotificationStore', () => {
     });
   });
 
+  it('countUnread() counts with readAt null and the tenant/type filters, without fetching rows', async () => {
+    const { client, notification } = makeClient();
+    notification.count.mockResolvedValueOnce(7);
+    const store = new PrismaNotificationStore(client as unknown as PrismaNotificationClientLike);
+
+    expect(await store.countUnread('User', '42', 'tenant-1', ['A'])).toBe(7);
+
+    expect(notification.count).toHaveBeenCalledWith({
+      where: {
+        notifiableType: 'User',
+        notifiableId: '42',
+        tenantId: 'tenant-1',
+        type: { in: ['A'] },
+        readAt: null,
+      },
+    });
+    expect(notification.findMany).not.toHaveBeenCalled();
+  });
+
   it('getUnread() queries with readAt null ordered by createdAt desc', async () => {
     const { client, notification } = makeClient();
     notification.findMany.mockResolvedValueOnce([

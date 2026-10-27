@@ -130,6 +130,74 @@ describe('PrismaPendingDigestStore', () => {
     expect(await store.listGroups('weekly')).toHaveLength(1);
   });
 
+  it('clear() splits a large id list across deleteMany calls of at most 1000 ids', async () => {
+    const { store, pendingDigest } = make();
+    const ids = Array.from({ length: 2500 }, (_, i) => `id-${i}`);
+    await store.clear(ids);
+    const batches = pendingDigest.deleteMany.mock.calls.map(
+      ([args]) => (args as { where: { id: { in: string[] } } }).where.id.in,
+    );
+    expect(batches.map((batch) => batch.length)).toEqual([1000, 1000, 500]);
+    expect(batches.flat()).toEqual(ids);
+  });
+
+  it('listGroupsPage() pages group keys with groupBy, then loads only those groups', async () => {
+    const { store, pendingDigest } = make();
+    for (const id of ['1', '2', '3']) {
+      await store.enqueue({
+        notifiable: { type: 'User', id },
+        category: 'billing',
+        cadence: 'daily',
+        notification: { name: `N${id}`, data: {} },
+      });
+    }
+    const groupBy = vi.fn(async () => [
+      { tenantId: null, notifiableType: 'User', notifiableId: '3', category: 'billing' },
+      { tenantId: null, notifiableType: 'User', notifiableId: '2', category: 'billing' },
+    ]);
+    Object.assign(pendingDigest, { groupBy });
+
+    const page = await store.listGroupsPage('daily', { limit: 2, offset: 1 });
+
+    expect(groupBy).toHaveBeenCalledWith({
+      by: ['tenantId', 'notifiableType', 'notifiableId', 'category'],
+      where: { cadence: 'daily' },
+      orderBy: [
+        { tenantId: 'asc' },
+        { notifiableType: 'asc' },
+        { notifiableId: 'asc' },
+        { category: 'asc' },
+      ],
+      skip: 1,
+      take: 2,
+    });
+    expect(pendingDigest.findMany).toHaveBeenLastCalledWith({
+      where: {
+        cadence: 'daily',
+        OR: [
+          { tenantId: null, notifiableType: 'User', notifiableId: '3', category: 'billing' },
+          { tenantId: null, notifiableType: 'User', notifiableId: '2', category: 'billing' },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(page.map((g) => g.entries.map((e) => e.notification.name))).toEqual([['N3'], ['N2']]);
+  });
+
+  it('listGroupsPage() pages a full read in key order when the client has no groupBy', async () => {
+    const { store } = make();
+    for (const id of ['2', '1', '3']) {
+      await store.enqueue({
+        notifiable: { type: 'User', id },
+        category: 'billing',
+        cadence: 'daily',
+        notification: { name: `N${id}`, data: {} },
+      });
+    }
+    const page = await store.listGroupsPage('daily', { limit: 2, offset: 1 });
+    expect(page.map((g) => g.notifiable.id)).toEqual(['2', '3']);
+  });
+
   it('clear() deletes by id (and no-ops on empty)', async () => {
     const { store, pendingDigest } = make();
     await store.clear([]);

@@ -52,6 +52,11 @@ export class PreferenceCenterService {
     return { ref, tenantId, categories, quietHours: stored.quietHours };
   }
 
+  /** @internal The notifiable's stored preferences, without registry defaults merged in. */
+  storedMatrix(ref: NotifiableRef, tenantId?: string): Promise<PreferenceMatrix> {
+    return this.store.getMatrix(ref, tenantId);
+  }
+
   /** Toggle one (category × channel) for a notifiable. */
   async setChannel(
     ref: NotifiableRef,
@@ -121,13 +126,26 @@ export class PreferenceCenterService {
     tenantId?: string,
     now: Date = new Date(),
   ): Promise<PreferenceResolution> {
+    return this.resolveWith(() => this.store.getMatrix(ref, tenantId), category, channel, now);
+  }
+
+  /**
+   * @internal {@link resolve}, reading the notifiable's stored matrix through `loadStored` so a
+   * caller resolving several channels for one recipient can share a single store read.
+   */
+  async resolveWith(
+    loadStored: () => Promise<PreferenceMatrix>,
+    category: string,
+    channel: string,
+    now: Date = new Date(),
+  ): Promise<PreferenceResolution> {
     const def = this.registry.get(category);
     if (def.mandatory) {
       // Mandatory categories bypass everything, including quiet hours.
       return { allowed: true, digest: 'instant' };
     }
 
-    const stored = await this.store.getMatrix(ref, tenantId);
+    const stored = await loadStored();
     const pref = this.merge(def, stored.categories[category]);
 
     if (pref.digest === 'off') {
