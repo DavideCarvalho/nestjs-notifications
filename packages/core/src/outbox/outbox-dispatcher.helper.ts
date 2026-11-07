@@ -14,7 +14,7 @@ export interface OutboxDispatcherConfig {
 /**
  * Wires the transactional outbox dispatcher into `NotificationsModule`. Spread it into `forRoot`;
  * `OutboxModule.forRoot()` (and its store) is configured by the app, as documented at
- * https://docs.nestjs.com/techniques/outbox:
+ * https://docs.nestjs.com/reliability/outbox:
  *
  * ```ts
  * NotificationsModule.forRoot({

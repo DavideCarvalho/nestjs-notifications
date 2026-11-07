@@ -105,7 +105,7 @@ export class ResilientTransport<T extends SendingTransport> {
  * slower than `timeout` fails the attempt (`ResilienceTimeoutError`) and counts toward its breaker.
  * The first provider that succeeds stops the chain; if all fail, the last error is thrown. Breaker
  * state is in-process. State changes are published on the `nestjs:resilience:*` diagnostics
- * channels (https://docs.nestjs.com/techniques/resilience).
+ * channels (https://docs.nestjs.com/reliability/resilience).
  *
  * When the call's last argument is an options object with a `signal` (a `@nestjs/mail`
  * transport's `send(message, { signal })`), the attempt's timeout signal is combined into it, so the

@@ -1,5 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { NotificationService, NotificationsModule } from '@dudousxd/nestjs-notifications-core';
+import {
+  type Notification,
+  NotificationService,
+  NotificationsModule,
+} from '@dudousxd/nestjs-notifications-core';
 import { OutboxModule } from '@nestjs/outbox';
 import { Test } from '@nestjs/testing';
 import {
@@ -63,7 +67,7 @@ describe('WebhookChannel (direct URL)', () => {
     const transport = new InMemoryWebhookTransport();
     await channel({ transport, headers: { 'X-Tenant-App': 'flip' } }).send(
       new Customer(),
-      new OrderPaidMessage(),
+      new OrderPaidMessage() as Notification,
     );
     const sent = transport.single({ url: URL });
     expect(JSON.parse(sent.request.body)).toEqual({ event: 'order.paid', id: 42 });
@@ -76,11 +80,11 @@ describe('WebhookChannel (direct URL)', () => {
     const transport = new InMemoryWebhookTransport();
     await channel({ transport, url: 'https://default.example.com/h' }).send(
       new Customer(URL),
-      new OrderPaid(),
+      new OrderPaid() as Notification,
     );
     await channel({ transport, url: 'https://default.example.com/h' }).send(
       new Customer(),
-      new OrderPaid(),
+      new OrderPaid() as Notification,
     );
     expect(transport.filter().map((s) => s.request.url)).toEqual([
       URL,
@@ -93,7 +97,7 @@ describe('WebhookChannel (direct URL)', () => {
     const tenantUrl = 'https://acme.example.com/hooks';
     await channel({ transport, url: URL }, () => ({ transport, url: tenantUrl })).send(
       new Customer(),
-      new OrderPaid(),
+      new OrderPaid() as Notification,
       { tenant: 'acme' },
     );
     expect(transport.single().request.url).toBe(tenantUrl);
@@ -101,7 +105,10 @@ describe('WebhookChannel (direct URL)', () => {
 
   it('keeps the sha256= signature by default', async () => {
     const transport = new InMemoryWebhookTransport();
-    await channel({ transport, url: URL, secret: 's3cret' }).send(new Customer(), new OrderPaid());
+    await channel({ transport, url: URL, secret: 's3cret' }).send(
+      new Customer(),
+      new OrderPaid() as Notification,
+    );
     const { headers, body } = transport.single().request;
     expect(headers['x-signature-256']).toBe(sha256Signature('s3cret', body));
   });
@@ -110,7 +117,7 @@ describe('WebhookChannel (direct URL)', () => {
     const transport = new InMemoryWebhookTransport();
     await channel({ transport, url: URL, secret, signing: 'standard' }).send(
       new Customer(),
-      new OrderPaid(),
+      new OrderPaid() as Notification,
       {
         idempotencyKey: 'outbox-msg-1',
       },
@@ -139,21 +146,27 @@ describe('WebhookChannel (direct URL)', () => {
   it('fails on a non-2xx answer', async () => {
     const transport = new InMemoryWebhookTransport().respondWith(503);
     await expect(
-      channel({ transport, url: URL }).send(new Customer(), new OrderPaid()),
+      channel({ transport, url: URL }).send(new Customer(), new OrderPaid() as Notification),
     ).rejects.toThrow(/failed with status 503/);
   });
 
   it('sends through HttpWebhookTransport by default: private addresses and http are refused', async () => {
     await expect(
-      channel({ url: 'https://127.0.0.1/hook' }).send(new Customer(), new OrderPaid()),
+      channel({ url: 'https://127.0.0.1/hook' }).send(
+        new Customer(),
+        new OrderPaid() as Notification,
+      ),
     ).rejects.toBeInstanceOf(WebhookDestinationBlockedError);
     await expect(
-      channel({ url: 'http://example.com/hook' }).send(new Customer(), new OrderPaid()),
+      channel({ url: 'http://example.com/hook' }).send(
+        new Customer(),
+        new OrderPaid() as Notification,
+      ),
     ).rejects.toBeInstanceOf(WebhookDestinationBlockedError);
   });
 
   it('throws a clear error when no target url can be resolved', async () => {
-    await expect(channel({}).send(new Customer(), new OrderPaid())).rejects.toThrow(
+    await expect(channel({}).send(new Customer(), new OrderPaid() as Notification)).rejects.toThrow(
       /needs a target URL/,
     );
   });
@@ -204,7 +217,7 @@ describe('WebhookChannel (subscriptions via @nestjs/webhooks)', () => {
     const [result] = await moduleRef
       .get(NotificationService)
       .forTenant('acme')
-      .send(new Customer(), new InvoicePaid(9));
+      .send(new Customer(), new InvoicePaid(9) as Notification);
     expect(result?.results[0]?.status).toBe('sent');
 
     await waitFor(() => transport.sent.length > 0);
@@ -215,8 +228,8 @@ describe('WebhookChannel (subscriptions via @nestjs/webhooks)', () => {
   });
 
   it('explains what is missing without WebhooksModule or a transaction runner', async () => {
-    await expect(channel({}).send(new Customer(), new InvoicePaid(1))).rejects.toThrow(
-      /WebhooksModule/,
-    );
+    await expect(
+      channel({}).send(new Customer(), new InvoicePaid(1) as Notification),
+    ).rejects.toThrow(/WebhooksModule/);
   });
 });

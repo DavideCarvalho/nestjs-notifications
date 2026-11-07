@@ -31,7 +31,7 @@ export interface DrizzleStoreDbOptions extends TablesOption {
 export interface DrizzleStoreConnectionOptions extends TablesOption {
   /**
    * The `DrizzleModule` connection to use (`'default'` for the unnamed one): the stores inject
-   * `getDrizzleToken(connectionName)` from `@nestjs/drizzle` (https://docs.nestjs.com/recipes/drizzle).
+   * `getDrizzleToken(connectionName)` from `@nestjs/drizzle` (https://docs.nestjs.com/data/drizzle).
    */
   connectionName: string;
   db?: never;

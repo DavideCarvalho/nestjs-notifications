@@ -14,7 +14,7 @@ export interface MailChannelModuleOptions extends MailChannelOptions {
 
 /**
  * Registers the mail channel. Sending is `@nestjs/mail`'s: configure `MailModule.forRoot()`
- * (transport, default `from`, retries; https://docs.nestjs.com/techniques/mail) next to it.
+ * (transport, default `from`, retries; https://docs.nestjs.com/application/mail) next to it.
  *
  * ```ts
  * MailModule.forRoot({ transport: new SmtpTransport({ host, port, auth }), from: 'no-reply@example.com' }),

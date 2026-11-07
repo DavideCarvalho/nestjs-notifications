@@ -1,6 +1,8 @@
 import {
   type ChannelContext,
   ChannelRunner,
+  type Notifiable,
+  type Notification,
   NotificationService,
   NotificationsModule,
   RouteFor,
@@ -162,9 +164,14 @@ describe('MailChannel over @nestjs/mail', () => {
     const moduleRef = await app(transport, { retry: 2 });
     // Through the runner with an idempotency key, as the outbox handler does.
     const runner = moduleRef.get(ChannelRunner);
-    const [res] = await runner.run(new User('ada@example.com'), new Welcome(), ['mail'], {
-      idempotencyKey: 'msg-1',
-    });
+    const [res] = await runner.run(
+      new User('ada@example.com') as Notifiable,
+      new Welcome() as Notification,
+      ['mail'],
+      {
+        idempotencyKey: 'msg-1',
+      },
+    );
     expect(res?.status).toBe('failed');
     expect(send).toHaveBeenCalledTimes(2); // retry: 2 attempts, overriding the module's retry: false
     const first = send.mock.calls[0] as unknown as [NestMailMessage, { idempotencyKey?: string }];

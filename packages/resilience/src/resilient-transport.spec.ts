@@ -145,8 +145,12 @@ describe('resilientTransport', () => {
 
   it('closes every wrapped transport', async () => {
     const close = vi.fn();
+    const withClose: { send: (p: Payload) => Promise<string>; close?: () => void } = {
+      ...ok(),
+      close,
+    };
     await resilientTransport([
-      { id: 'a', transport: { ...ok(), close } },
+      { id: 'a', transport: withClose },
       { id: 'b', transport: ok() },
     ]).close();
     expect(close).toHaveBeenCalledOnce();
