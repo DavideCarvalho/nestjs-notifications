@@ -84,11 +84,45 @@ and `sendAsync` write the job through `tx`; the handle stays in memory and is ne
 
 Each delivery gets the outbox message id as its `idempotencyKey`: the [mail channel](/docs/channels/mail#retries)
 passes it to `@nestjs/mail` (a redelivered mail keeps its `Message-ID`) and the
-[webhook channel](/docs/channels/webhook#standard-webhooks-signing) uses it as `webhook-id`.
+[webhook channel](/docs/channels/webhook#standard-webhooks-signing) uses it as `webhook-id`. For a
+[subscription delivery](/docs/channels/webhook#subscription-delivery) the webhook channel records that
+`webhook-id` in the outbox inbox in the same transaction as `Webhooks.dispatch()`, so a retried
+delivery returns `{ id, duplicate: true }` instead of dispatching the event again.
+
+### Channels that completed are not run again
+
+A job runs several channels, and the outbox redelivers the whole message: after a `failFast`
+failure, after a crash before the message was marked published, or when the relay loses its lease.
+So the handler records each channel that completes, and a redelivery skips it (its result is
+`suppressed`). Only the channels that haven't completed run again: with `failFast`, the one that
+failed and those after it.
+
+A record is written for every channel that doesn't fail (`sent`, `skipped`, `deferred`), once it
+has, in the outbox's **inbox store**: consumer `aviary.notifications:<channel>`, message id
+`<outbox message id>:<notifiable type>#<notifiable id>` (a SHA-256 digest when either is longer than
+255 characters). Each consumer of a message is checked and recorded on its own, in the order the
+channels run.
+
+| Error policy | A channel fails | On a redelivery |
+| --- | --- | --- |
+| `failFast` | Thrown; the outbox retries the message with its retry schedule | The completed channels are skipped; the failed one and the rest run |
+| `continueOnError` (default) | Reported (`notification.failed`, delivery tracking); the message completes and is **not** retried | If one happens anyway (crash, lost lease), the completed channels are skipped and the failed ones run again |
+
+<Callout type="warn">
+  The records are only as durable as the inbox store. With `PostgresOutboxStore` /
+  `MySqlOutboxStore` (or your own store registered as `inbox`) they survive restarts and are shared
+  by every instance. With the in-memory default they live in the process: a redelivery after a
+  restart runs every channel again. A channel can still run twice if the process dies between its
+  delivery and the record (at-least-once), which is why mail and webhook also pass the
+  `idempotencyKey` on.
+</Callout>
+
+The records are inbox rows like the outbox's own, kept until you prune them: the
+`OutboxInbox.prune(olderThan)` the NestJS docs recommend removes them too.
 
 <Callout type="info">
   Under the default `errorPolicy: 'continueOnError'` a failed channel is reported (events, delivery
   tracking) and the outbox message completes. With `errorPolicy: 'failFast'` the first failure is
-  thrown and the outbox retries the whole job; give the mail channel `retry: false` so retries don't
-  multiply.
+  thrown and the outbox retries the job, skipping the channels that already completed; give the mail
+  channel `retry: false` so retries don't multiply.
 </Callout>

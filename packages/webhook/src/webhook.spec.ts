@@ -1,10 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import {
+  type ChannelDriver,
+  ChannelRegistry,
   type Notification,
   NotificationService,
   NotificationsModule,
 } from '@dudousxd/nestjs-notifications-core';
-import { OutboxModule } from '@nestjs/outbox';
+import { outboxDispatcher } from '@dudousxd/nestjs-notifications-core/outbox';
+import { InMemoryOutboxStore, OutboxModule, OutboxRelay, OutboxStorage } from '@nestjs/outbox';
 import { Test } from '@nestjs/testing';
 import {
   InMemoryWebhookTransport,
@@ -17,7 +20,12 @@ import {
 import { describe, expect, it } from 'vitest';
 import { sha256Signature } from './signing';
 import { WebhookEvent, WebhookMessage } from './webhook-message';
-import { Webhook, WebhookChannel, type WebhookChannelOptions } from './webhook.channel';
+import {
+  WEBHOOK_DISPATCH_CONSUMER,
+  Webhook,
+  WebhookChannel,
+  type WebhookChannelOptions,
+} from './webhook.channel';
 import { WebhookChannelModule } from './webhook.module';
 
 const URL = 'https://example.com/hooks/notifications';
@@ -178,6 +186,11 @@ describe('WebhookChannel (direct URL)', () => {
   });
 });
 
+/** The in-memory store `OutboxModule` falls back to without a registered one. */
+function outboxStore(moduleRef: { get(token: typeof OutboxStorage): OutboxStorage }) {
+  return moduleRef.get(OutboxStorage).messages as InMemoryOutboxStore;
+}
+
 async function waitFor(check: () => boolean, timeoutMs = 3000): Promise<void> {
   const started = Date.now();
   while (!check()) {
@@ -231,5 +244,109 @@ describe('WebhookChannel (subscriptions via @nestjs/webhooks)', () => {
     await expect(
       channel({}).send(new Customer(), new InvoicePaid(1) as Notification),
     ).rejects.toThrow(/WebhooksModule/);
+  });
+
+  it('a retried delivery (same idempotency key) dispatches the event once and succeeds', async () => {
+    const transport = new InMemoryWebhookTransport();
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        NotificationsModule.forRoot({ emitter: true }),
+        // Relay run by hand, so the first message is still pending when the retry dispatches.
+        OutboxModule.forRoot({ relay: { enabled: false } }),
+        WebhooksModule.forRoot({ eventTypes: ['invoice.paid'], worker: { pollInterval: 10 } }),
+        WebhookChannelModule.forRoot({
+          transaction: (work) => outboxStore(moduleRef).transaction(work),
+        }),
+      ],
+    })
+      .overrideProvider(WebhookTransport)
+      .useValue(transport)
+      .compile();
+    await moduleRef.init();
+    const store = outboxStore(moduleRef);
+    await moduleRef.get(WebhookEndpoints).create({
+      url: 'https://acme.example.com/hooks',
+      eventTypes: ['invoice.paid'],
+    });
+    const webhook = moduleRef.get(WebhookChannel);
+    const send = () =>
+      webhook.send(new Customer(), new InvoicePaid(5) as Notification, {
+        idempotencyKey: 'outbox-msg-5',
+      });
+
+    const first = await send();
+    expect(first).toMatchObject({ id: 'msg_outbox-msg-5', type: 'invoice.paid' });
+    // While the first message is pending: no duplicate outbox id, no error.
+    await expect(send()).resolves.toEqual({ id: 'msg_outbox-msg-5', duplicate: true });
+    expect(store.stats(Date.now()).pending).toBe(1);
+    expect(store.hasInbox(WEBHOOK_DISPATCH_CONSUMER, 'msg_outbox-msg-5')).toBe(true);
+
+    await moduleRef.get(OutboxRelay).runOnce();
+    await waitFor(() => transport.sent.length === 1);
+    // After it was published and fanned out, a retry is still a no-op.
+    await expect(send()).resolves.toEqual({ id: 'msg_outbox-msg-5', duplicate: true });
+    await moduleRef.get(OutboxRelay).runOnce();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(transport.sent).toHaveLength(1);
+    expect(transport.single().request.headers['webhook-id']).toBe('msg_outbox-msg-5');
+    await moduleRef.close();
+  });
+
+  it('through the outbox dispatcher: a failFast retry caused by another channel delivers the webhook once', async () => {
+    const transport = new InMemoryWebhookTransport();
+    const flaky: ChannelDriver & { sends: number; failures: number } = {
+      channel: 'flaky',
+      sends: 0,
+      failures: 1,
+      async send() {
+        this.sends++;
+        if (this.failures-- > 0) throw new Error('flaky is down');
+      },
+    };
+    class InvoiceSettled extends InvoicePaid {
+      via() {
+        return ['webhook', 'flaky'];
+      }
+    }
+    const transaction = <T>(work: (tx: unknown) => Promise<T>) =>
+      outboxStore(moduleRef).transaction(work);
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        OutboxModule.forRoot({
+          relay: { pollInterval: 10 },
+          retry: { attempts: 5, backoff: { delay: 20, jitter: 'none' } },
+        }),
+        WebhooksModule.forRoot({ eventTypes: ['invoice.paid'], worker: { pollInterval: 10 } }),
+        NotificationsModule.forRoot({
+          emitter: true,
+          errorPolicy: 'failFast',
+          ...outboxDispatcher({ transaction }),
+          notifications: [InvoiceSettled],
+          resolveNotifiable: () => new Customer(),
+        }),
+        WebhookChannelModule.forRoot({ transaction }),
+      ],
+    })
+      .overrideProvider(WebhookTransport)
+      .useValue(transport)
+      .compile();
+    moduleRef.get(ChannelRegistry).register(flaky);
+    await moduleRef.init();
+    const store = outboxStore(moduleRef);
+    await moduleRef.get(WebhookEndpoints).create({
+      url: 'https://acme.example.com/hooks',
+      eventTypes: ['invoice.paid'],
+    });
+
+    const customer = Object.assign(new Customer(), {
+      toNotifiableRef: () => ({ type: 'Customer', id: 1 }),
+    });
+    await moduleRef.get(NotificationService).sendAsync(customer, new InvoiceSettled(6));
+    await waitFor(() => flaky.sends === 2 && transport.sent.length === 1);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(transport.sent).toHaveLength(1);
+    expect(store.stats(Date.now()).pending).toBe(0);
+    expect(store.listDeadLetters({})).toEqual([]);
+    await moduleRef.close();
   });
 });

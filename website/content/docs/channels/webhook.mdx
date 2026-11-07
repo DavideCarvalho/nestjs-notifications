@@ -194,6 +194,20 @@ The event goes to the endpoints of the delivery's tenant ([`forTenant(id)`](/doc
 or `@Tenant()`; `null` without one). The channel's response is the dispatched `WebhookMessage`; the
 per-endpoint outcome is in `@nestjs/webhooks`' delivery log.
 
+### Retries of a subscription delivery
+
+A delivery with an `idempotencyKey` (the [outbox dispatcher](/docs/dispatchers/outbox#delivery-and-retries)'s
+message id) dispatches with that key as the `webhook-id`. `@nestjs/webhooks` writes the event to the
+outbox under that id, so dispatching it twice would add a duplicate outbox id (an error while the
+first message is still pending). The channel therefore records the `webhook-id` in the outbox inbox
+(consumer `aviary.notifications.webhook-dispatch`, exported as `WEBHOOK_DISPATCH_CONSUMER`) through
+`OutboxInbox.processInTransaction()`, in the same transaction as `Webhooks.dispatch()`: the
+attempt whose transaction commits is the only one that dispatches. A retry of it dispatches nothing,
+succeeds, and responds `{ id, duplicate: true }`.
+
+Use a transaction runner on the same database as your outbox store, so the record and the event
+commit together.
+
 ## Per-tenant config
 
 In a multi-tenant app each tenant can post to its own endpoint with its own headers. Pass

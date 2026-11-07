@@ -1,6 +1,8 @@
 export { WebhookMessage, WebhookEvent, type WebhookRequest } from './webhook-message';
 export {
+  WEBHOOK_DISPATCH_CONSUMER,
   Webhook,
+  type WebhookAlreadyDispatched,
   WebhookChannel,
   type WebhookChannelOptions,
   type WebhookDeliveryResult,

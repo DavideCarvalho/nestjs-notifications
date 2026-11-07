@@ -9,6 +9,7 @@ import {
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { OutboxInbox } from '@nestjs/outbox';
 import {
   type WebhookMessage as DispatchedWebhookMessage,
   HttpWebhookTransport,
@@ -22,6 +23,12 @@ import { WebhookEvent, WebhookMessage } from './webhook-message';
 
 const DEFAULT_SIGNATURE_HEADER = 'X-Signature-256';
 const DEFAULT_TIMEOUT_MS = 15_000;
+
+/**
+ * The outbox inbox consumer under which subscription deliveries record the `webhook-id`s they
+ * dispatched, so a retried notification doesn't dispatch the same event twice.
+ */
+export const WEBHOOK_DISPATCH_CONSUMER = 'aviary.notifications.webhook-dispatch';
 
 /** Channel handle: use as `@Webhook()` on a payload method, or as a token in `via()`. */
 export const Webhook = createChannel('webhook');
@@ -80,6 +87,15 @@ export interface WebhookDeliveryResult {
 }
 
 /**
+ * What a subscription delivery returns when its `webhook-id` was already dispatched by an earlier
+ * attempt of the same delivery: nothing was dispatched this time.
+ */
+export interface WebhookAlreadyDispatched {
+  id: string;
+  duplicate: true;
+}
+
+/**
  * Delivers a notification as a webhook, two ways:
  *
  * - **Direct**: a signed `POST` of the JSON body to one URL (the message's, else the
@@ -87,7 +103,10 @@ export interface WebhookDeliveryResult {
  *   SSRF-guarded `HttpWebhookTransport`. A non-2xx answer fails the delivery.
  * - **Subscriptions**: a {@link WebhookEvent} is handed to `Webhooks.dispatch()`, which fans it
  *   out to the endpoints subscribed to its type (for the delivery's tenant), with retries and a
- *   delivery log. Needs `WebhooksModule` + `OutboxModule` and the `transaction` option.
+ *   delivery log. Needs `WebhooksModule` + `OutboxModule` and the `transaction` option. A
+ *   delivery with an `idempotencyKey` (the outbox dispatcher's message id) records its
+ *   `webhook-id` in the outbox inbox in the same transaction as the dispatch, so a retry of it
+ *   dispatches nothing and returns {@link WebhookAlreadyDispatched}.
  */
 @Injectable()
 export class WebhookChannel extends BaseChannel {
@@ -105,6 +124,8 @@ export class WebhookChannel extends BaseChannel {
     private readonly transaction?: WebhookTransactionRunner,
     @Optional()
     private readonly webhooks?: Webhooks,
+    @Optional()
+    private readonly inbox?: OutboxInbox,
   ) {
     super();
   }
@@ -113,7 +134,7 @@ export class WebhookChannel extends BaseChannel {
     notifiable: Notifiable,
     notification: Notification,
     context?: DeliveryContext,
-  ): Promise<WebhookDeliveryResult | DispatchedWebhookMessage> {
+  ): Promise<WebhookDeliveryResult | DispatchedWebhookMessage | WebhookAlreadyDispatched> {
     const result = this.buildPayload<WebhookMessage | WebhookEvent | Record<string, unknown>>(
       notification,
       notifiable,
@@ -172,7 +193,7 @@ export class WebhookChannel extends BaseChannel {
   private async dispatch(
     event: WebhookEvent,
     context: DeliveryContext | undefined,
-  ): Promise<DispatchedWebhookMessage> {
+  ): Promise<DispatchedWebhookMessage | WebhookAlreadyDispatched> {
     const webhooks = this.webhooks;
     if (!webhooks) {
       throw new Error(
@@ -185,17 +206,27 @@ export class WebhookChannel extends BaseChannel {
           '@nestjs/webhooks writes the event through a transaction.',
       );
     }
-    const message = await this.transaction(async (tx) =>
-      webhooks.dispatch(tx, {
-        type: event.type,
-        data: event.data,
-        tenant: context?.tenant ?? null,
-        // The outbox message id of this delivery: a redelivery dispatches the same webhook-id.
-        ...(context?.idempotencyKey ? { id: webhookId(context.idempotencyKey) } : {}),
-      }),
-    );
+    // The outbox message id of this delivery: a retry derives the same webhook-id.
+    const id = context?.idempotencyKey ? webhookId(context.idempotencyKey) : undefined;
+    const inbox = this.inbox;
+    const outcome = await this.transaction(async (tx) => {
+      const dispatch = () =>
+        webhooks.dispatch(tx, {
+          type: event.type,
+          data: event.data,
+          tenant: context?.tenant ?? null,
+          ...(id ? { id } : {}),
+        });
+      if (!id || !inbox) return { duplicate: false as const, result: await dispatch() };
+      // The record commits with the dispatched message, so an attempt whose transaction
+      // committed is the only one that dispatches: a retry finds the record and skips it,
+      // instead of adding the webhook-id to the outbox again (a duplicate key while the first
+      // message is pending).
+      return inbox.processInTransaction(tx, WEBHOOK_DISPATCH_CONSUMER, id, dispatch);
+    });
+    if (outcome.duplicate) return { id: id as string, duplicate: true };
     webhooks.notify();
-    return message;
+    return outcome.result;
   }
 
   private transportFor(options: WebhookChannelOptions): WebhookTransport {
