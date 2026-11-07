@@ -1,7 +1,7 @@
 {
   "name": "@dudousxd/nestjs-notifications-webhook",
   "version": "0.6.0",
-  "description": "Webhook channel for nestjs-notifications — deliver notifications by POSTing JSON to an HTTP endpoint",
+  "description": "Webhook channel for nestjs-notifications — direct signed POSTs over @nestjs/webhooks' SSRF-guarded transport, or subscription delivery through @nestjs/webhooks",
   "license": "MIT",
   "author": "Davide Carvalho",
   "repository": {
@@ -30,13 +30,21 @@
   },
   "peerDependencies": {
     "@dudousxd/nestjs-notifications-core": ">=0.1.0 <1.0.0",
-    "@nestjs/common": "^10.0.0 || ^11.0.0 || ^12.0.0"
+    "@nestjs/common": "^12.0.0",
+    "@nestjs/webhooks": ">=0.0.4 <0.1.0",
+    "@nestjs/outbox": ">=0.1.4 <0.2.0"
   },
   "devDependencies": {
     "@dudousxd/nestjs-notifications-core": "workspace:^",
-    "@nestjs/common": "12.0.1",
+    "@nestjs/common": "12.3.2",
     "reflect-metadata": "0.2.2",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "@nestjs/webhooks": "0.0.4",
+    "@nestjs/outbox": "0.1.4",
+    "@nestjs/core": "12.3.2",
+    "@nestjs/testing": "12.3.2",
+    "@nestjs/event-emitter": "12.0.1",
+    "rxjs": "7.8.2"
   },
   "module": "./dist/index.js",
   "exports": {
@@ -49,6 +57,11 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    }
+  },
+  "peerDependenciesMeta": {
+    "@nestjs/outbox": {
+      "optional": true
     }
   }
 }
