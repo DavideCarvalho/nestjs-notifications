@@ -26,7 +26,7 @@ describe('InboxMountAudit', () => {
   });
 
   it('warns when the module auto-mounts AND the app mounts its own controller', () => {
-    // Exactly the downstream wiring that shipped the bug: forRoot() without `controller: false`,
+    // Exactly the downstream wiring that shipped the bug: forRoot() without `routes: false`,
     // plus a hand-mounted controller on a different path.
     DatabaseChannelModule.forRoot({});
     createNotificationsController({ resolveRef, path: 'notifications-inbox' });
@@ -37,7 +37,7 @@ describe('InboxMountAudit', () => {
     expect(message).toContain('"notifications"');
     expect(message).toContain('"notifications-inbox"');
     expect(message).toContain('does NOT disable');
-    expect(message).toContain('controller: false');
+    expect(message).toContain('routes: false');
   });
 
   it('warns regardless of the order the two mounts were built in', () => {
@@ -56,8 +56,8 @@ describe('InboxMountAudit', () => {
     expect(runAudit()).toContain('"notifications", and this application also mounted its own at');
   });
 
-  it('stays silent when the app opts out with `controller: false`', () => {
-    DatabaseChannelModule.forRoot({ controller: false });
+  it('stays silent when the app opts out with `routes: false`', () => {
+    DatabaseChannelModule.forRoot({ routes: false });
     createNotificationsController({ resolveRef, path: 'notifications-inbox' });
 
     expect(runAudit()).toBeUndefined();

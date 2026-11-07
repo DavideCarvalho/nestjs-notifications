@@ -48,7 +48,7 @@ describe('Drizzle store modules (Nest wiring, pglite)', () => {
         DatabaseChannelModule.forRoot({
           store: DrizzleNotificationStore,
           imports: [DrizzleNotificationStoreModule.forRoot({ db, tables })],
-          controller: false,
+          routes: false,
         }),
       ],
     }).compile();
@@ -76,7 +76,7 @@ describe('Drizzle store modules (Nest wiring, pglite)', () => {
           db,
           tables: createNotificationTables({ tableNames: { notifications: 'sibling_items' } }),
         }),
-        DatabaseChannelModule.forFeature({ controller: false }),
+        DatabaseChannelModule.forFeature({ routes: false }),
       ],
     }).compile();
     await moduleRef.init();

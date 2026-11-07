@@ -12,8 +12,9 @@ export const CAN_ANYONE_METADATA = 'authorization:can-anyone';
  *
  * 1. Marks it open to `@nestjs/authorization`'s deny-by-default `AuthorizationGuard` (the same
  *    metadata `@Can.Anyone()` writes), so an app that registers `AuthorizationModule.forRoot()`
- *    does not refuse these routes just because they declare no `@Can()`. This package's own
- *    protection (`guards`, `resolveRef`, signatures, ...) keeps deciding who reaches them. The mark
+ *    does not refuse these routes just because they declare no `@Can()`. What still
+ *    decides who reaches them is the caller's `decorators` (or mounting the factory's controller
+ *    in their own module), plus what the route itself checks (`resolveRef`, provider signatures). The mark
  *    only opens routes with no requirement: a `@Can()` passed in `decorators` is still enforced.
  * 2. Applies the caller's `decorators` (e.g. `[UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')]`),
  *    in order, after the class's own decorators.

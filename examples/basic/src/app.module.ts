@@ -17,10 +17,10 @@ import { InvoicePaid } from './notifications/invoice-paid.notification';
     NotificationsModule.forRoot({ notifications: [InvoicePaid] }),
     // Mail channel with an in-memory transport (swap for SMTP via `smtp: {...}`).
     MailChannelModule.forRoot({ from: 'billing@example.com', transport: MemoryTransport }),
-    // Database channel persisting to the bundled in-memory store. `controller: false` because
+    // Database channel persisting to the bundled in-memory store. `routes: false` because
     // this example mounts its own static NotificationsInboxController (so nestjs-codegen can read
     // it) — by default forRoot() auto-mounts the inbox controller for you.
-    DatabaseChannelModule.forRoot({ controller: false }),
+    DatabaseChannelModule.forRoot({ routes: false }),
   ],
   controllers: [AppController, NotificationsInboxController],
   providers: [AppService],

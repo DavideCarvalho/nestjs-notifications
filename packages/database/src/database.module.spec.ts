@@ -20,19 +20,19 @@ describe('DatabaseChannelModule inbox controller mounting', () => {
   });
 
   describe('forRoot()', () => {
-    it('auto-mounts the inbox at "notifications" when `controller` is omitted', () => {
+    it('auto-mounts the inbox at "notifications" when `routes` is omitted', () => {
       // The crux of the downstream bug: omitting the option is NOT the same as disabling it.
       const module = DatabaseChannelModule.forRoot({ autoCreateSchema: false });
       expect(mountedPaths(module)).toEqual(['notifications']);
     });
 
-    it('auto-mounts when `controller` is true', () => {
-      const module = DatabaseChannelModule.forRoot({ controller: true });
+    it('auto-mounts when `routes` is true', () => {
+      const module = DatabaseChannelModule.forRoot({ routes: true });
       expect(mountedPaths(module)).toEqual(['notifications']);
     });
 
-    it('mounts nothing when `controller` is false', () => {
-      const module = DatabaseChannelModule.forRoot({ controller: false });
+    it('mounts nothing when `routes` is false', () => {
+      const module = DatabaseChannelModule.forRoot({ routes: false });
       expect(mountedPaths(module)).toEqual([]);
     });
 
@@ -42,7 +42,7 @@ describe('DatabaseChannelModule inbox controller mounting', () => {
     });
 
     it('auto-mounts at the default path when the options object omits `path`', () => {
-      // Passing `{ guards }` to configure the controller still leaves it on `notifications`,
+      // Passing `controller` options to configure the controller still leaves it on `notifications`,
       // where it can shadow an application page route.
       const module = DatabaseChannelModule.forRoot({
         controller: { resolveRef: () => ({ type: 'User', id: '1' }) },
@@ -57,13 +57,13 @@ describe('DatabaseChannelModule inbox controller mounting', () => {
   });
 
   describe('forFeature()', () => {
-    it('auto-mounts the inbox when `controller` is omitted', () => {
+    it('auto-mounts the inbox when `routes` is omitted', () => {
       const module = DatabaseChannelModule.forFeature();
       expect(mountedPaths(module)).toEqual(['notifications']);
     });
 
-    it('mounts nothing when `controller` is false', () => {
-      const module = DatabaseChannelModule.forFeature({ controller: false });
+    it('mounts nothing when `routes` is false', () => {
+      const module = DatabaseChannelModule.forFeature({ routes: false });
       expect(mountedPaths(module)).toEqual([]);
     });
 

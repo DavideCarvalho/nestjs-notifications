@@ -54,6 +54,23 @@ describe('DatabaseChannelModule with @nestjs/authorization', () => {
     expect(await res.json()).toEqual({ count: 0 });
   });
 
+  it('the default resolver answers 401 when no user is on the request', async () => {
+    const app = await boot(DatabaseChannelModule.forRoot({ autoCreateSchema: false }));
+    apps.push(app);
+
+    expect((await get(app, '/notifications/unread/count')).status).toBe(401);
+    expect((await get(app, '/notifications')).status).toBe(401);
+  });
+
+  it('`routes: false` mounts nothing', async () => {
+    const app = await boot(
+      DatabaseChannelModule.forRoot({ autoCreateSchema: false, routes: false }),
+    );
+    apps.push(app);
+
+    expect((await get(app, '/notifications/unread/count', { 'x-user': 'u1' })).status).toBe(404);
+  });
+
   it('enforces a `@Can()` passed through `decorators`', async () => {
     const app = await boot(
       DatabaseChannelModule.forRoot({
