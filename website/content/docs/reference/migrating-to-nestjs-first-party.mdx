@@ -1,0 +1,158 @@
+---
+title: Migrating to NestJS first-party packages
+icon: ArrowRightLeft
+description: Mail, webhooks, outbox, i18n, Drizzle and resilience now build on the official @nestjs/* packages. What changed, before and after.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Where NestJS ships a first-party package, Aviary integrates it and keeps only what it lacks.
+These releases are breaking (0.x minors). Configure the official packages as
+[docs.nestjs.com](https://docs.nestjs.com) describes; this page lists what changes on the Aviary side.
+
+| Package | New version | Now built on |
+| --- | --- | --- |
+| `@dudousxd/nestjs-notifications-core` | 0.11 | `@nestjs/outbox` (`/outbox`), `@nestjs/i18n` (`/i18n`), both optional |
+| `@dudousxd/nestjs-notifications-mail` | 0.10 | `@nestjs/mail` |
+| `@dudousxd/nestjs-notifications-webhook` | 0.7 | `@nestjs/webhooks` |
+| `@dudousxd/nestjs-notifications-delivery-tracking` | minor | `@nestjs/mail` events (`/mail`, optional) |
+| `@dudousxd/nestjs-notifications-database-drizzle` | minor | `@nestjs/drizzle` connections (optional) |
+| `@dudousxd/nestjs-notifications-resilience` | 0.3 | `@nestjs/resilience` |
+
+Nest peer floors: core and mail `^11 || ^12`; webhook and resilience `^12` (the official peers'
+floors). The official packages are ESM-only; the CommonJS builds load them with `require(esm)`
+(Node ≥ 20.19, which the official packages require anyway).
+
+## Mail → @nestjs/mail
+
+Transports, the default sender and retries move to `MailModule`.
+
+```ts title="Before"
+MailChannelModule.forRoot({
+  from: 'billing@example.com',
+  smtp: { host: 'smtp.example.com', port: 587, auth },
+  resolveTransport: (tenant) => tenantTransports.get(tenant) ?? defaultTransport,
+});
+```
+
+```ts title="After"
+MailModule.forRoot({
+  from: 'billing@example.com',
+  transport: new TenantRoutingMailTransport(
+    (tenant) => tenantTransports.get(tenant),
+    new SmtpTransport({ host: 'smtp.example.com', port: 587, auth }),
+  ),
+}),
+MailChannelModule.forRoot(),
+```
+
+| Removed | Replacement |
+| --- | --- |
+| `NodemailerTransport`, `smtp`, `MAIL_SMTP_OPTIONS` | `@nestjs/mail` `SmtpTransport` |
+| `SesTransport`, `composeRawEmail` | `@nestjs/mail` `SesTransport` (SigV4, no AWS SDK); `MailMessage.toMime()` for raw MIME |
+| `LogMailTransport` / `NullMailTransport` | `@nestjs/mail` `LogMailTransport` / `FileMailTransport` / `InMemoryMailTransport` |
+| `MailTransport` interface, `MailTransportPayload`, `transport`, `transportInstance`, `MAIL_TRANSPORT` | `@nestjs/mail` `MailTransport` (abstract class), `MailModule.forRoot({ transport })` |
+| `from` option | `MailModule.forRoot({ from })` (`MailMessage.from()` still overrides) |
+| `resolveTransport`, `MAIL_TRANSPORT_RESOLVER` | `TenantRoutingMailTransport` (tenant from an AsyncLocalStorage scope) |
+| `nodemailer`, `@aws-sdk/client-sesv2` peers | `@nestjs/mail` peer |
+| attachment `path` as a URL | `attach({ filename, url })` (the channel downloads it) |
+
+New: `toMail()` may return `{ mail: MailClass, data }`; `MailMessage.replyTo()` / `.header()`; the channel
+returns `MailSendResult` (delivery tracking records `providerMessageId`, so SES bounces match);
+`retry` option; the delivery `idempotencyKey` is passed to the mailer.
+
+## Webhook → @nestjs/webhooks
+
+```ts title="Before"
+WebhookChannelModule.forRoot({ url, secret, redirect: 'error', timeoutMs: 10_000 });
+// toWebhook: new WebhookMessage().method('PUT').payload(body)
+```
+
+```ts title="After"
+WebhookChannelModule.forRoot({ url, secret, timeoutMs: 10_000 }); // redirects are never followed
+// toWebhook: new WebhookMessage().payload(body) — always POST
+```
+
+| Removed / changed | Replacement |
+| --- | --- |
+| `fetch`-based delivery | `HttpWebhookTransport`: https only, private/metadata addresses refused, address pinned. `delivery: { allowHttp, allowPrivateNetworks, allowedAddresses, ca }` for development or internal targets |
+| `redirect` option | removed (a 3xx fails the delivery) |
+| `WebhookMessage.method()` / `methodValue` | removed (always `POST`) |
+| request headers | sent lower-case |
+| response `void` | `{ id, statusCode }` |
+
+New: `signing: 'standard'` (Standard Webhooks, verifiable with `@VerifyWebhook`), `transport`
+override, and subscription delivery: return `new WebhookEvent(type, data)` and configure
+`WebhooksModule` + `OutboxModule` + `WebhookChannelModule.forRoot({ transaction })`.
+
+## Outbox → @nestjs/outbox (new)
+
+```ts
+NotificationsModule.forRoot({ ...outboxDispatcher({ transaction: (work) => db.transaction(work) }) });
+
+await db.transaction(async (tx) => {
+  await notifications.inTransaction(tx).send(user, new OrderPlaced(order));
+});
+```
+
+See [Outbox](/docs/dispatchers/outbox). `DispatchDriver` gains an optional `transactional` flag;
+`NotificationJob` an in-memory `transaction`; `DeliveryContext` an `idempotencyKey`. Custom
+`ScopedNotifier` implementations must add `inTransaction()`.
+
+## Localization → @nestjs/i18n
+
+```ts title="Before"
+NotificationsModule.forRoot({
+  localization: { defaultLocale: 'en', catalog: { en: { hi: 'Hi {name}' }, 'pt-BR': { hi: 'Olá {name}' } } },
+});
+```
+
+```ts title="After"
+I18nModule.forRoot({
+  defaultLocale: 'en',
+  loader: new InMemoryI18nLoader({ en: { hi: 'Hi {name}' }, 'pt-BR': { hi: 'Olá {name}' } }),
+}),
+NotificationsModule.forRoot({ providers: [...i18nTranslator()], localization: { defaultLocale: 'en' } }),
+```
+
+`InMemoryTranslator`, `TranslationCatalog` and `localization.catalog` are removed (`@nestjs/i18n`
+has catalogs, loaders, plurals and fallbacks). Without a translator, `t(key)` returns the key
+(`keyTranslator`). `TranslateParams` is now `Record<string, unknown>`. The recipient's locale
+resolver (`PropertyLocaleResolver`, `LocaleResolver`) is unchanged; deliveries run inside
+`I18nContext.run(locale)`.
+
+## Delivery tracking
+
+No breaking change. New `mailDeliveryTracking()` (`/mail` subpath) records mail sent with `Mailer`
+directly. See [Delivery tracking](/docs/recipes/delivery-tracking#mail-sent-outside-notifications).
+
+## Drizzle
+
+No breaking change. New `forRoot({ connectionName })` uses a `@nestjs/drizzle` connection; `db` still
+works. `forRootAsync`'s factory returns `{ db, tables? }` only.
+
+## Resilience → @nestjs/resilience
+
+```ts title="Before"
+resilientTransport(entries, {
+  timeoutMs: 8_000,
+  breaker: { threshold: 5, cooldownMs: 30_000 },
+  store: new RedisResilienceStore(redis),
+});
+```
+
+```ts title="After"
+resilientTransport(entries, {
+  timeout: '8s',
+  breaker: { minimumCalls: 5, slidingWindow: { type: 'count', size: 5 }, failureRateThreshold: 100, openDuration: '30s' },
+});
+```
+
+`@dudousxd/nestjs-resilience` is deprecated. `store`/`ResilienceStore` (fleet-wide breaker state),
+`clock` and `onEvent` are removed; breaker state is in-process, events come from the
+`nestjs:resilience:*` channels, errors are `CircuitOpenError` / `ResilienceTimeoutError`. New:
+`failoverIf`, `breakers`, `close()`, and any `send()` signature (fits `@nestjs/mail` transports).
+
+<Callout type="info">
+  Not migrated yet: request-context capture still uses `@dudousxd/nestjs-context`'s accessor.
+</Callout>

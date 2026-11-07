@@ -1,0 +1,94 @@
+---
+title: Outbox
+icon: Archive
+description: Transactional sends. Write the notification through your database transaction with @nestjs/outbox, so it's delivered only if the transaction commits.
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+A notification sent next to a database write has two failure modes: the write rolls back but the
+email already went out, or the write commits but the process dies before sending. The **outbox
+dispatcher** removes both: the notification job is written to
+[`@nestjs/outbox`](https://docs.nestjs.com/reliability/outbox) through your transaction, and delivered
+after the commit. Relaying, retries, ordering, dead letters and the inbox are the outbox's; this
+page covers what Aviary adds.
+
+## Install
+
+<Tabs items={['pnpm', 'npm']}>
+  <Tab value="pnpm">
+    ```bash
+    pnpm add @nestjs/outbox
+    ```
+  </Tab>
+  <Tab value="npm">
+    ```bash
+    npm install @nestjs/outbox
+    ```
+  </Tab>
+</Tabs>
+
+The dispatcher lives in core's `/outbox` subpath; `@nestjs/outbox` is an optional peer of core.
+
+## Wire it up
+
+Configure `OutboxModule` and its store as the NestJS docs describe, then spread `outboxDispatcher()`
+into `NotificationsModule.forRoot()`:
+
+```ts title="app.module.ts"
+import { OutboxModule } from '@nestjs/outbox';
+import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
+import { outboxDispatcher } from '@dudousxd/nestjs-notifications-core/outbox';
+
+@Module({
+  imports: [
+    OutboxModule.forRoot(),
+    NotificationsModule.forRoot({
+      ...outboxDispatcher({ transaction: (work) => db.transaction(work) }),
+      notifications: [OrderPlaced],
+      resolveNotifiable: (ref) => users.findById(ref.id),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+Jobs are serialized like any async dispatcher's (`notifications` + `resolveNotifiable` rebuild them)
+and written to the topic `aviary.notifications`. `OutboxNotificationHandler`, registered by the
+helper, is the `@OnOutboxMessage()` consumer (`aviary.notifications`) that rehydrates each job and
+runs its channels.
+
+## Send in a transaction
+
+```ts
+await db.transaction(async (tx) => {
+  await tx.insert(orders).values(order);
+  await notifications.inTransaction(tx).send(customer, new OrderPlaced(order));
+});
+```
+
+`inTransaction(tx)` composes with the other scopes (`forTenant`, `only`, `except`). `send`, `notify`
+and `sendAsync` write the job through `tx`; the handle stays in memory and is never serialized.
+`sendNow` delivers inline and ignores `tx`. With a dispatcher that isn't transactional,
+`inTransaction()` throws instead of delivering outside the transaction.
+
+`outboxDispatcher()` options:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `transaction` | — | Opens a transaction for jobs sent without one (`sendAsync()`, a `shouldQueue` notification, a quiet-hours re-queue), e.g. `(work) => db.transaction(work)`. Without it, such a job fails to dispatch. |
+| `key` | none | `(job) => string \| null`: the outbox ordering key. Jobs sharing a key are delivered one at a time, in order. |
+
+## Delivery and retries
+
+Each delivery gets the outbox message id as its `idempotencyKey`: the [mail channel](/docs/channels/mail#retries)
+passes it to `@nestjs/mail` (a redelivered mail keeps its `Message-ID`) and the
+[webhook channel](/docs/channels/webhook#standard-webhooks-signing) uses it as `webhook-id`.
+
+<Callout type="info">
+  Under the default `errorPolicy: 'continueOnError'` a failed channel is reported (events, delivery
+  tracking) and the outbox message completes. With `errorPolicy: 'failFast'` the first failure is
+  thrown and the outbox retries the whole job; give the mail channel `retry: false` so retries don't
+  multiply.
+</Callout>

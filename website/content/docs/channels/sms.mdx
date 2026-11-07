@@ -174,15 +174,15 @@ SmsChannelModule.forRoot({ from: '+15555550100', transport: VonageTransport });
 
 ## Multi-provider failover
 
-`resilientTransport` (from [`@dudousxd/nestjs-notifications-resilience`](https://davidecarvalho.github.io/aviary/docs/resilience))
+`resilientTransport` (from [`@dudousxd/nestjs-notifications-resilience`](https://github.com/DavideCarvalho/nestjs-notifications/tree/main/packages/resilience))
 wraps an ordered list of transports and tries each until one succeeds — so when Twilio is down, the
-next provider (say Vonage) takes over. Beyond plain try-in-order, it adds a **per-provider circuit
-breaker** (a known-dead provider is skipped instantly instead of retried every send) and a
-**per-attempt timeout** (a slow provider is treated as a failure). Pass it as a pre-built instance
-via `transportInstance` (which takes precedence over the `transport` class):
+next provider (say Vonage) takes over. Each provider runs behind a
+[`@nestjs/resilience`](https://docs.nestjs.com/reliability/resilience) `CircuitBreakerPolicy` (a
+known-dead provider is skipped instantly instead of retried every send) and a `TimeoutPolicy` (a slow
+provider counts as a failure). Pass it as a pre-built instance via `transportInstance`:
 
 ```bash
-pnpm add @dudousxd/nestjs-notifications-resilience @dudousxd/nestjs-resilience
+pnpm add @dudousxd/nestjs-notifications-resilience @nestjs/resilience
 ```
 
 ```ts title="app.module.ts"
@@ -197,19 +197,20 @@ SmsChannelModule.forRoot({
       { id: 'vonage', transport: new VonageTransport(vonageOpts) },
     ],
     {
-      keyPrefix: 'sms',                              // circuit keys: 'sms:twilio', 'sms:vonage'
-      timeoutMs: 8_000,                              // per-attempt timeout
-      breaker: { threshold: 5, cooldownMs: 30_000 }, // open after 5 failures, probe after 30s
+      keyPrefix: 'sms',                                          // breakers 'sms:twilio', 'sms:vonage'
+      timeout: '8s',                                             // per-attempt timeout
+      breaker: { failureRateThreshold: 50, minimumCalls: 5, openDuration: '30s' },
       onFailover: (id, error) => logger.warn(`sms provider ${id} failed over: ${error}`),
     },
   ),
 });
 ```
 
-The last error is rethrown only if **every** provider fails. By default breaker state is per-process;
-pass a distributed [`@dudousxd/nestjs-resilience-store-*`](https://davidecarvalho.github.io/aviary/docs/resilience)
-adapter as `store` to share it fleet-wide. The same `resilientTransport` works for the mail channel —
-it's generic over any `{ send(payload) }` transport.
+An open breaker rejects with `CircuitOpenError` and a slow provider with `ResilienceTimeoutError`;
+both always fail over, and `failoverIf(error)` decides for other errors (default: all). The last error
+is rethrown only if **every** provider fails. Breaker state is in-process; state changes are published
+on the `nestjs:resilience:*` diagnostics channels. The same `resilientTransport` works for
+[mail](/docs/channels/mail#multi-provider-failover) — it's generic over any `send()` transport.
 
 ## Per-tenant config
 

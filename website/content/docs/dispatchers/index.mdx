@@ -16,6 +16,7 @@ A dispatcher is small. One required method, plus an optional bulk one:
 interface DispatchDriver {
   dispatch(job: NotificationJob): Promise<void>;
   dispatchMany?(jobs: NotificationJob[]): Promise<void>;
+  readonly transactional?: boolean; // honors job.transaction (see the outbox dispatcher)
 }
 ```
 
@@ -111,7 +112,10 @@ See [Async dispatch](/docs/concepts/async-dispatch) for the full round trip.
 | [event-emitter](/docs/dispatchers/event-emitter) | same, deferred | no | no |
 | [BullMQ](/docs/dispatchers/bullmq) | worker | yes | yes |
 | [Redis](/docs/dispatchers/redis) | worker | yes | yes |
+| [Outbox](/docs/dispatchers/outbox) | relay (after commit) | yes | yes |
 
 - Want async without infrastructure? Use [event-emitter](/docs/dispatchers/event-emitter).
 - Already running [BullMQ](/docs/dispatchers/bullmq)? Reuse it.
 - Want a dedicated worker without BullMQ? Use the [Redis](/docs/dispatchers/redis) dispatcher.
+- Sending next to a database write? Use the [outbox](/docs/dispatchers/outbox): delivered only if the
+  transaction commits.

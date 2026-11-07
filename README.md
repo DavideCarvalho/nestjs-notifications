@@ -43,13 +43,13 @@ await notifications.send(user, new InvoicePaid(invoice));
 
 | Package | What it does |
 | --- | --- |
-| `@dudousxd/nestjs-notifications-core` | Abstractions, `NotificationService`, synchronous dispatcher, events |
-| `@dudousxd/nestjs-notifications-mail` | Mail channel — fluent `MailMessage`; Default/Markdown/React-Email/MJML renderers; failover transport |
+| `@dudousxd/nestjs-notifications-core` | Abstractions, `NotificationService`, synchronous dispatcher, events; `/outbox` transactional dispatch on `@nestjs/outbox`, `/i18n` translator on `@nestjs/i18n` |
+| `@dudousxd/nestjs-notifications-mail` | Mail channel on `@nestjs/mail` — fluent `MailMessage`; Default/Markdown/React-Email/MJML renderers; per-tenant transport routing |
 | `@dudousxd/nestjs-notifications-database` | Database channel — `NotificationStore` + in-memory store |
 | `@dudousxd/nestjs-notifications-database-typeorm` | TypeORM adapter for the database channel |
 | `@dudousxd/nestjs-notifications-database-mikro-orm` | MikroORM adapter for the database channel |
 | `@dudousxd/nestjs-notifications-database-prisma` | Prisma adapter for the database channel |
-| `@dudousxd/nestjs-notifications-database-drizzle` | Drizzle ORM (Postgres) adapter for the database channel + digest store |
+| `@dudousxd/nestjs-notifications-database-drizzle` | Drizzle ORM (Postgres) adapter for the database channel + digest store (`@nestjs/drizzle` connections) |
 | `@dudousxd/nestjs-notifications-broadcast` | WebSocket (socket.io) channel for realtime in-app notifications |
 | `@dudousxd/nestjs-notifications-sse` | Server-Sent Events channel for live in-app updates |
 | `@dudousxd/nestjs-notifications-push` | Push channel — Web Push, FCM, Expo, APNs |
@@ -58,9 +58,10 @@ await notifications.send(user, new InvoicePaid(invoice));
 | `@dudousxd/nestjs-notifications-discord` | Discord channel — webhook |
 | `@dudousxd/nestjs-notifications-telegram` | Telegram channel — Bot API |
 | `@dudousxd/nestjs-notifications-teams` | Microsoft Teams channel — incoming webhook |
-| `@dudousxd/nestjs-notifications-webhook` | Webhook channel — HMAC-signed HTTP callbacks |
+| `@dudousxd/nestjs-notifications-webhook` | Webhook channel on `@nestjs/webhooks` — signed POSTs (sha256 or Standard Webhooks) or subscription fan-out |
 | `@dudousxd/nestjs-notifications-preferences` | Channel opt-out + full preference center (category × channel × digest) |
-| `@dudousxd/nestjs-notifications-delivery-tracking` | Persisted per-channel delivery status + Twilio/SES inbound status webhooks |
+| `@dudousxd/nestjs-notifications-delivery-tracking` | Persisted per-channel delivery status + Twilio/SES inbound status webhooks; `/mail` records `@nestjs/mail` events |
+| `@dudousxd/nestjs-notifications-resilience` | Provider failover on `@nestjs/resilience` circuit breakers + timeouts |
 | `@dudousxd/nestjs-notifications-client` | Framework-neutral headless SDK — fetch client + SSE subscribe + TanStack Query factories |
 | `@dudousxd/nestjs-notifications-react` | Drop-in `<Inbox/>` widget + `useNotifications` / `useUnreadCount` hooks |
 | `@dudousxd/nestjs-notifications-event-emitter` | In-process async dispatch via `@nestjs/event-emitter` |
@@ -72,20 +73,25 @@ await notifications.send(user, new InvoicePaid(invoice));
 ## Install
 
 ```bash
-pnpm add @dudousxd/nestjs-notifications-core @dudousxd/nestjs-notifications-mail @nestjs/event-emitter
+pnpm add @dudousxd/nestjs-notifications-core @dudousxd/nestjs-notifications-mail @nestjs/mail @nestjs/event-emitter
 ```
 
 ## Quick start
+
+Where NestJS ships a first-party package (mail, webhooks, outbox, i18n, Drizzle, resilience), Aviary
+builds on it. Upgrading from an earlier 0.x? See the
+[migration guide](website/content/docs/reference/migrating-to-nestjs-first-party.mdx).
 
 ```ts
 @Module({
   imports: [
     EventEmitterModule.forRoot(),
     NotificationsModule.forRoot({ notifications: [InvoicePaid] }),
-    MailChannelModule.forRoot({
+    MailModule.forRoot({
+      transport: new SmtpTransport({ host: 'smtp.example.com', port: 587, auth: { user, pass } }),
       from: 'billing@example.com',
-      smtp: { host: 'smtp.example.com', port: 587, auth: { user, pass } },
     }),
+    MailChannelModule.forRoot(),
     DatabaseChannelModule.forRoot(), // in-memory; pair with an ORM adapter for persistence
   ],
 })

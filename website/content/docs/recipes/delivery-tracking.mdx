@@ -151,8 +151,26 @@ The verifier is exported on its own too (`SnsMessageVerifier`, `buildSnsStringTo
 ## Correlating sends to callbacks
 
 A webhook says "message `SM123` was delivered" — the tracker needs to know which record that is. When
-a channel transport returns the provider's id (Twilio's `MessageSid`, SES's `messageId`), the listener
-captures it automatically, so delivered/bounced updates just work.
+a channel returns the provider's id (Twilio's `MessageSid`; the mail channel returns `@nestjs/mail`'s
+`MailSendResult`, whose `providerMessageId` is the SES `MessageId`), the listener captures it
+automatically, so delivered/bounced updates just work.
+
+### Mail sent outside notifications
+
+Mail your app sends with `@nestjs/mail`'s `Mailer` directly isn't a notification, so the listener
+never sees it. `mailDeliveryTracking()` from the `/mail` subpath records it from `MailEvents`
+(`sent` / `failed`, with the provider message id, so SES bounces correlate). Mail the mail channel
+sends is skipped there, so nothing is recorded twice:
+
+```ts title="app.module.ts"
+import { mailDeliveryTracking } from '@dudousxd/nestjs-notifications-delivery-tracking/mail';
+
+@Module({
+  imports: [DeliveryTrackingModule.forRoot(), MailModule.forRoot({ transport })],
+  providers: [...mailDeliveryTracking()],
+})
+export class AppModule {}
+```
 
 If a transport doesn't surface its id, attach it yourself after sending and the next callback will
 correlate:

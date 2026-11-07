@@ -1,43 +1,49 @@
 ---
 title: Mail
 icon: Mail
-description: Send email notifications. A fluent MailMessage builder, an HTML + text renderer, and a swappable transport — nodemailer SMTP out of the box.
+description: Send email notifications. A fluent MailMessage builder and renderers (Markdown, React Email, MJML) on top of @nestjs/mail, which owns transports, retries and events.
 ---
 
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
 import { Callout } from 'fumadocs-ui/components/callout';
 
-The mail channel turns a notification into an email. You shape the message with a fluent builder,
-a renderer produces the HTML and plain-text bodies, and a transport delivers it. The defaults —
-a semantic HTML renderer and a nodemailer SMTP transport — work out of the box, and every piece is
-swappable.
+The mail channel turns a notification into an email. **Sending is [`@nestjs/mail`](https://docs.nestjs.com/application/mail)'s**:
+its `MailModule` owns the transports (SMTP, Resend, Postmark, SendGrid, SES, log, file, in-memory),
+the default sender, retries, `MailEvents` and test helpers. This page documents only what the
+channel adds: the `MailMessage` builder, renderers, mail classes per notification, per-tenant
+routing and URL attachments.
 
 ## Install
 
 <Tabs items={['pnpm', 'npm']}>
   <Tab value="pnpm">
     ```bash
-    pnpm add @dudousxd/nestjs-notifications-mail
+    pnpm add @dudousxd/nestjs-notifications-mail @nestjs/mail
     ```
   </Tab>
   <Tab value="npm">
     ```bash
-    npm install @dudousxd/nestjs-notifications-mail
+    npm install @dudousxd/nestjs-notifications-mail @nestjs/mail
     ```
   </Tab>
 </Tabs>
 
 ## Register the channel
 
+Configure `MailModule` as the [NestJS mail docs](https://docs.nestjs.com/application/mail) describe,
+then add the channel:
+
 ```ts title="app.module.ts"
+import { MailModule, SmtpTransport } from '@nestjs/mail';
 import { MailChannelModule } from '@dudousxd/nestjs-notifications-mail';
 
 @Module({
   imports: [
-    MailChannelModule.forRoot({
-      from: 'billing@example.com',
-      smtp: { host: 'smtp.example.com', port: 587, auth: { user: '…', pass: '…' } },
+    MailModule.forRoot({
+      transport: new SmtpTransport({ host: 'smtp.example.com', port: 587, auth: { user: '…', pass: '…' } }),
+      from: 'Billing <billing@example.com>',
     }),
+    MailChannelModule.forRoot(),
   ],
 })
 export class AppModule {}
@@ -47,13 +53,14 @@ export class AppModule {}
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
-| `from` | `string` | — | Default sender used when a message doesn't set its own `from`. |
-| `transport` | `Type<MailTransport>` | `NodemailerTransport` | Transport **class** that delivers the rendered mail (resolved from DI). |
-| `transportInstance` | `MailTransport` | — | A pre-built transport **instance** — use for transports you construct yourself (e.g. [`SesTransport`](#aws-ses) or a [failover](#multi-provider-failover) wrapper). Takes precedence over `transport`. |
-| `renderer` | `Type<MailRenderer>` | `DefaultMailRenderer` | Renderer that produces the HTML + text bodies. |
-| `smtp` | `SMTPOptions \| string` | `{}` | SMTP options, or a connection URL (`smtp://user:pass@host:587`), forwarded to the default nodemailer transport. |
-| `resolveTransport` | `(tenant: string) => MailTransport` | — | Per-tenant transport resolver. See [Per-tenant transport](#per-tenant-transport). |
+| `renderer` | `Type<MailRenderer>` | `DefaultMailRenderer` | Renderer that produces the HTML + text bodies of a `MailMessage`. |
+| `rendererInstance` | `MailRenderer` | — | A pre-built renderer instance; takes precedence over `renderer`. |
+| `retry` | `number \| false \| MailRetryOptions` | the `MailModule`'s | `@nestjs/mail` retry for the channel's sends. Set `false` when an outer queue already retries deliveries (see [Retries](#retries)). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
+
+The channel returns `@nestjs/mail`'s `MailSendResult` as its response, so
+[delivery tracking](/docs/recipes/delivery-tracking) records the provider's message id (the SES
+`MessageId` an SES bounce refers to).
 
 ## The notification side
 
@@ -87,7 +94,22 @@ compile-time checks on `toMail()`'s shape, implement `MailNotification` alongsid
 `toMail()` receives a **context object** — `toMail({ notifiable, localization })` — so you can
 translate the subject and lines per recipient. Destructure only what you need; use
 `localization.t(key, params)` to render in the recipient's language. See
-[Localization](/docs/concepts/localization).
+[Localization](/docs/concepts/localization). The resolved locale is also recorded on the sent message.
+
+### Mail classes
+
+`toMail()` can return a [`@nestjs/mail` mail class](https://docs.nestjs.com/application/mail) with its
+data instead of a `MailMessage`. The channel sends it with `mailer.send(mail, { to, data, locale })`,
+in the recipient's locale:
+
+```ts
+@Mail()
+toMail() {
+  return { mail: OrderShippedMail, data: this.order };
+}
+```
+
+The object may also carry `from`, `replyTo`, `headers` and `attachments` overrides.
 
 ### MailMessage builder
 
@@ -95,7 +117,10 @@ translate the subject and lines per recipient. Destructure only what you need; u
 
 | Method | Effect |
 | --- | --- |
-| `.from(addr)` | Override the sender for this message (otherwise the module's `from`). |
+| `.from(addr)` | Override the sender for this message (otherwise `MailModule`'s `from`). |
+| `.replyTo(addr)` | Set the Reply-To address. |
+| `.header(name, value)` | Add a custom header (`List-Unsubscribe`, `X-Entity-Ref-ID`). |
+| `.attach(attachment)` | Attach a file: `@nestjs/mail`'s attachment (`content` or a local `path`), or `{ filename, url }`. |
 | `.subject(s)` | Set the subject line. |
 | `.greeting(s)` | Set the leading greeting (rendered as a heading). |
 | `.line(s)` | Append a body paragraph. Call it more than once for multiple paragraphs. |
@@ -118,141 +143,47 @@ export class User implements Notifiable {
 }
 ```
 
-The channel sends with that address as `to`, and uses the message's `from` (falling back to the
-module's `from`) as the sender.
+The route may also be `{ name, address }` or a list of addresses. The sender is the message's `from`,
+else `MailModule`'s.
 
-## Transports
+## Attachments from a URL
 
-The default transport, `NodemailerTransport`, wraps nodemailer's SMTP transport and is configured
-through the `smtp` option:
-
-```ts
-MailChannelModule.forRoot({
-  from: 'no-reply@example.com',
-  smtp: { host: 'smtp.example.com', port: 587, secure: false, auth: { user, pass } },
-});
-```
-
-`SMTPOptions` requires `host` and `port`, with optional `secure` and `auth`. Any extra keys pass
-straight through to nodemailer. You can also pass a connection URL, which is the usual
-single-env-var form, for example for an internal relay on a private network:
+`@nestjs/mail` reads an attachment `path` from the local disk only. For a file at a URL, give `url`:
+the channel downloads it (no redirects followed) before sending. Use URLs your app chooses, never
+ones built from user input.
 
 ```ts
-MailChannelModule.forRoot({ from: 'no-reply@corp.internal', smtp: process.env.SMTP_URL }); // smtp://user:pass@relay.internal:25
+new MailMessage().subject('Your report').attach({ filename: 'report.pdf', url: report.downloadUrl });
 ```
 
-### Log and null transports
+## Retries
 
-Two built-in transports cover environments that shouldn't really send mail:
+`@nestjs/mail` retries a failed send (3 attempts by default). When notifications also go through a
+retrying queue (BullMQ, or the [outbox](/docs/dispatchers/outbox) with `errorPolicy: 'failFast'`),
+attempts multiply; give the channel `retry: false` so only the queue retries. A delivery from the
+outbox passes its message id as `idempotencyKey`, so a redelivered mail keeps its `Message-ID`.
 
-- `LogMailTransport` writes each message (recipient, subject, text body) to the Nest logger. It's the
-  "log" driver for local development, so you can click an invite link straight from the console.
-  Never use it in production, because links end up in your logs.
-- `NullMailTransport` drops every message and logs the drop at debug level. Use it where outgoing
-  mail is deliberately off, such as CI or an air-gapped install with no relay configured.
+## Multi-provider failover
+
+`resilientTransport` from [`@dudousxd/nestjs-notifications-resilience`](https://github.com/DavideCarvalho/nestjs-notifications/tree/main/packages/resilience)
+wraps an ordered list of `@nestjs/mail` transports, each behind a `@nestjs/resilience` circuit breaker
+and timeout, and fails over to the next one. Pass it as `MailModule`'s transport:
 
 ```ts
-MailChannelModule.forRoot({
-  from: 'no-reply@example.com',
-  ...(process.env.SMTP_URL
-    ? { smtp: process.env.SMTP_URL }
-    : { transport: process.env.NODE_ENV === 'production' ? NullMailTransport : LogMailTransport }),
-});
-```
-
-To use a provider's HTTP API instead of SMTP, implement `MailTransport` and pass it as `transport`:
-
-```ts title="resend.transport.ts"
-import { Injectable } from '@nestjs/common';
-import type { MailTransport, MailTransportPayload } from '@dudousxd/nestjs-notifications-mail';
-
-@Injectable()
-export class ResendTransport implements MailTransport {
-  async send(payload: MailTransportPayload): Promise<void> {
-    // payload: { to, from?, subject, html, text }
-    await resend.emails.send({ to: payload.to, from: payload.from, subject: payload.subject, html: payload.html });
-  }
-}
-
-MailChannelModule.forRoot({ from: 'no-reply@example.com', transport: ResendTransport });
-```
-
-The transport class is registered in DI, so it can inject its own dependencies (config, an HTTP
-client, your provider SDK).
-
-### AWS SES
-
-The mail package ships a first-class **AWS SES v2** transport, `SesTransport`. Unlike SES "Simple"
-content (subject/html/text only), it builds a full MIME message with nodemailer's `MailComposer` and
-sends it as `Content.Raw` — so **attachments are supported**. It's a ready-made `MailTransport` you
-construct with a configured SES client and pass via `transportInstance`:
-
-```bash
-pnpm add @dudousxd/nestjs-notifications-mail @aws-sdk/client-sesv2
-```
-
-```ts title="app.module.ts"
-import { SESv2Client } from '@aws-sdk/client-sesv2';
-import { MailChannelModule, SesTransport } from '@dudousxd/nestjs-notifications-mail';
-
-MailChannelModule.forRoot({
-  from: 'no-reply@example.com',
-  transportInstance: new SesTransport({
-    client: new SESv2Client({ region: 'us-east-1' }),
-    from: 'no-reply@example.com', // fallback sender when a message sets no `from`
-  }),
-});
-```
-
-`SesTransportOptions` is `{ client: SesV2Client; from?: string }`. `client` is anything with a
-`send(command)` method — in practice `@aws-sdk/client-sesv2`'s `SESv2Client`, but the transport only
-depends on the structural `SesV2Client` interface, so a test double or a custom-configured client
-works too. The `@aws-sdk/client-sesv2` package is an **optional peer** imported lazily (only when a
-mail actually sends), so it isn't resolved at compile time and stays out of your bundle until you use
-this transport.
-
-<Callout type="info">
-  Because `SesTransport` sends raw MIME, you can attach files to a `MailMessage` and they ride through
-  to SES intact — SES's Simple content type can't do that. Need the raw bytes yourself (to sign, log,
-  or hand to another SDK call)? `composeRawEmail(payload, defaultFrom?)` is exported too — it returns
-  the composed MIME `Buffer` for a rendered `MailTransportPayload`.
-</Callout>
-
-### Multi-provider failover
-
-`resilientTransport` (from [`@dudousxd/nestjs-notifications-resilience`](https://davidecarvalho.github.io/aviary/docs/resilience))
-wraps an ordered list of transports and tries each until one succeeds — so when SES is down, the next
-provider (say Resend) takes over. It adds a **per-provider circuit breaker** (a known-dead provider is
-skipped instead of retried every send) and a **per-attempt timeout**. Pass it as a pre-built instance
-via `transportInstance`:
-
-```bash
-pnpm add @dudousxd/nestjs-notifications-resilience @dudousxd/nestjs-resilience
-```
-
-```ts
+import { ResendTransport, SesTransport, MailModule } from '@nestjs/mail';
 import { resilientTransport } from '@dudousxd/nestjs-notifications-resilience';
 
-MailChannelModule.forRoot({
+MailModule.forRoot({
   from: 'no-reply@example.com',
-  transportInstance: resilientTransport(
+  transport: resilientTransport(
     [
-      { id: 'ses', transport: sesTransport },
-      { id: 'resend', transport: resendTransport },
+      { id: 'ses', transport: new SesTransport({ region: 'us-east-1' }) },
+      { id: 'resend', transport: new ResendTransport({ apiKey }) },
     ],
-    {
-      keyPrefix: 'mail',
-      timeoutMs: 10_000,
-      breaker: { threshold: 5, cooldownMs: 30_000 },
-      onFailover: (id, error) => logger.warn(`mail provider ${id} failed over: ${error}`),
-    },
+    { keyPrefix: 'mail', timeout: '10s', breaker: { failureRateThreshold: 50, openDuration: '30s' } },
   ),
 });
 ```
-
-The last error is rethrown only if **every** provider fails. Breaker state is per-process by default;
-pass a distributed [`@dudousxd/nestjs-resilience-store-*`](https://davidecarvalho.github.io/aviary/docs/resilience)
-adapter as `store` to share it fleet-wide.
 
 ## Renderers
 
@@ -270,7 +201,7 @@ ship in the box; pick one with the `renderer` option:
 ```ts title="React Email"
 import { ReactEmailRenderer } from '@dudousxd/nestjs-notifications-mail';
 
-MailChannelModule.forRoot({ from: 'no-reply@example.com', renderer: ReactEmailRenderer });
+MailChannelModule.forRoot({ renderer: ReactEmailRenderer });
 
 // in the notification:
 toMail() {
@@ -281,7 +212,7 @@ toMail() {
 ```ts title="MJML"
 import { MjmlMailRenderer } from '@dudousxd/nestjs-notifications-mail';
 
-MailChannelModule.forRoot({ from: 'no-reply@example.com', renderer: MjmlMailRenderer });
+MailChannelModule.forRoot({ renderer: MjmlMailRenderer });
 
 toMail() {
   return new MailMessage().subject('Welcome').mjml('<mjml><mj-body>…</mj-body></mjml>');
@@ -305,12 +236,12 @@ export class HandlebarsRenderer implements MailRenderer {
   }
 }
 
-MailChannelModule.forRoot({ from: 'no-reply@example.com', renderer: HandlebarsRenderer });
+MailChannelModule.forRoot({ renderer: HandlebarsRenderer });
 ```
 
 <Callout type="info">
   `MailMessage` exposes read-only getters (`subjectLine`, `greetingText`, `lines`, `actionText`,
-  `actionUrl`, `salutationText`, `fromAddress`) so a custom renderer can read everything the builder
+  `actionUrl`, `salutationText`, `fromAddress`, `replyToAddress`, `headerValues`, `attachments`) so a custom renderer can read everything the builder
   collected.
 </Callout>
 
@@ -322,10 +253,7 @@ When you'd rather write the body as Markdown than chain `.line()` calls, swap in
 ```ts title="app.module.ts"
 import { MailChannelModule, MarkdownMailRenderer } from '@dudousxd/nestjs-notifications-mail';
 
-MailChannelModule.forRoot({
-  from: 'no-reply@example.com',
-  renderer: MarkdownMailRenderer,
-});
+MailChannelModule.forRoot({ renderer: MarkdownMailRenderer });
 ```
 
 ```ts title="invoice-paid.notification.ts"
@@ -350,16 +278,36 @@ Markdown and builder-style notifications under one renderer.
 
 ## Per-tenant transport
 
-In a multi-tenant app each tenant can send through its own SMTP/provider. Pass `resolveTransport` —
-when a send is scoped to a tenant (via [`forTenant(id)`](/docs/concepts/multi-tenancy) or a
-`@Tenant()` property), the channel uses the transport you return instead of the default:
+In a multi-tenant app each tenant can send through its own provider. Give `MailModule` a
+`TenantRoutingMailTransport`: it picks the transport per message from the tenant the notification is
+delivered for ([`forTenant(id)`](/docs/concepts/multi-tenancy) or a `@Tenant()` property). The tenant
+travels in an `AsyncLocalStorage` scope around the send, never as a header on the message.
 
 ```ts title="app.module.ts"
-MailChannelModule.forRoot({
+import { MailModule, SmtpTransport } from '@nestjs/mail';
+import { TenantRoutingMailTransport } from '@dudousxd/nestjs-notifications-mail';
+
+MailModule.forRoot({
   from: 'no-reply@example.com',
-  resolveTransport: (tenant) => tenantTransports.get(tenant) ?? defaultTransport,
+  transport: new TenantRoutingMailTransport(
+    (tenant) => tenantTransports.get(tenant), // undefined → the fallback
+    new SmtpTransport({ host: 'smtp.example.com' }),
+  ),
 });
 ```
 
-The resolver receives the tenant id and returns a `MailTransport`. Sends with no tenant scope keep
-using the default transport. See [Multi-tenancy](/docs/concepts/multi-tenancy) for the full picture.
+Mail without a tenant (single-tenant sends, or a direct `mailer.send()`) goes through the fallback. To
+route a direct send by tenant, wrap it in `runInMailScope({ tenant }, () => mailer.send(...))`;
+`currentMailScope()` reads the scope (a `MailEvents` subscriber runs inside it too).
+
+## Testing
+
+Use `@nestjs/mail`'s `InMemoryMailTransport` and its assertions
+([docs](https://docs.nestjs.com/application/mail)):
+
+```ts
+const mailbox = new InMemoryMailTransport();
+// MailModule.forRoot({ transport: mailbox }) or .overrideProvider(MailTransport).useValue(mailbox)
+await notifications.send(user, new InvoicePaid('INV-1'));
+mailbox.assertSent({ to: user.email }).link('/invoices/INV-1');
+```

@@ -1,46 +1,55 @@
 ---
 title: Localization (i18n)
 icon: Languages
-description: Translate each notification per recipient. Resolve a locale off the notifiable, look strings up in a catalog (or your own translator), and render channel payloads in the recipient's language with localization.t().
+description: Translate each notification per recipient. Resolve a locale off the notifiable, translate with @nestjs/i18n, and render channel payloads in the recipient's language with localization.t().
 ---
 
 import { Callout } from 'fumadocs-ui/components/callout';
 
 Notifications go to people who don't all speak the same language. **Localization** resolves a
 **locale per recipient** and gives each channel payload method a translator, so one notification
-renders as English for one user and Portuguese for another — the call site never changes. It's opt-in
-and backward compatible: a payload method that ignores the translator keeps working.
+renders as English for one user and Portuguese for another — the call site never changes.
 
-## Configure a catalog
+Translation itself — catalogs, plurals, fallbacks, number and date formatting — is
+[`@nestjs/i18n`](https://docs.nestjs.com/application/i18n)'s. Aviary adds the per-recipient locale and
+an adapter that renders every delivery in it.
 
-The simplest setup passes a translation **catalog** to `forRoot`. The default in-memory translator
-looks keys up in it, and the default resolver reads the recipient's locale off the notifiable:
+## Use @nestjs/i18n
+
+Configure `I18nModule` as the NestJS docs describe, then bind its translator with `i18nTranslator()`
+from the `/i18n` subpath of core (`@nestjs/i18n` is an optional peer):
 
 ```ts title="app.module.ts"
-NotificationsModule.forRoot({
-  localization: {
-    defaultLocale: 'en',
-    catalog: {
-      en: {
-        'invoice.paid.subject': 'Invoice {id} paid',
-        'invoice.paid.body': 'Thanks for your payment!',
-      },
-      'pt-BR': {
-        'invoice.paid.subject': 'Fatura {id} paga',
-        'invoice.paid.body': 'Obrigado pelo seu pagamento!',
-      },
-    },
-  },
-});
+import { I18nModule, JsonI18nLoader } from '@nestjs/i18n';
+import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
+import { i18nTranslator } from '@dudousxd/nestjs-notifications-core/i18n';
+
+@Module({
+  imports: [
+    I18nModule.forRoot({ defaultLocale: 'en', loader: new JsonI18nLoader({ path: 'i18n' }) }),
+    NotificationsModule.forRoot({
+      providers: [...i18nTranslator()],
+      localization: { defaultLocale: 'en' },
+    }),
+  ],
+})
+export class AppModule {}
 ```
 
-`LocalizationOptions` is `{ defaultLocale?, resolver?, translator?, catalog? }` — all optional.
+`I18nServiceTranslator` turns `localization.t(key, params)` into
+`i18n.translate(key, { locale, args: params })`, and runs each channel delivery inside
+`I18nContext.run(locale)`. Code that reads the ambient locale — `@nestjs/i18n`'s `t()`, a
+[`@nestjs/mail` mail class](/docs/channels/mail#mail-classes) injecting `I18nService` — renders in the
+recipient's language too.
+
+`LocalizationOptions` is `{ defaultLocale?, resolver?, translator? }` — all optional. Without a
+translator, `t(key)` returns the key.
 
 ## Translate in a payload method
 
 Every `to<Channel>()` method receives a **context object** carrying the resolved `localization`
 (alongside the `notifiable` and `tenant`). Destructure what you need and call `localization.t(key,
-params)` — it resolves the key in the recipient's locale and interpolates `{placeholders}`:
+params)` — it resolves the key in the recipient's locale:
 
 ```ts title="invoice-paid.notification.ts"
 @Notification()
@@ -58,7 +67,7 @@ export class InvoicePaid implements MailNotification {
 
 Send to a `pt-BR` recipient and the subject is *"Fatura 42 paga"*; to an `en` recipient, *"Invoice 42
 paid"*. `Localization` is `{ locale: string; t(key, params?): string }`, and `params` is a
-`Record<string, string | number>`.
+`Record<string, unknown>` (`@nestjs/i18n`'s `args`).
 
 ## Where the locale comes from
 
@@ -88,19 +97,15 @@ NotificationsModule.forRoot({
 
 ## Bring your own translator
 
-The default catalog translator is deliberately minimal. To use i18next, ICU messages, or a remote
-catalog, implement `Translator` and pass it (or bind it under `NOTIFICATION_TRANSLATOR`):
+Any other library works through the `Translator` interface (pass it as `localization.translator`, or
+bind it under `NOTIFICATION_TRANSLATOR`). `runInLocale` is optional: implement it when the library
+has an ambient locale the delivery should run in.
 
 ```ts
 interface Translator {
   translate(key: string, locale: string, params?: TranslateParams): string;
+  runInLocale?<R>(locale: string, fn: () => R): R;
 }
-
-NotificationsModule.forRoot({
-  localization: {
-    translator: { translate: (key, locale, params) => i18next.t(key, { lng: locale, ...params }) },
-  },
-});
 ```
 
 <Callout type="info">
@@ -115,22 +120,6 @@ NotificationsModule.forRoot({
 Everything above is driven by a few concrete exports you can also use directly — in a test, a custom
 resolver, or your own rendering code.
 
-**`InMemoryTranslator`** is the zero-dependency default translator. It looks up `catalog[locale][key]`,
-falling back to the base locale (`pt-BR` → `pt`), then the default locale, then the raw key, and
-interpolates `{placeholder}` tokens. It's what backs the `catalog` option, but you can construct one
-yourself:
-
-```ts
-import { InMemoryTranslator } from '@dudousxd/nestjs-notifications-core';
-
-const t = new InMemoryTranslator(
-  { en: { hi: 'Hi {name}' }, 'pt-BR': { hi: 'Olá {name}' } },
-  'en', // default locale
-);
-t.translate('hi', 'pt-BR', { name: 'Ana' }); // "Olá Ana"
-t.translate('hi', 'fr', { name: 'Ana' });    // "Hi Ana"  (falls back to the default locale)
-```
-
 **`makeLocalization(translator, locale)`** binds a translator to a resolved locale, producing the
 `Localization` object (`{ locale, t }`) your payload methods receive — the shorthand `t(key, params)`
 is just `translator.translate(key, locale, params)`. Reach for it when you render a message outside a
@@ -139,14 +128,14 @@ channel (a preview, a digest email) and want the same `.t()` ergonomics:
 ```ts
 import { makeLocalization } from '@dudousxd/nestjs-notifications-core';
 
-const l10n = makeLocalization(t, 'pt-BR');
-l10n.t('hi', { name: 'Ana' }); // "Olá Ana"
+const l10n = makeLocalization(translator, 'pt-BR');
+l10n.t('hi', { name: 'Ana' }); // translator.translate('hi', 'pt-BR', { name: 'Ana' })
 ```
 
 **`LocalizationService`** is the injectable that the [`ChannelRunner`](/docs/concepts/channels-and-dispatchers)
 uses to resolve a `Localization` per delivery — `forNotifiable(notifiable)` runs the bound
 `LocaleResolver` (default: `PropertyLocaleResolver`) and wraps the resolved locale with the bound
-`Translator` via `makeLocalization`. It's provided by `NotificationsModule`, so you can inject it if
+`Translator` via `makeLocalization`; `run(locale, fn)` runs `fn` in the translator's ambient locale. It's provided by `NotificationsModule`, so you can inject it if
 you need the same resolution the channels get:
 
 ```ts
