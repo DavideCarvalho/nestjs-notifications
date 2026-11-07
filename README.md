@@ -152,24 +152,40 @@ channel, recipient, notification class, payload, and failure reason.
 
 ## Authorization of the mounted routes
 
-Every controller the library mounts — the database inbox (`DatabaseChannelModule.forRoot/forFeature`,
-`createNotificationsController`), the SSE stream (`createNotificationsStreamController`), the
-preference center (`createPreferenceCenterController`) and the delivery-tracking callbacks
-(`createTwilioStatusController`, `createSesNotificationController`) — takes a
-`decorators?: ClassDecorator[]` option, applied in order to that controller. Use it with NestJS's
-first-party [`@nestjs/authorization`](https://docs.nestjs.com/security/authorization):
+The library has no access-control options of its own: you decide who reaches its routes with
+NestJS's first-party [`@nestjs/authentication`](https://docs.nestjs.com/security/authentication)
+and [`@nestjs/authorization`](https://docs.nestjs.com/security/authorization), in one of two ways.
 
-```ts
-DatabaseChannelModule.forRoot({
-  decorators: [UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')],
-});
-```
+1. **`decorators`** — the inbox (`DatabaseChannelModule.forRoot/forFeature`,
+   `createNotificationsController`), the SSE stream (`createNotificationsStreamController`), the
+   preference center (`createPreferenceCenterController`) and the delivery-tracking callbacks
+   (`createTwilioStatusController`, `createSesNotificationController`) all take
+   `decorators?: ClassDecorator[]`, applied in order to the controller:
 
-By default each of these controllers is marked open to `@nestjs/authorization`'s deny-by-default
-global guard (the metadata `Can.Anyone()` writes), so adopting it does not lock them; the library's
-own `guards`/`resolveRef`/signature checks keep deciding who reaches them. A `@Can()` passed in
+   ```ts
+   DatabaseChannelModule.forRoot({
+     decorators: [UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')],
+   });
+   ```
+
+2. **Mount the controller yourself** — the factories return a controller class you add to your
+   own module's `controllers`. For the inbox, pass `routes: false` to `DatabaseChannelModule` so it
+   doesn't auto-mount a second one.
+
+Every controller is marked open to `@nestjs/authorization`'s deny-by-default global guard (the
+metadata `Can.Anyone()` writes), so adopting it does not lock them; a `@Can()` passed in
 `decorators` is still enforced. Each registration builds a fresh controller class, so decorators
 never leak between registrations.
+
+**Production.** Nothing refuses to boot. The inbox, SSE and preference routes are scoped to the
+recipient `resolveRef`/`resolveRoute` returns (the auto-mounted inbox's default resolver answers
+`401` with no `req.user.id`). Delivery-tracking callbacks are called by providers, which carry no
+user, so they are outside any "must be decorated" rule: Twilio is verified by `X-Twilio-Signature`.
+SES/SNS signature verification is not implemented yet — keep that endpoint behind a gateway or an
+allowlist passed in `decorators`.
+
+**Migrating from `guards`** (removed): `guards: [G]` → `decorators: [UseGuards(G)]`, or mount the
+controller yourself; `controller: false` → `routes: false`.
 
 ## Testing
 

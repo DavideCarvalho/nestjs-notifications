@@ -87,11 +87,9 @@ Point your Twilio messaging service's status callback URL at that path. Invalid 
 rejected with `403`.
 
 <Callout type="info">
-  Both inbound controllers are marked open to [`@nestjs/authorization`](https://docs.nestjs.com/security/authorization)'s
-  deny-by-default global guard (the metadata `Can.Anyone()` writes): a provider callback carries no
-  user, so it would otherwise be refused. Twilio is authenticated by its signature. Both factories
-  take `decorators?: ClassDecorator[]`, applied in order to the controller (e.g. an IP-allowlist
-  `UseGuards(...)`); a `@Can()` passed there is still enforced.
+  Provider callbacks carry no user, so these controllers are not meant to sit behind your app's
+  authentication: Twilio is authenticated by its signature. Both factories take `decorators` (e.g.
+  an IP-allowlist `UseGuards(...)`). See [Authorization of the mounted routes](/docs/recipes/route-authorization).
 </Callout>
 
 ### AWS SES (email)
@@ -109,9 +107,9 @@ const SesController = createSesNotificationController({
 ```
 
 <Callout type="warn">
-  SNS message-signature verification is off by default (it pulls no heavy dependency). For
-  internet-facing endpoints, terminate the webhook behind a verified API gateway, or implement SNS
-  signature verification before trusting the payload.
+  SNS message-signature verification is not implemented yet (`verifySignature` only logs a
+  warning), so this endpoint trusts the payload. For internet-facing endpoints, terminate the
+  webhook behind an API gateway that verifies SNS, or pass an allowlist guard in `decorators`.
 </Callout>
 
 ## Correlating sends to callbacks

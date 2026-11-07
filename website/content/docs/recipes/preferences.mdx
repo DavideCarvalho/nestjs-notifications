@@ -188,9 +188,9 @@ const PreferenceCenterController = createPreferenceCenterController({
 | `PUT /preferences/:category/channels/:channel` | `{ enabled }` — toggle one cell |
 | `PUT /preferences/:category/digest` | `{ digest }` — set a category's frequency |
 
-Pass `guards` for your auth guard, or `decorators` (class decorators applied, in order, to the
-controller) to use NestJS's first-party
-[`@nestjs/authorization`](https://docs.nestjs.com/security/authorization):
+Every route except `GET /preferences/categories` is scoped to the notifiable `resolveRef` returns.
+Decide who reaches the controller with `decorators` (or by mounting it in your own module) — see
+[Authorization of the mounted routes](/docs/recipes/route-authorization):
 
 ```ts
 createPreferenceCenterController({
@@ -198,11 +198,6 @@ createPreferenceCenterController({
   decorators: [UseGuards(AuthenticationGuard), Can(PreferencesPolicy, 'manage')],
 });
 ```
-
-By default the controller is marked open to `@nestjs/authorization`'s deny-by-default global guard
-(the metadata `Can.Anyone()` writes), so it keeps answering in apps that adopt it; a `@Can()` passed
-in `decorators` is still enforced. Each call builds a fresh class, so decorators never leak between
-controllers.
 
 <Callout type="info">
   The center is additive — the simple `forRoot` opt-out API above still works unchanged. Pick `forRoot`
