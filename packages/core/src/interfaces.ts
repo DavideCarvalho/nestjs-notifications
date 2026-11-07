@@ -228,6 +228,12 @@ export interface DeliveryContext {
    * Undefined when no resolver/translator is bound (behavior unchanged).
    */
   localization?: Localization;
+  /**
+   * A stable key identifying this delivery across redeliveries, set by dispatchers that have one
+   * (the outbox dispatcher passes its message id). Channels forward it to providers that
+   * deduplicate (the mail channel passes it to `@nestjs/mail` as `idempotencyKey`).
+   */
+  idempotencyKey?: string | undefined;
 }
 
 /**
@@ -284,6 +290,12 @@ export interface NotificationJob {
    * deferred again. JSON-safe (array of strings).
    */
   deferredChannels?: string[] | undefined;
+  /**
+   * The caller's open transaction, set by `notifications.inTransaction(tx)`. In memory only: it
+   * is never serialized. A transactional dispatcher (the outbox dispatcher) writes the job through
+   * it, so the notification is only delivered if the transaction commits.
+   */
+  transaction?: unknown;
 }
 
 /** Decides where/when a job is processed: inline, in-process events, Redis, BullMQ. */
@@ -295,6 +307,12 @@ export interface DispatchDriver {
    * through {@link dispatch}.
    */
   dispatchMany?(jobs: NotificationJob[]): Promise<void>;
+  /**
+   * `true` when the driver honors {@link NotificationJob.transaction} (writes the job through the
+   * caller's transaction). `notifications.inTransaction(tx)` refuses to send through a driver
+   * that doesn't, instead of silently delivering outside the transaction.
+   */
+  readonly transactional?: boolean;
 }
 
 /** Context handed to a {@link PreferenceGate} before a channel is delivered. */

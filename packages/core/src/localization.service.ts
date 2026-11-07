@@ -1,11 +1,11 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { Notifiable } from './interfaces';
 import {
-  InMemoryTranslator,
   type LocaleResolver,
   type Localization,
   PropertyLocaleResolver,
   type Translator,
+  keyTranslator,
   makeLocalization,
 } from './localization';
 import type { NotificationsModuleOptions } from './options';
@@ -21,7 +21,7 @@ const DEFAULT_LOCALE = 'en';
 /**
  * Resolves a per-delivery {@link Localization} (locale + bound translator) for a notifiable. Uses
  * the bound {@link LocaleResolver} (default: read a locale property) and {@link Translator}
- * (default: empty {@link InMemoryTranslator}). Wired into the {@link ChannelRunner} so every
+ * (default: {@link keyTranslator}, which returns the key). Wired into the {@link ChannelRunner} so every
  * delivery carries a localization context the channels can use.
  */
 @Injectable()
@@ -43,15 +43,18 @@ export class LocalizationService {
     const i18n = options.localization ?? {};
     this.defaultLocale = i18n.defaultLocale ?? DEFAULT_LOCALE;
     this.resolver = resolver ?? i18n.resolver ?? new PropertyLocaleResolver();
-    this.translator =
-      translator ??
-      i18n.translator ??
-      new InMemoryTranslator(i18n.catalog ?? {}, this.defaultLocale);
+    this.translator = translator ?? i18n.translator ?? keyTranslator;
   }
 
   /** Resolve the localization context for delivering to `notifiable`. */
   async forNotifiable(notifiable: Notifiable): Promise<Localization> {
     const resolved = (await this.resolver.resolve(notifiable)) ?? this.defaultLocale;
     return makeLocalization(this.translator, resolved);
+  }
+
+  /** Run `fn` in `locale` when the translator supports an ambient locale; else just run it. */
+  run<R>(locale: string | undefined, fn: () => R): R {
+    if (locale === undefined || typeof this.translator.runInLocale !== 'function') return fn();
+    return this.translator.runInLocale(locale, fn);
   }
 }

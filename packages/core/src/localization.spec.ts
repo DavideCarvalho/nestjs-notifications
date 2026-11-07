@@ -1,7 +1,9 @@
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { I18nModule, InMemoryI18nLoader, t as ambientT } from '@nestjs/i18n';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { ChannelRegistry } from './channel-registry';
+import { i18nTranslator } from './i18n';
 import type {
   ChannelContext,
   ChannelDriver,
@@ -10,37 +12,18 @@ import type {
   Notification,
 } from './interfaces';
 import {
-  InMemoryTranslator,
   type LocaleResolver,
   PropertyLocaleResolver,
   baseLocale,
+  keyTranslator,
 } from './localization';
 import { NotificationService } from './notification.service';
 import { NotificationsModule } from './notifications.module';
 import { NOTIFICATION_LOCALE_RESOLVER } from './tokens';
 
-describe('InMemoryTranslator', () => {
-  const t = new InMemoryTranslator(
-    {
-      en: { greeting: 'Hello {name}' },
-      'pt-BR': { greeting: 'Olá {name}' },
-      pt: { greeting: 'Olá (pt) {name}' },
-    },
-    'en',
-  );
-
-  it('translates into the requested locale with interpolation', () => {
-    expect(t.translate('greeting', 'en', { name: 'Ada' })).toBe('Hello Ada');
-    expect(t.translate('greeting', 'pt-BR', { name: 'Ada' })).toBe('Olá Ada');
-  });
-
-  it('falls back to the base locale then the default locale then the key', () => {
-    // 'pt-PT' has no entry → base 'pt'.
-    expect(t.translate('greeting', 'pt-PT', { name: 'X' })).toBe('Olá (pt) X');
-    // unknown locale → default 'en'.
-    expect(t.translate('greeting', 'fr', { name: 'X' })).toBe('Hello X');
-    // unknown key → returns the key.
-    expect(t.translate('missing', 'en')).toBe('missing');
+describe('keyTranslator (the default without a translator)', () => {
+  it('returns the key', () => {
+    expect(keyTranslator.translate('greeting', 'pt-BR', { name: 'Ada' })).toBe('greeting');
   });
 });
 
@@ -95,25 +78,32 @@ class Welcome {
     return ['mail'];
   }
   toMail({ notifiable: _n, localization: loc }: ChannelContext): string {
-    return loc ? loc.t('welcome') : 'welcome';
+    // `t()` without DI reads the ambient locale: the runner delivers inside I18nContext.run().
+    return loc
+      ? `${loc.t('welcome', { name: 'Ada' })}|${ambientT('welcome' as never, { args: { name: 'Ada' } } as never)}`
+      : 'welcome';
   }
 }
 
 async function bootstrap(channel: ChannelDriver, resolver?: LocaleResolver) {
-  const providers = resolver ? [{ provide: NOTIFICATION_LOCALE_RESOLVER, useValue: resolver }] : [];
+  const providers = [
+    ...i18nTranslator(),
+    ...(resolver ? [{ provide: NOTIFICATION_LOCALE_RESOLVER, useValue: resolver }] : []),
+  ];
   const moduleRef = await Test.createTestingModule({
     imports: [
       EventEmitterModule.forRoot(),
+      I18nModule.forRoot({
+        defaultLocale: 'en',
+        loader: new InMemoryI18nLoader({
+          en: { welcome: 'Welcome {name}!' },
+          'pt-BR': { welcome: 'Bem-vinda {name}!' },
+        }),
+      }),
       NotificationsModule.forRoot({
         global: false,
         providers,
-        localization: {
-          defaultLocale: 'en',
-          catalog: {
-            en: { welcome: 'Welcome!' },
-            'pt-BR': { welcome: 'Bem-vindo!' },
-          },
-        },
+        localization: { defaultLocale: 'en' },
       }),
     ],
   }).compile();
@@ -122,7 +112,7 @@ async function bootstrap(channel: ChannelDriver, resolver?: LocaleResolver) {
   return moduleRef;
 }
 
-describe('localization end-to-end', () => {
+describe('localization end-to-end with @nestjs/i18n (I18nServiceTranslator)', () => {
   it('renders the same notification differently per locale', async () => {
     const channel = new CapturingChannel();
     const moduleRef = await bootstrap(channel);
@@ -131,7 +121,10 @@ describe('localization end-to-end', () => {
     await service.send(new User(1, 'pt-BR'), new Welcome());
     await service.send(new User(2, 'en'), new Welcome());
 
-    expect(channel.rendered).toEqual(['Bem-vindo!', 'Welcome!']);
+    expect(channel.rendered).toEqual([
+      'Bem-vinda Ada!|Bem-vinda Ada!',
+      'Welcome Ada!|Welcome Ada!',
+    ]);
   });
 
   it('falls back to the default locale when the notifiable resolves none', async () => {
@@ -141,7 +134,7 @@ describe('localization end-to-end', () => {
 
     await service.send(new User(3), new Welcome()); // no locale property
 
-    expect(channel.rendered).toEqual(['Welcome!']);
+    expect(channel.rendered).toEqual(['Welcome Ada!|Welcome Ada!']);
   });
 
   it('honors a custom locale resolver', async () => {
@@ -153,6 +146,6 @@ describe('localization end-to-end', () => {
     await service.send(new User(4, 'en'), new Welcome()); // resolver overrides the property
 
     expect(resolver.resolve).toHaveBeenCalled();
-    expect(channel.rendered).toEqual(['Bem-vindo!']);
+    expect(channel.rendered).toEqual(['Bem-vinda Ada!|Bem-vinda Ada!']);
   });
 });

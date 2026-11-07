@@ -49,6 +49,11 @@ export interface SendScope {
   only?: string[] | undefined;
   /** When set, these channels are dropped from delivery (ad-hoc deny-list). */
   except?: string[] | undefined;
+  /**
+   * The caller's open transaction (`inTransaction(tx)`). Sends go through the async dispatcher,
+   * which must be transactional; the handle rides on the job in memory only.
+   */
+  transaction?: unknown;
 }
 
 /**
@@ -69,6 +74,8 @@ export interface ScopedNotifier {
   only(channels: string[]): ScopedNotifier;
   /** Drop these channels for this send (merged with any prior `except`). */
   except(channels: string[]): ScopedNotifier;
+  /** Write the sends through `tx`: delivered only if the transaction commits. See {@link NotificationService.inTransaction}. */
+  inTransaction(tx: unknown): ScopedNotifier;
   send(
     notifiables: NotifiableInput | NotifiableInput[],
     notification: NotificationInput,
@@ -196,6 +203,25 @@ export class NotificationService {
     return this.scoped({ except: channels });
   }
 
+  /**
+   * Send inside the caller's open transaction (transactional outbox):
+   *
+   * ```ts
+   * await db.transaction(async (tx) => {
+   *   await tx.insert(orders).values(order);
+   *   await notifications.inTransaction(tx).send(user, new OrderPlaced(order));
+   * });
+   * ```
+   *
+   * `send`/`notify`/`sendAsync` go through the async dispatcher, which writes the job through
+   * `tx`, so nothing is delivered unless the transaction commits. The dispatcher must be
+   * transactional (`outboxDispatcher()` from `@dudousxd/nestjs-notifications-core/outbox`); any
+   * other dispatcher makes the send throw. `sendNow` delivers inline and ignores `tx`.
+   */
+  inTransaction(tx: unknown): ScopedNotifier {
+    return this.scoped({ transaction: tx });
+  }
+
   /** Build a chainable scoped sender over the given {@link SendScope}. */
   private scoped(scope: SendScope): ScopedNotifier {
     const merge = (extra: SendScope): ScopedNotifier => {
@@ -203,10 +229,12 @@ export class NotificationService {
         scope.except || extra.except
           ? [...(scope.except ?? []), ...(extra.except ?? [])]
           : undefined;
+      const transaction = 'transaction' in extra ? extra.transaction : scope.transaction;
       return this.scoped({
         tenants: extra.tenants ?? scope.tenants,
         only: extra.only ?? scope.only,
         except,
+        ...(transaction !== undefined ? { transaction } : {}),
       });
     };
     return {
@@ -214,6 +242,7 @@ export class NotificationService {
       forTenants: (tenants) => merge({ tenants }),
       only: (channels) => merge({ only: channels }),
       except: (channels) => merge({ except: channels }),
+      inTransaction: (tx) => merge({ transaction: tx }),
       send: (n, notif) => this.dispatchAll(n, notif, 'auto', scope),
       notify: (n, notif) => this.dispatchAll(n, notif, 'auto', scope),
       sendNow: (n, notif) => this.dispatchAll(n, notif, 'sync', scope),
@@ -239,7 +268,17 @@ export class NotificationService {
   ): Promise<SendResult[]> {
     const n = notification as Notification;
     const targets = Array.isArray(notifiables) ? notifiables : [notifiables];
-    const async = mode === 'async' || (mode === 'auto' && (n.shouldQueue || n.delay !== undefined));
+    const transactional = scope.transaction !== undefined && mode !== 'sync';
+    if (transactional && this.dispatcher.transactional !== true) {
+      throw new Error(
+        'notifications.inTransaction(tx) needs a transactional dispatcher (outboxDispatcher() from ' +
+          '@dudousxd/nestjs-notifications-core/outbox); the configured one would deliver outside the transaction.',
+      );
+    }
+    const async =
+      transactional ||
+      mode === 'async' ||
+      (mode === 'auto' && (n.shouldQueue || n.delay !== undefined));
 
     // Snapshot the request context (who/tenant/trace) once at send() time, before any async
     // boundary. Undefined when nestjs-context is absent → fully unchanged behavior.
@@ -332,6 +371,7 @@ export class NotificationService {
       delay: toDelayMs(notification.delay),
       tenant,
       captured,
+      ...(scope.transaction !== undefined ? { transaction: scope.transaction } : {}),
     });
     return {
       notifiable,
@@ -443,6 +483,7 @@ export class NotificationService {
       delay: toDelayMs(notification.delay),
       tenant,
       captured,
+      ...(scope.transaction !== undefined ? { transaction: scope.transaction } : {}),
     });
     return {
       notifiable,

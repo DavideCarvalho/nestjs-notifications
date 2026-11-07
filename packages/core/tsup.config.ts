@@ -11,6 +11,8 @@ import { defineConfig } from 'tsup';
  * All runtime peers are external — they must never be bundled into the published artifact.
  */
 const external = [
+  '@nestjs/outbox',
+  '@nestjs/i18n',
   '@dudousxd/nestjs-context',
   '@nestjs/common',
   '@nestjs/core',
@@ -21,21 +23,25 @@ const external = [
 
 export default defineConfig([
   {
-    entry: ['src/index.ts'],
+    entry: ['src/index.ts', 'src/outbox.ts', 'src/i18n.ts'],
     format: ['esm'],
     dts: true,
     clean: true,
-    splitting: false,
+    // Subpath entries share chunks with the main entry, so DI tokens (classes, symbols) are
+    // the same objects whichever entry a consumer imports.
+    splitting: true,
     sourcemap: true,
     outDir: 'dist',
     external,
   },
   {
-    entry: ['src/index.ts'],
+    entry: ['src/index.ts', 'src/outbox.ts', 'src/i18n.ts'],
     format: ['cjs'],
     dts: true,
     clean: false,
-    splitting: false,
+    // Subpath entries share chunks with the main entry, so DI tokens (classes, symbols) are
+    // the same objects whichever entry a consumer imports.
+    splitting: true,
     sourcemap: true,
     outDir: 'dist',
     external,

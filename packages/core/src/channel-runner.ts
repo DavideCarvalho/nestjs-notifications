@@ -163,7 +163,12 @@ export class ChannelRunner {
 
     const startedAt = Date.now();
     try {
-      const response = await driver.send(notifiable, notification, context);
+      // Deliver in the recipient's locale, so translators with an ambient locale (@nestjs/i18n)
+      // render the payload and any mail class in it.
+      const send = () => driver.send(notifiable, notification, context);
+      const response = await (this.localization
+        ? this.localization.run(context.localization?.locale, send)
+        : send());
       this.events.emit(
         NotificationEvents.sent,
         new NotificationSentEvent(

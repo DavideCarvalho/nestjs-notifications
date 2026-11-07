@@ -123,27 +123,37 @@ export class NotificationFake {
     return this.scoped({ except: channels });
   }
 
+  /** Record sends as written through `tx` (queued) — mirrors {@link NotificationService.inTransaction}. */
+  inTransaction(tx: unknown): ScopedNotifier {
+    return this.scoped({ transaction: tx });
+  }
+
   private scoped(scope: SendScope): ScopedNotifier {
     const merge = (extra: SendScope): ScopedNotifier => {
       const except =
         scope.except || extra.except
           ? [...(scope.except ?? []), ...(extra.except ?? [])]
           : undefined;
+      const transaction = 'transaction' in extra ? extra.transaction : scope.transaction;
       return this.scoped({
         tenants: extra.tenants ?? scope.tenants,
         only: extra.only ?? scope.only,
         except,
+        ...(transaction !== undefined ? { transaction } : {}),
       });
     };
+    // A transactional send goes through the async dispatcher.
+    const auto = scope.transaction !== undefined ? ('async' as const) : ('sync' as const);
     return {
       forTenant: (tenant) => merge({ tenants: [tenant] }),
       forTenants: (tenants) => merge({ tenants }),
       only: (channels) => merge({ only: channels }),
       except: (channels) => merge({ except: channels }),
+      inTransaction: (tx) => merge({ transaction: tx }),
       send: (n, notif) =>
-        this.record(n as Notifiable | Notifiable[], notif as Notification, 'sync', scope),
+        this.record(n as Notifiable | Notifiable[], notif as Notification, auto, scope),
       notify: (n, notif) =>
-        this.record(n as Notifiable | Notifiable[], notif as Notification, 'sync', scope),
+        this.record(n as Notifiable | Notifiable[], notif as Notification, auto, scope),
       sendNow: (n, notif) =>
         this.record(n as Notifiable | Notifiable[], notif as Notification, 'sync', scope),
       sendAsync: (n, notif) =>

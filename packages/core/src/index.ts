@@ -40,10 +40,9 @@ export {
   type LocaleResolver,
   type Translator,
   type TranslateParams,
-  type TranslationCatalog,
   type Localization,
   PropertyLocaleResolver,
-  InMemoryTranslator,
+  keyTranslator,
   makeLocalization,
   baseLocale,
 } from './localization';
