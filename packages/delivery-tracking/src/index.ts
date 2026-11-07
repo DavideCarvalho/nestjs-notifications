@@ -25,3 +25,18 @@ export {
   mapSesNotificationType,
   type SesNotificationControllerOptions,
 } from './inbound/ses.controller';
+export {
+  SnsMessageVerifier,
+  SnsVerificationError,
+  InMemorySnsMessageIdStore,
+  buildSnsStringToSign,
+  fetchSnsCertificate,
+  isSnsUrl,
+  parseSnsMessage,
+  type SnsCertificateLoader,
+  type SnsMessage,
+  type SnsMessageIdStore,
+  type SnsMessageType,
+  type SnsMessageVerifierOptions,
+  type SnsVerificationFailure,
+} from './inbound/sns-message-verifier';

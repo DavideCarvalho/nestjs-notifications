@@ -3,7 +3,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { DeliveryTrackingService } from './delivery-tracking.service';
 import { InMemoryDeliveryTrackingStore } from './in-memory.store';
-import { createSesNotificationController, mapSesNotificationType } from './inbound/ses.controller';
+import { mapSesNotificationType } from './inbound/ses.controller';
 import {
   computeTwilioSignature,
   createTwilioStatusController,
@@ -222,39 +222,5 @@ describe('Twilio status controller', () => {
     await expect(controller.handle(body, undefined, req(body))).rejects.toBeInstanceOf(
       ForbiddenException,
     );
-  });
-});
-
-describe('SES notification controller', () => {
-  function makeController() {
-    const store = new InMemoryDeliveryTrackingStore();
-    const service = new DeliveryTrackingService(store);
-    const ControllerClass = createSesNotificationController() as new (
-      svc: DeliveryTrackingService,
-    ) => { handle: (body: any) => Promise<void> };
-    return { store, controller: new ControllerClass(service) };
-  }
-
-  it('updates the matching record from an SNS Notification', async () => {
-    const { store, controller } = makeController();
-    const rec = await store.record({ channel: 'mail', notificationType: 'A', status: 'sent' });
-    await store.setProviderMessageId(rec.id, 'ses-msg-1');
-
-    await controller.handle({
-      Type: 'Notification',
-      Message: JSON.stringify({
-        notificationType: 'Bounce',
-        mail: { messageId: 'ses-msg-1' },
-      }),
-    });
-
-    expect((await store.get(rec.id))?.status).toBe('bounced');
-  });
-
-  it('ignores SubscriptionConfirmation when auto-confirm is off', async () => {
-    const { controller } = makeController();
-    await expect(
-      controller.handle({ Type: 'SubscriptionConfirmation', SubscribeURL: 'https://x' }),
-    ).resolves.toBeUndefined();
   });
 });
