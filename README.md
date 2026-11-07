@@ -180,9 +180,9 @@ never leak between registrations.
 **Production.** Nothing refuses to boot. The inbox, SSE and preference routes are scoped to the
 recipient `resolveRef`/`resolveRoute` returns (the auto-mounted inbox's default resolver answers
 `401` with no `req.user.id`). Delivery-tracking callbacks are called by providers, which carry no
-user, so they are outside any "must be decorated" rule: Twilio is verified by `X-Twilio-Signature`.
-SES/SNS signature verification is not implemented yet — keep that endpoint behind a gateway or an
-allowlist passed in `decorators`.
+user, so they are outside any "must be decorated" rule: Twilio is verified by `X-Twilio-Signature`,
+and SES by the SNS message signature plus a required `topicArns` allowlist and a timestamp check
+(`403` otherwise).
 
 **Migrating from `guards`** (removed): `guards: [G]` → `decorators: [UseGuards(G)]`, or mount the
 controller yourself; `controller: false` → `routes: false`.

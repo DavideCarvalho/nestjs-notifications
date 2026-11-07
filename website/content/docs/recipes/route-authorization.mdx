@@ -85,15 +85,12 @@ Nothing refuses to boot here. Each route already checks something on every reque
   when the request carries no identity. The one unscoped route, `GET /preferences/categories`,
   returns your configured category definitions, not anyone's data.
 - **Delivery-tracking callbacks** are called by the provider, which has no user, so they stay
-  outside any "must be decorated" rule. The Twilio controller verifies `X-Twilio-Signature` on
-  every request and answers `403` when it doesn't match.
-
-<Callout type="warn">
-  The **SES** controller does not verify SNS message signatures yet (`verifySignature` only logs a
-  warning). Until it does, anyone who can reach the path can post delivery events. Keep it off
-  the public internet, behind an API gateway that verifies SNS, or behind an allowlist passed in
-  `decorators` (e.g. `UseGuards(SnsIpAllowlistGuard)`).
-</Callout>
+  outside any "must be decorated" rule. They authenticate the provider instead, and answer `403`
+  when that fails:
+  - the **Twilio** controller verifies `X-Twilio-Signature` on every request;
+  - the **SES** controller verifies the SNS message signature (certificate fetched only from an
+    SNS host), requires the `TopicArn` to be one of your `topicArns`, and refuses stale
+    timestamps. See [Delivery tracking](/docs/recipes/delivery-tracking#aws-ses-email).
 
 ## Migrating from `guards`
 
