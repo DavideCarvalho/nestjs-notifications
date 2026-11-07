@@ -1,4 +1,14 @@
-import type { MailAttachment } from './transport';
+import type { MailAttachmentInput } from '@nestjs/mail';
+
+/**
+ * A file attached to an outgoing email: `@nestjs/mail`'s attachment (`content`, or a local
+ * `path`), plus `url` for a file the channel downloads at send time (an `https:` or `http:` URL
+ * your app chose: never one built from user input).
+ */
+export type MailAttachment = MailAttachmentInput & {
+  /** Download the content from this URL when the mail is sent. Not with `content` or `path`. */
+  url?: string;
+};
 
 /**
  * A fluent builder for an email notification, mirroring Laravel's `MailMessage`.
@@ -24,10 +34,24 @@ export class MailMessage {
   private _react?: unknown;
   private _mjml?: string;
   private _attachments: MailAttachment[] = [];
+  private _headers: Record<string, string> = {};
+  private _replyTo?: string;
 
   /** Override the sender address for this message. */
   from(addr: string): this {
     this._from = addr;
+    return this;
+  }
+
+  /** Set the Reply-To address for this message. */
+  replyTo(addr: string): this {
+    this._replyTo = addr;
+    return this;
+  }
+
+  /** Add a custom header, such as `List-Unsubscribe`. */
+  header(name: string, value: string): this {
+    this._headers[name] = value;
     return this;
   }
 
@@ -94,8 +118,8 @@ export class MailMessage {
   }
 
   /**
-   * Attach a file. Call repeatedly to add several. The body renderer ignores attachments —
-   * they're carried through to the transport.
+   * Attach a file. Call repeatedly to add several. The body renderer ignores attachments; they
+   * are handed to `@nestjs/mail` (a `url` is downloaded first).
    *
    * ```ts
    * new MailMessage().subject('Report').attach({ filename: 'report.pdf', content: pdfBuffer });
@@ -108,6 +132,14 @@ export class MailMessage {
 
   get fromAddress(): string | undefined {
     return this._from;
+  }
+
+  get replyToAddress(): string | undefined {
+    return this._replyTo;
+  }
+
+  get headerValues(): Record<string, string> {
+    return this._headers;
   }
 
   get subjectLine(): string {

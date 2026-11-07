@@ -6,13 +6,12 @@ import { defineConfig } from 'tsup';
  * from tsconfig, so NestJS DI / ORM `design:paramtypes` metadata survives in both outputs.
  */
 const external = [
-  '@aws-sdk/client-sesv2',
   '@dudousxd/nestjs-notifications-core',
   '@nestjs/common',
+  '@nestjs/mail',
   '@react-email/render',
   'marked',
   'mjml',
-  'nodemailer',
   'react',
   'react-dom',
   'reflect-metadata',
