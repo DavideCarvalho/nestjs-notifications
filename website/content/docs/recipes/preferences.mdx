@@ -188,6 +188,22 @@ const PreferenceCenterController = createPreferenceCenterController({
 | `PUT /preferences/:category/channels/:channel` | `{ enabled }` — toggle one cell |
 | `PUT /preferences/:category/digest` | `{ digest }` — set a category's frequency |
 
+Pass `guards` for your auth guard, or `decorators` (class decorators applied, in order, to the
+controller) to use NestJS's first-party
+[`@nestjs/authorization`](https://docs.nestjs.com/security/authorization):
+
+```ts
+createPreferenceCenterController({
+  resolveRef: (req) => ({ type: 'User', id: req.user.id }),
+  decorators: [UseGuards(AuthenticationGuard), Can(PreferencesPolicy, 'manage')],
+});
+```
+
+By default the controller is marked open to `@nestjs/authorization`'s deny-by-default global guard
+(the metadata `Can.Anyone()` writes), so it keeps answering in apps that adopt it; a `@Can()` passed
+in `decorators` is still enforced. Each call builds a fresh class, so decorators never leak between
+controllers.
+
 <Callout type="info">
   The center is additive — the simple `forRoot` opt-out API above still works unchanged. Pick `forRoot`
   for a single mute switch, `forCenter` when users need the full grid.

@@ -86,6 +86,14 @@ export class WebhooksModule {}
 Point your Twilio messaging service's status callback URL at that path. Invalid signatures are
 rejected with `403`.
 
+<Callout type="info">
+  Both inbound controllers are marked open to [`@nestjs/authorization`](https://docs.nestjs.com/security/authorization)'s
+  deny-by-default global guard (the metadata `Can.Anyone()` writes): a provider callback carries no
+  user, so it would otherwise be refused. Twilio is authenticated by its signature. Both factories
+  take `decorators?: ClassDecorator[]`, applied in order to the controller (e.g. an IP-allowlist
+  `UseGuards(...)`); a `@Can()` passed there is still enforced.
+</Callout>
+
 ### AWS SES (email)
 
 SES delivers bounce / complaint / delivery events via SNS. The controller handles the SNS

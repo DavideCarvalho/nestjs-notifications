@@ -155,6 +155,32 @@ Absent, or empty after parsing, means no filter — every type matches.
   `resolveRef` reads off the request.
 </Callout>
 
+### Authorization (`decorators`)
+
+`DatabaseChannelModule.forRoot()` and `forFeature()` take a top-level `decorators` option: class
+decorators applied, in order, to every controller the module mounts (`createNotificationsController`
+takes the same option). Use it to hand the inbox to NestJS's first-party
+[`@nestjs/authorization`](https://docs.nestjs.com/security/authorization) and
+`@nestjs/authentication`:
+
+```ts
+import { AuthenticationGuard } from '@nestjs/authentication';
+import { Can } from '@nestjs/authorization';
+import { UseGuards } from '@nestjs/common';
+
+DatabaseChannelModule.forRoot({
+  decorators: [UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')],
+});
+```
+
+**Default:** `AuthorizationModule.forRoot()` registers a global guard that denies any route
+declaring no `@Can()`. Every controller this library mounts is marked open to it (the metadata
+`Can.Anyone()` writes), so adopting `@nestjs/authorization` doesn't lock the inbox; `resolveRef`
+and `guards` keep deciding who reaches it. The mark only opens routes with no requirement: a
+`@Can()` you pass in `decorators` is still enforced (`401` for a guest, `403` for a user the
+policy denies). Each registration builds its own controller class, so decorators never carry over
+from one registration to another.
+
 ### Ownership scoping and custom stores
 
 The ownership check runs in the store. Every bundled adapter (in-memory, TypeORM, MikroORM, Prisma)

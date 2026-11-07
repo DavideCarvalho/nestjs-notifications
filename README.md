@@ -150,6 +150,27 @@ TelescopeModule.forRoot({ watchers: [new NotificationsWatcher()] });
 Every `notification.sent` / `notification.failed` shows up as a `notification` entry —
 channel, recipient, notification class, payload, and failure reason.
 
+## Authorization of the mounted routes
+
+Every controller the library mounts — the database inbox (`DatabaseChannelModule.forRoot/forFeature`,
+`createNotificationsController`), the SSE stream (`createNotificationsStreamController`), the
+preference center (`createPreferenceCenterController`) and the delivery-tracking callbacks
+(`createTwilioStatusController`, `createSesNotificationController`) — takes a
+`decorators?: ClassDecorator[]` option, applied in order to that controller. Use it with NestJS's
+first-party [`@nestjs/authorization`](https://docs.nestjs.com/security/authorization):
+
+```ts
+DatabaseChannelModule.forRoot({
+  decorators: [UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')],
+});
+```
+
+By default each of these controllers is marked open to `@nestjs/authorization`'s deny-by-default
+global guard (the metadata `Can.Anyone()` writes), so adopting it does not lock them; the library's
+own `guards`/`resolveRef`/signature checks keep deciding who reaches them. A `@Can()` passed in
+`decorators` is still enforced. Each registration builds a fresh controller class, so decorators
+never leak between registrations.
+
 ## Testing
 
 ```ts
