@@ -41,6 +41,7 @@
     "access": "public"
   },
   "scripts": {
+    "prepack": "node ../../scripts/check-package-exports.mjs",
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

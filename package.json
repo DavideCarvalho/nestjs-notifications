@@ -14,6 +14,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "check:exports": "node scripts/check-package-exports.mjs --all",
     "build": "turbo run build --filter=!website",
     "build:docs": "pnpm --filter website build",
     "test": "vitest run",
@@ -25,7 +26,7 @@
     "format": "biome format --write .",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "turbo run build --filter=!website && changeset publish"
+    "release": "turbo run build --filter=!website && pnpm check:exports && changeset publish"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
