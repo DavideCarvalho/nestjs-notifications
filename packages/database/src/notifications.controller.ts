@@ -11,6 +11,7 @@ import {
   type Type,
   UseGuards,
 } from '@nestjs/common';
+import { finishController } from './controller-decorators';
 import { type InboxMountOrigin, recordInboxMount } from './inbox-registry';
 import type { PaginatedNotifications } from './notifications-query.service';
 import { NotificationsQueryService } from './notifications-query.service';
@@ -28,6 +29,13 @@ export interface NotificationsControllerOptions {
    * inbox is per-user, so it should almost always be authenticated.
    */
   guards?: Array<Type<CanActivate> | CanActivate> | undefined;
+  /**
+   * Class decorators applied to the controller, in order, after its own (e.g.
+   * `[UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')]` with `@nestjs/authorization`).
+   * The controller is marked open to `@nestjs/authorization`'s deny-by-default guard
+   * (`Can.Anyone()`), so it answers without any; a `@Can()` passed here is still enforced.
+   */
+  decorators?: ClassDecorator[] | undefined;
 }
 
 /**
@@ -144,6 +152,7 @@ export function buildNotificationsController(
   if (options.guards && options.guards.length > 0) {
     UseGuards(...options.guards)(NotificationsController);
   }
+  finishController(NotificationsController, options.decorators);
 
   return NotificationsController;
 }

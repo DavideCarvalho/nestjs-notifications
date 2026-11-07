@@ -28,3 +28,4 @@ minimumReleaseAgeExclude:
   - '@aws-sdk/token-providers@3.1066.0'
   # Never gate our own freshly-published packages (we publish them from this repo).
   - '@dudousxd/*'
+  - '@nestjs/authorization@0.1.3'

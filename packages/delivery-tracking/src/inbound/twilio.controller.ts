@@ -9,6 +9,7 @@ import {
   Req,
   type Type,
 } from '@nestjs/common';
+import { finishController } from '../controller-decorators';
 import { DeliveryTrackingService } from '../delivery-tracking.service';
 import type { DeliveryStatus } from '../interfaces';
 
@@ -18,6 +19,14 @@ export interface TwilioStatusControllerOptions {
   authToken: string;
   /** Route path for the controller. Default `webhooks/twilio/status`. */
   path?: string;
+  /**
+   * Class decorators applied to the controller, in order, after its own (e.g. an IP-allowlist
+   * guard via `UseGuards(...)`). The controller is marked open to `@nestjs/authorization`'s
+   * deny-by-default guard (`Can.Anyone()`), since the provider calling it has no user: it
+   * authenticates by the `X-Twilio-Signature` header instead.
+   * A `@Can()` passed here is still enforced.
+   */
+  decorators?: ClassDecorator[];
 }
 
 /** Maps Twilio `MessageStatus` values onto our {@link DeliveryStatus}. */
@@ -133,5 +142,6 @@ export function createTwilioStatusController(
     }
   }
 
+  finishController(TwilioStatusController, options.decorators);
   return TwilioStatusController;
 }

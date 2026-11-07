@@ -11,6 +11,7 @@ import {
   type Type,
   UseGuards,
 } from '@nestjs/common';
+import { finishController } from './controller-decorators';
 import type {
   CategoryDefinition,
   DigestFrequency,
@@ -32,6 +33,13 @@ export interface PreferenceCenterControllerOptions {
   path?: string;
   /** Guards to protect the endpoints with (e.g. your auth guard). Applied via `@UseGuards`. */
   guards?: Array<Type<CanActivate> | CanActivate>;
+  /**
+   * Class decorators applied to the controller, in order, after its own (e.g.
+   * `[UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')]` with `@nestjs/authorization`).
+   * The controller is marked open to `@nestjs/authorization`'s deny-by-default guard
+   * (`Can.Anyone()`), so it answers without any; a `@Can()` passed here is still enforced.
+   */
+  decorators?: ClassDecorator[];
 }
 
 /** Body of `PUT /preferences/:category/channels/:channel`. */
@@ -128,6 +136,7 @@ export function createPreferenceCenterController(
   if (options.guards && options.guards.length > 0) {
     UseGuards(...options.guards)(PreferenceCenterController);
   }
+  finishController(PreferenceCenterController, options.decorators);
 
   return PreferenceCenterController;
 }

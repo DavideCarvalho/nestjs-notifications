@@ -1,4 +1,5 @@
 import { Body, Controller, HttpCode, Logger, Post, type Type } from '@nestjs/common';
+import { finishController } from '../controller-decorators';
 import { DeliveryTrackingService } from '../delivery-tracking.service';
 import type { DeliveryStatus } from '../interfaces';
 
@@ -22,6 +23,14 @@ export interface SesNotificationControllerOptions {
    * upstream verifier) until verification is wired up.
    */
   verifySignature?: boolean;
+  /**
+   * Class decorators applied to the controller, in order, after its own (e.g. an IP-allowlist
+   * guard via `UseGuards(...)`). The controller is marked open to `@nestjs/authorization`'s
+   * deny-by-default guard (`Can.Anyone()`), since the provider calling it has no user: protect it
+   * with a secret path, a private network or an upstream verifier (see `verifySignature`).
+   * A `@Can()` passed here is still enforced.
+   */
+  decorators?: ClassDecorator[];
 }
 
 /** Maps an SES SNS notificationType onto our {@link DeliveryStatus}. */
@@ -115,6 +124,7 @@ export function createSesNotificationController(
     }
   }
 
+  finishController(SesNotificationController, options.decorators);
   return SesNotificationController;
 }
 

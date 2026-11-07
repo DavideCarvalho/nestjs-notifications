@@ -63,6 +63,13 @@ export interface DatabaseChannelOptions {
    */
   controller?: boolean | InboxControllerOptions;
   /**
+   * Class decorators applied, in order, to every controller this module mounts (the inbox), e.g.
+   * `[UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')]` with `@nestjs/authorization`.
+   * Mounted controllers are marked open to `@nestjs/authorization`'s deny-by-default guard
+   * (`Can.Anyone()`), so they answer without any; a `@Can()` passed here is still enforced.
+   */
+  decorators?: ClassDecorator[];
+  /**
    * Schedule periodic deletion of old notifications. Omit to disable. See {@link PruneOptions}.
    *
    * ```ts
@@ -77,6 +84,8 @@ export interface DatabaseChannelFeatureOptions {
   autoCreateSchema?: boolean;
   /** See {@link DatabaseChannelOptions.controller}. Default true. */
   controller?: boolean | InboxControllerOptions;
+  /** See {@link DatabaseChannelOptions.decorators}. */
+  decorators?: ClassDecorator[];
   /** See {@link DatabaseChannelOptions.prune}. */
   prune?: PruneOptions;
 }
@@ -88,13 +97,16 @@ export interface DatabaseChannelFeatureOptions {
  * mention `controller` and for apps that mount their own controller believing that replaces the
  * default. {@link InboxMountAudit} warns about the latter at bootstrap.
  */
-function inboxControllers(option: boolean | InboxControllerOptions | undefined): Type<unknown>[] {
+function inboxControllers(
+  option: boolean | InboxControllerOptions | undefined,
+  decorators: ClassDecorator[] | undefined,
+): Type<unknown>[] {
   if (option === false) return [];
   const opts = option && option !== true ? option : undefined;
   const resolveRef = opts?.resolveRef ?? defaultResolveRef;
   return [
     buildNotificationsController(
-      { resolveRef, path: opts?.path, guards: opts?.guards },
+      { resolveRef, path: opts?.path, guards: opts?.guards, decorators },
       // Tagged 'auto' so the bootstrap audit can tell this apart from the app's own mount.
       'auto',
     ),
@@ -128,7 +140,7 @@ export class DatabaseChannelModule {
       module: DatabaseChannelModule,
       global: options.global ?? true,
       imports: options.imports ?? [],
-      controllers: inboxControllers(options.controller),
+      controllers: inboxControllers(options.controller, options.decorators),
       providers,
       exports: [DatabaseChannel, NOTIFICATION_STORE, NotificationsQueryService],
     };
@@ -138,7 +150,7 @@ export class DatabaseChannelModule {
   static forFeature(options: DatabaseChannelFeatureOptions = {}): DynamicModule {
     return {
       module: DatabaseChannelModule,
-      controllers: inboxControllers(options.controller),
+      controllers: inboxControllers(options.controller, options.decorators),
       providers: [
         { provide: AUTO_CREATE_SCHEMA, useValue: options.autoCreateSchema ?? true },
         { provide: PRUNE_OPTIONS, useValue: options.prune ?? null },
