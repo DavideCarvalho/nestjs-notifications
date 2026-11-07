@@ -1,5 +1,5 @@
-import { FakeClock, InMemoryResilienceStore } from '@dudousxd/nestjs-resilience';
-import { describe, expect, it, vi } from 'vitest';
+import { CircuitOpenError, ResilienceTimeoutError } from '@nestjs/resilience';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resilientTransport } from './resilient-transport';
 
 interface Payload {
@@ -7,20 +7,25 @@ interface Payload {
 }
 const payload: Payload = { text: 'hi' };
 
-const ok = () => ({ send: vi.fn<(p: Payload) => Promise<void>>().mockResolvedValue(undefined) });
-const failing = () => ({
-  send: vi.fn<(p: Payload) => Promise<void>>().mockRejectedValue(new Error('down')),
+const ok = () => ({ send: vi.fn<(p: Payload) => Promise<string>>().mockResolvedValue('sent') });
+const failing = (error: unknown = new Error('down')) => ({
+  send: vi.fn<(p: Payload) => Promise<string>>().mockRejectedValue(error),
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('resilientTransport', () => {
-  it('uses the first transport when it succeeds', async () => {
+  it('uses the first transport when it succeeds, and returns its result', async () => {
     const a = ok();
     const b = ok();
-    await resilientTransport([
+    const t = resilientTransport([
       { id: 'a', transport: a },
       { id: 'b', transport: b },
-    ]).send(payload);
-    expect(a.send).toHaveBeenCalledTimes(1);
+    ]);
+    await expect(t.send(payload)).resolves.toBe('sent');
+    expect(a.send).toHaveBeenCalledWith(payload);
     expect(b.send).not.toHaveBeenCalled();
   });
 
@@ -40,60 +45,111 @@ describe('resilientTransport', () => {
   });
 
   it('throws the last error when every transport fails', async () => {
-    const a = failing();
-    const b = failing();
     await expect(
       resilientTransport([
-        { id: 'a', transport: a },
-        { id: 'b', transport: b },
+        { id: 'a', transport: failing(new Error('a down')) },
+        { id: 'b', transport: failing(new Error('b down')) },
       ]).send(payload),
-    ).rejects.toThrow('down');
+    ).rejects.toThrow('b down');
   });
 
-  it('opens a per-provider circuit so a dead provider is skipped, then probes after cooldown', async () => {
-    const clock = new FakeClock();
-    const store = new InMemoryResilienceStore(clock);
+  it('stops at an error failoverIf rejects', async () => {
+    const invalid = Object.assign(new Error('invalid number'), { status: 400 });
+    const b = ok();
+    await expect(
+      resilientTransport(
+        [
+          { id: 'a', transport: failing(invalid) },
+          { id: 'b', transport: b },
+        ],
+        { failoverIf: (error) => (error as { status?: number }).status !== 400 },
+      ).send(payload),
+    ).rejects.toBe(invalid);
+    expect(b.send).not.toHaveBeenCalled();
+  });
+
+  it('opens a per-provider circuit so a dead provider is skipped, then probes after openDuration', async () => {
+    vi.useFakeTimers();
     const a = failing();
     const b = ok();
+    const onFailover = vi.fn();
     const t = resilientTransport(
       [
         { id: 'a', transport: a },
         { id: 'b', transport: b },
       ],
-      { store, breaker: { threshold: 2, cooldownMs: 1000 }, keyPrefix: 'sms' },
+      {
+        keyPrefix: 'sms',
+        breaker: { minimumCalls: 2, slidingWindow: { type: 'count', size: 2 }, openDuration: 1000 },
+        onFailover,
+      },
     );
 
-    await t.send(payload); // a fails (1), falls over to b
-    await t.send(payload); // a fails (2) -> a's circuit opens, b delivers
+    await t.send(payload); // a fails (1), b delivers
+    await t.send(payload); // a fails (2) -> 100% of 2 calls -> a opens
     expect(a.send).toHaveBeenCalledTimes(2);
+    expect(t.breakers.a?.state).toBe('open');
+    expect(t.breakers.a?.name).toBe('sms:a');
 
-    await t.send(payload); // a is open -> short-circuited, skipped; b delivers
-    await t.send(payload); // still open -> skipped; b delivers
-    expect(a.send).toHaveBeenCalledTimes(2); // not called while the circuit is open
-    expect(b.send).toHaveBeenCalledTimes(4);
+    await t.send(payload); // a open -> rejected without a call, b delivers
+    expect(a.send).toHaveBeenCalledTimes(2);
+    expect(onFailover).toHaveBeenLastCalledWith('a', expect.any(CircuitOpenError), 0);
+    expect(b.send).toHaveBeenCalledTimes(3);
 
-    clock.advance(1000); // cooldown elapses -> half-open
-    await t.send(payload); // a is probed again (3), fails -> re-opens; b delivers
+    vi.advanceTimersByTime(1000); // openDuration passes -> half-open
+    await t.send(payload); // a probed (3), fails -> open again; b delivers
     expect(a.send).toHaveBeenCalledTimes(3);
+    expect(t.breakers.a?.state).toBe('open');
   });
 
-  it('times out a slow provider and fails over to a fast one', async () => {
+  it('times out a slow provider (ResilienceTimeoutError) and fails over to a fast one', async () => {
+    vi.useFakeTimers();
     const slow = {
-      send: vi.fn<(p: Payload) => Promise<void>>(
-        () => new Promise<void>((resolve) => setTimeout(resolve, 200)),
+      send: vi.fn<(p: Payload) => Promise<string>>(
+        () => new Promise<string>((resolve) => setTimeout(() => resolve('late'), 5_000)),
       ),
     };
     const fast = ok();
-    await expect(
-      resilientTransport(
-        [
-          { id: 'slow', transport: slow },
-          { id: 'fast', transport: fast },
-        ],
-        { timeoutMs: 30 },
-      ).send(payload),
-    ).resolves.toBeUndefined();
-    expect(fast.send).toHaveBeenCalledTimes(1);
+    const onFailover = vi.fn();
+    const sending = resilientTransport(
+      [
+        { id: 'slow', transport: slow },
+        { id: 'fast', transport: fast },
+      ],
+      { timeout: 30, onFailover },
+    ).send(payload);
+    await vi.advanceTimersByTimeAsync(30);
+    await expect(sending).resolves.toBe('sent');
+    expect(onFailover).toHaveBeenCalledWith('slow', expect.any(ResilienceTimeoutError), 0);
+  });
+
+  it("combines the attempt's timeout signal into a send options object", async () => {
+    vi.useFakeTimers();
+    let seen: AbortSignal | undefined;
+    const transport = {
+      send: vi.fn((_message: string, options: { signal: AbortSignal }) => {
+        seen = options.signal;
+        return new Promise<never>(() => {});
+      }),
+    };
+    const caller = new AbortController();
+    const sending = resilientTransport([{ id: 'only', transport }], { timeout: 50 }).send('m', {
+      signal: caller.signal,
+    });
+    const assertion = expect(sending).rejects.toBeInstanceOf(ResilienceTimeoutError);
+    await vi.advanceTimersByTimeAsync(50);
+    await assertion;
+    expect(seen?.aborted).toBe(true);
+    expect(caller.signal.aborted).toBe(false);
+  });
+
+  it('closes every wrapped transport', async () => {
+    const close = vi.fn();
+    await resilientTransport([
+      { id: 'a', transport: { ...ok(), close } },
+      { id: 'b', transport: ok() },
+    ]).close();
+    expect(close).toHaveBeenCalledOnce();
   });
 
   it('throws when given no transports', () => {

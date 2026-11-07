@@ -1,109 +1,132 @@
 import {
-  InMemoryResilienceStore,
-  circuitBreaker,
-  failover,
-  timeout,
-  wrap,
-} from '@dudousxd/nestjs-resilience';
-import type { Clock, EventSink, ResilienceStore } from '@dudousxd/nestjs-resilience';
+  type CircuitBreakerOptions,
+  CircuitBreakerPolicy,
+  CircuitOpenError,
+  type Duration,
+  ResiliencePolicy,
+  ResilienceTimeoutError,
+  TimeoutPolicy,
+} from '@nestjs/resilience';
 
-/** A transport (any provider) tagged with a stable id used as its circuit-breaker key. */
-export interface ResilientTransportEntry<T> {
-  /** Stable provider id, e.g. `'twilio'`, `'vonage'`. Becomes the circuit key `<keyPrefix>:<id>`. */
+/** Anything with a promise-returning `send()`: an SMS transport, a `@nestjs/mail` transport, yours. */
+export type SendingTransport = { send(...args: any[]): Promise<unknown>; close?(): unknown };
+
+/** A transport (any provider) tagged with a stable id, used to name its circuit breaker. */
+export interface ResilientTransportEntry<T extends SendingTransport> {
+  /** Stable provider id, e.g. `'twilio'`, `'vonage'`. The breaker is named `<keyPrefix>:<id>`. */
   id: string;
   transport: T;
 }
 
-export interface ResilientBreakerOptions {
-  /** Consecutive failures before a provider's circuit opens. */
-  threshold: number;
-  /** How long a provider's circuit stays open before a half-open probe, in ms. */
-  cooldownMs: number;
-  /** Max concurrent half-open probes per provider. Default 1. */
-  halfOpenMax?: number;
-}
+/** `@nestjs/resilience`'s circuit breaker options; the name is derived from `keyPrefix` + id. */
+export type ResilientBreakerOptions = Omit<CircuitBreakerOptions, 'name'>;
 
 export interface ResilientTransportOptions {
-  /** Circuit-breaker state store. Default: a private in-memory store (per-process). Pass a
-   *  distributed @dudousxd/nestjs-resilience-store-* adapter to share breaker state fleet-wide. */
-  store?: ResilienceStore;
-  /** Clock seam for the timeout policy and the default store (inject a FakeClock in tests). */
-  clock?: Clock;
-  /** Per-attempt timeout per provider, in ms. A timeout counts as a provider failure. Default 10000. */
-  timeoutMs?: number;
-  /** Per-provider circuit breaker. Default `{ threshold: 5, cooldownMs: 30000 }`. */
+  /** Per-attempt timeout per provider (`'8s'` or ms). A timeout counts as a provider failure. Default `'10s'`. */
+  timeout?: Duration;
+  /** Per-provider circuit breaker, `@nestjs/resilience`'s options. Default: its defaults. */
   breaker?: ResilientBreakerOptions;
-  /** Prefix for circuit keys, e.g. `'sms'` → `'sms:twilio'`. */
+  /** Prefix for breaker names, e.g. `'sms'` → `'sms:twilio'` (labels the `nestjs:resilience:*` events). */
   keyPrefix?: string;
+  /**
+   * Which provider errors move on to the next provider. An open circuit and a timeout always do.
+   * Default: every error.
+   */
+  failoverIf?: (error: unknown) => boolean;
   /** Called once per provider that fails (or short-circuits), before falling over to the next. */
   onFailover?: (id: string, error: unknown, index: number) => void;
-  /** Resilience event sink (diagnostics / event-emitter bridge). */
-  onEvent?: EventSink;
 }
 
-/** A transport that delivers a payload, throwing on failure (the nestjs-notifications contract). */
-export interface ResilientTransport<P> {
-  send(payload: P): Promise<void>;
-}
-
-const DEFAULT_TIMEOUT_MS = 10_000;
-const DEFAULT_BREAKER: ResilientBreakerOptions = Object.freeze({
-  threshold: 5,
-  cooldownMs: 30_000,
-});
+const DEFAULT_TIMEOUT: Duration = '10s';
 
 /**
- * Wrap an ordered list of provider transports into a single resilient transport.
- *
- * Each `send` tries the providers in order; every attempt is wrapped in a per-provider circuit
- * breaker (outer) and a per-attempt timeout (inner). An open breaker short-circuits instantly so a
- * known-dead provider is skipped without a wasted call, and a slow provider that exceeds `timeoutMs`
- * is treated as a failure and tripped toward the breaker. The first provider that succeeds stops the
- * chain; if all fail, the last error is thrown. State transitions emit on `onEvent` (resilience
- * diagnostics).
- *
- * Generic over any transport with `send(payload): Promise<void>` — works for `MailTransport`,
- * `SmsTransport`, or any custom transport. Drops into a channel module's `transportInstance`.
+ * The transport {@link resilientTransport} returns: the wrapped transports' `send()`, failing over
+ * across providers. `breakers` exposes each provider's `CircuitBreakerPolicy` (state, `trip()`,
+ * `reset()`) for health checks and tests.
  */
-export function resilientTransport<P, T extends { send(payload: P): Promise<void> }>(
-  entries: ResilientTransportEntry<T>[],
-  opts: ResilientTransportOptions = {},
-): ResilientTransport<P> {
-  if (entries.length === 0) {
-    throw new Error('resilientTransport() needs at least one transport.');
-  }
-  const store = opts.store ?? new InMemoryResilienceStore(opts.clock);
-  const breaker = opts.breaker ?? DEFAULT_BREAKER;
-  const prefix = opts.keyPrefix ? `${opts.keyPrefix}:` : '';
-  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const timeoutOpts = opts.clock ? { clock: opts.clock } : {};
-  const onEvent = opts.onEvent;
-  const onFailover = opts.onFailover;
+export class ResilientTransport<T extends SendingTransport> {
+  readonly breakers: Readonly<Record<string, CircuitBreakerPolicy>>;
+  private readonly chain: { id: string; transport: T; policy: ResiliencePolicy }[];
 
-  return {
-    send: (payload: P): Promise<void> =>
-      failover<ResilientTransportEntry<T>, void>({
-        targets: entries,
-        run: (entry) => entry.transport.send(payload),
-        policy: (entry) =>
-          wrap(
-            circuitBreaker({
-              key: `${prefix}${entry.id}`,
-              store,
-              threshold: breaker.threshold,
-              cooldownMs: breaker.cooldownMs,
-              ...(breaker.halfOpenMax !== undefined ? { halfOpenMax: breaker.halfOpenMax } : {}),
-              ...(onEvent ? { onEvent } : {}),
-            }),
-            timeout(timeoutMs, timeoutOpts),
-          ),
-        ...(onFailover
-          ? {
-              onFailover: (entry: ResilientTransportEntry<T>, error: unknown, index: number) =>
-                onFailover(entry.id, error, index),
-            }
-          : {}),
-        ...(onEvent ? { onEvent } : {}),
-      }),
-  };
+  constructor(
+    entries: ResilientTransportEntry<T>[],
+    private readonly options: ResilientTransportOptions = {},
+  ) {
+    if (entries.length === 0) {
+      throw new Error('resilientTransport() needs at least one transport.');
+    }
+    const prefix = options.keyPrefix ? `${options.keyPrefix}:` : '';
+    const breakers: Record<string, CircuitBreakerPolicy> = {};
+    // Built once per entry: the breaker's state lives in this instance, across sends.
+    this.chain = entries.map((entry) => {
+      const name = `${prefix}${entry.id}`;
+      const breaker = new CircuitBreakerPolicy({ ...options.breaker, name });
+      breakers[entry.id] = breaker;
+      const timeout = new TimeoutPolicy({ timeout: options.timeout ?? DEFAULT_TIMEOUT, name });
+      return { ...entry, policy: ResiliencePolicy.wrap(breaker, timeout) };
+    });
+    this.breakers = breakers;
+  }
+
+  /** Try each provider in order; the first that succeeds wins, else the last error is thrown. */
+  send: T['send'] = (async (...args: unknown[]) => {
+    let lastError: unknown;
+    for (const [index, entry] of this.chain.entries()) {
+      try {
+        return await entry.policy.execute(({ signal }) =>
+          entry.transport.send(...withSignal(args, signal)),
+        );
+      } catch (error) {
+        lastError = error;
+        if (!this.failsOver(error) || index === this.chain.length - 1) break;
+        this.options.onFailover?.(entry.id, error, index);
+      }
+    }
+    throw lastError;
+  }) as T['send'];
+
+  /** Closes every wrapped transport that can be closed. */
+  async close(): Promise<void> {
+    await Promise.all(this.chain.map(({ transport }) => transport.close?.()));
+  }
+
+  private failsOver(error: unknown): boolean {
+    if (error instanceof CircuitOpenError || error instanceof ResilienceTimeoutError) return true;
+    return this.options.failoverIf ? this.options.failoverIf(error) : true;
+  }
+}
+
+/**
+ * Wrap an ordered list of provider transports into one resilient transport.
+ *
+ * Each provider gets a `@nestjs/resilience` `CircuitBreakerPolicy` (outer) around a `TimeoutPolicy`
+ * (inner). A send tries the providers in order: an open breaker rejects instantly
+ * (`CircuitOpenError`), so a known-dead provider is skipped without a wasted call, and a provider
+ * slower than `timeout` fails the attempt (`ResilienceTimeoutError`) and counts toward its breaker.
+ * The first provider that succeeds stops the chain; if all fail, the last error is thrown. Breaker
+ * state is in-process. State changes are published on the `nestjs:resilience:*` diagnostics
+ * channels (https://docs.nestjs.com/techniques/resilience).
+ *
+ * When the call's last argument is an options object with a `signal` (a `@nestjs/mail`
+ * transport's `send(message, { signal })`), the attempt's timeout signal is combined into it, so the
+ * transport stops on a timeout.
+ */
+export function resilientTransport<T extends SendingTransport>(
+  entries: ResilientTransportEntry<T>[],
+  options: ResilientTransportOptions = {},
+): ResilientTransport<T> {
+  return new ResilientTransport(entries, options);
+}
+
+function withSignal(args: unknown[], signal: AbortSignal): unknown[] {
+  const last = args[args.length - 1];
+  if (
+    last &&
+    typeof last === 'object' &&
+    (last as { signal?: unknown }).signal instanceof AbortSignal
+  ) {
+    const caller = (last as { signal: AbortSignal }).signal;
+    return [...args.slice(0, -1), { ...last, signal: AbortSignal.any([caller, signal]) }];
+  }
+  return args;
 }

@@ -1,7 +1,7 @@
-export { resilientTransport } from './resilient-transport';
+export { ResilientTransport, resilientTransport } from './resilient-transport';
 export type {
   ResilientBreakerOptions,
-  ResilientTransport,
   ResilientTransportEntry,
   ResilientTransportOptions,
+  SendingTransport,
 } from './resilient-transport';

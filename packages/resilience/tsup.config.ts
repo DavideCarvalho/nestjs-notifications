@@ -1,8 +1,8 @@
 import { defineConfig } from 'tsup';
 
-/** Dual ESM + CJS build (mirrors the other channel packages). @dudousxd/nestjs-resilience and
+/** Dual ESM + CJS build (mirrors the other channel packages). @nestjs/resilience and
  *  @nestjs/common stay external (peer deps resolved by the consumer). */
-const external = ['@dudousxd/nestjs-resilience', '@nestjs/common'];
+const external = ['@nestjs/resilience', '@nestjs/common'];
 
 export default defineConfig([
   {
