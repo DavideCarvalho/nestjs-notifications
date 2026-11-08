@@ -55,7 +55,7 @@
     "@nestjs/common": "12.3.2",
     "@nestjs/core": "12.3.2",
     "@nestjs/testing": "12.3.2",
-    "@testcontainers/postgresql": "10.18.0",
+    "@testcontainers/postgresql": "10.28.0",
     "drizzle-orm": "0.45.4",
     "pg": "8.23.1",
     "reflect-metadata": "0.2.2",
