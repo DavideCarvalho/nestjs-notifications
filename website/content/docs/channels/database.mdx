@@ -368,6 +368,8 @@ the channel that consumes it.
     }),
     ```
 
+    With `connectionName`, the factory returns `{ tables? }` only: returning `db` as well throws.
+
     `DrizzleNotificationStoreModule` binds `DrizzleNotificationStore` to `NOTIFICATION_STORE`. The
     tables are plain `pgTable`s from `createNotificationTables()`. Columns are snake_case, as in
     Laravel's table. You can also pass `{ tableNames, schema }`. If you already provide

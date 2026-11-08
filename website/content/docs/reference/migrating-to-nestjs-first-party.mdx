@@ -13,10 +13,10 @@ These releases are breaking (0.x minors). Configure the official packages as
 | Package | New version | Now built on |
 | --- | --- | --- |
 | `@dudousxd/nestjs-notifications-core` | 0.11 | `@nestjs/outbox` (`/outbox`), `@nestjs/i18n` (`/i18n`), both optional |
-| `@dudousxd/nestjs-notifications-mail` | 0.10 | `@nestjs/mail` |
+| `@dudousxd/nestjs-notifications-mail` | 0.10 (0.11: [attachment downloads](#url-attachments-011)) | `@nestjs/mail` |
 | `@dudousxd/nestjs-notifications-webhook` | 0.7 | `@nestjs/webhooks` |
-| `@dudousxd/nestjs-notifications-delivery-tracking` | minor | `@nestjs/mail` events (`/mail`, optional) |
-| `@dudousxd/nestjs-notifications-database-drizzle` | minor | `@nestjs/drizzle` connections (optional) |
+| `@dudousxd/nestjs-notifications-delivery-tracking` | 0.5 | `@nestjs/mail` events (`/mail`, optional) |
+| `@dudousxd/nestjs-notifications-database-drizzle` | 0.3 | `@nestjs/drizzle` connections (optional) |
 | `@dudousxd/nestjs-notifications-resilience` | 0.3 | `@nestjs/resilience` |
 
 Nest peer floors: core and mail `^11 || ^12`; webhook and resilience `^12` (the official peers'
@@ -60,6 +60,19 @@ MailChannelModule.forRoot(),
 New: `toMail()` may return `{ mail: MailClass, data }`; `MailMessage.replyTo()` / `.header()`; the channel
 returns `MailSendResult` (delivery tracking records `providerMessageId`, so SES bounces match);
 `retry` option; the delivery `idempotencyKey` is passed to the mailer.
+
+### URL attachments (0.11)
+
+From 0.11 the channel downloads `attach({ filename, url })` files with limits: the URL must be
+`https:` and the host must resolve to a public address (checked at connect time), with a 30 s
+timeout and a 25 MiB cap. An `http:` or internal-host attachment that worked in 0.10 now fails. To
+fetch from an internal server you trust:
+
+```ts
+MailChannelModule.forRoot({
+  attachments: { allowPrivateHosts: true, allowHttp: true }, // also: timeoutMs, maxBytes
+});
+```
 
 ## Webhook → @nestjs/webhooks
 
@@ -123,13 +136,40 @@ resolver (`PropertyLocaleResolver`, `LocaleResolver`) is unchanged; deliveries r
 
 ## Delivery tracking
 
-No breaking change. New `mailDeliveryTracking()` (`/mail` subpath) records mail sent with `Mailer`
-directly. See [Delivery tracking](/docs/recipes/delivery-tracking#mail-sent-outside-notifications).
+New `mailDeliveryTracking()` (`/mail` subpath) records mail sent with `Mailer` directly. See
+[Delivery tracking](/docs/recipes/delivery-tracking#mail-sent-outside-notifications).
+
+Breaking changes to the inbound controllers:
+
+| Changed | Now |
+| --- | --- |
+| `createSesNotificationController()` | `topicArns` is required (non-empty); messages from other topics get 403 |
+| SES `verifySignature` | defaults to `true` (SNS signatures are verified); set `false` only if something in front already verifies them |
+| `guards` on the SES and Twilio controllers | removed; passing it throws. Use `decorators` (see [Route protection](#route-protection)) |
+
+See [AWS SES](/docs/recipes/delivery-tracking#aws-ses-email) for the full set of SES checks.
 
 ## Drizzle
 
-No breaking change. New `forRoot({ connectionName })` uses a `@nestjs/drizzle` connection; `db` still
-works. `forRootAsync`'s factory returns `{ db, tables? }` only.
+New `forRoot({ connectionName })` uses a `@nestjs/drizzle` connection; `db` still works. `forRootAsync`
+takes either a factory that returns `{ db, tables? }`, or `{ connectionName, useFactory? }` where the
+optional factory returns `{ tables? }`. With `connectionName`, a factory that also returns `db` throws.
+Both apply to `DrizzleNotificationStoreModule` and `DrizzlePendingDigestStoreModule`.
+
+## Route protection
+
+The inbox, SSE stream, preference center and delivery-tracking controllers no longer take `guards`.
+Protect them with `@nestjs/authentication` / `@nestjs/authorization` through `decorators`, or mount
+the controller in your own module:
+
+| Old | Now |
+| --- | --- |
+| `guards: [G]` on `createNotificationsController()`, `createNotificationsStreamController()`, `createPreferenceCenterController()`, `createSesNotificationController()`, `createTwilioStatusController()` | `decorators: [UseGuards(G)]` |
+| `DatabaseChannelModule.forRoot({ controller: { guards: [G] } })` | `DatabaseChannelModule.forRoot({ decorators: [UseGuards(G)] })` |
+| `DatabaseChannelModule.forRoot({ controller: false })` | `DatabaseChannelModule.forRoot({ routes: false })` |
+
+The old options throw at registration instead of being ignored. See
+[Authorization of the mounted routes](/docs/recipes/route-authorization).
 
 ## Resilience → @nestjs/resilience
 

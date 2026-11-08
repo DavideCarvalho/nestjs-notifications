@@ -197,7 +197,15 @@ per-endpoint outcome is in `@nestjs/webhooks`' delivery log.
 ### Retries of a subscription delivery
 
 A delivery with an `idempotencyKey` (the [outbox dispatcher](/docs/dispatchers/outbox#delivery-and-retries)'s
-message id) dispatches with that key as the `webhook-id`. `@nestjs/webhooks` writes the event to the
+message id) dispatches with a `webhook-id` derived from that key. A `webhook-id` may only contain
+letters, digits, `_` and `-`, up to 128 characters, so:
+
+- a key made of those characters that fits is sent as `msg_<key>`;
+- any other key is hashed and sent as `msgh_<sha256 hex>`, so distinct keys never share an id.
+
+Direct delivery (a `WebhookMessage` to a URL) still sends the raw key as the `webhook-id`.
+
+`@nestjs/webhooks` writes the event to the
 outbox under that id, so dispatching it twice would add a duplicate outbox id (an error while the
 first message is still pending). The channel therefore records the `webhook-id` in the outbox inbox
 (consumer `aviary.notifications.webhook-dispatch`, exported as `WEBHOOK_DISPATCH_CONSUMER`) through
@@ -224,6 +232,10 @@ WebhookChannelModule.forRoot({
   }),
 });
 ```
+
+The channel keeps one `HttpWebhookTransport` per tenant and reuses it. It builds a new one only
+when that tenant's `delivery` options change (compared by value, so a resolver that returns a fresh
+object with the same settings reuses the transport).
 
 Sends with no tenant scope keep the module defaults. See
 [Multi-tenancy](/docs/concepts/multi-tenancy) for the full picture.
