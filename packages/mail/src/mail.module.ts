@@ -26,6 +26,7 @@ export class MailChannelModule {
   static forRoot(options: MailChannelModuleOptions = {}): DynamicModule {
     const mailOptions: MailChannelOptions = {
       ...(options.retry !== undefined ? { retry: options.retry } : {}),
+      ...(options.attachments !== undefined ? { attachments: options.attachments } : {}),
     };
     const rendererClass = options.renderer ?? DefaultMailRenderer;
 

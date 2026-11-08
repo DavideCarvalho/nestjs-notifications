@@ -21,7 +21,9 @@ const storeProviders = [
 /**
  * Provides the Drizzle-backed notification store and binds it to the {@link NOTIFICATION_STORE}
  * token consumed by the database channel. Like Prisma, the Drizzle database is app-owned, so it
- * must be supplied: `forRoot({ db })`, `forRootAsync({ inject, useFactory })`, or `forFeature()`
+ * must be supplied: `forRoot({ db })` / `forRoot({ connectionName })` (a `@nestjs/drizzle`
+ * connection), `forRootAsync({ inject, useFactory })` / `forRootAsync({ connectionName, useFactory? })`
+ * (the factory then resolves only `tables`), or `forFeature()`
  * when you already provide {@link DRIZZLE_NOTIFICATIONS_DB} from a shared module.
  *
  * Pair this with `DatabaseChannelModule.forFeature()` from

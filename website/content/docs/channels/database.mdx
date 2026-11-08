@@ -360,6 +360,12 @@ the channel that consumes it.
     ```ts
     DrizzleModule.forRoot({ drizzle, connection: process.env.DATABASE_URL }),
     DrizzleNotificationStoreModule.forRoot({ connectionName: 'default' }),
+    // or async: the connection name is static, the factory resolves the rest
+    DrizzleNotificationStoreModule.forRootAsync({
+      connectionName: 'default',
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({ tables: tablesFor(config) }),
+    }),
     ```
 
     `DrizzleNotificationStoreModule` binds `DrizzleNotificationStore` to `NOTIFICATION_STORE`. The

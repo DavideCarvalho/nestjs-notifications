@@ -6,6 +6,7 @@ import {
   type Type,
   UnauthorizedException,
 } from '@nestjs/common';
+import { rejectRemovedGuards } from './controller-decorators';
 import { DatabaseChannel } from './database.channel';
 import { InMemoryStore } from './in-memory.store';
 import { InboxMountAudit } from './inbox-mount-audit';
@@ -115,12 +116,20 @@ function inboxControllers(options: {
   controller?: InboxControllerOptions;
   decorators?: ClassDecorator[];
 }): Type<unknown>[] {
+  const opts = options.controller as unknown;
+  if (typeof opts === 'boolean') {
+    // `controller: false` used to disable the inbox. Ignoring it would mount the inbox with the
+    // defaults for a JS caller who asked for none, so refuse it and point at the replacement.
+    throw new Error(
+      `DatabaseChannelModule: \`controller: ${opts}\` is no longer supported. Use \`routes: false\` to not mount the inbox (or omit it to mount it), and \`controller: { resolveRef, path }\` to configure it.`,
+    );
+  }
+  rejectRemovedGuards(opts, 'DatabaseChannelModule `controller`');
   if (options.routes === false) return [];
-  const opts = options.controller;
-  const resolveRef = opts?.resolveRef ?? defaultResolveRef;
+  const resolveRef = options.controller?.resolveRef ?? defaultResolveRef;
   return [
     buildNotificationsController(
-      { resolveRef, path: opts?.path, decorators: options.decorators },
+      { resolveRef, path: options.controller?.path, decorators: options.decorators },
       // Tagged 'auto' so the bootstrap audit can tell this apart from the app's own mount.
       'auto',
     ),

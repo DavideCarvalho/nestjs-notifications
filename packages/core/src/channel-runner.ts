@@ -116,7 +116,9 @@ export class ChannelRunner {
     try {
       await completion.markComplete(channel);
     } catch (error) {
-      // The channel did deliver; without the record a redelivery runs it again (at-least-once).
+      // The channel did deliver (and its `sent` event is out); without the record a redelivery runs
+      // it again and emits `sent` again (at-least-once). Under failFast the rethrow makes that
+      // redelivery immediate. Documented in the outbox docs ("Delivery is at-least-once").
       this.logger.error(`Could not record channel "${channel}" as complete: ${describe(error)}`);
       if (rethrow) throw error;
     }

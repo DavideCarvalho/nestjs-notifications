@@ -38,9 +38,11 @@ export class AppModule {}
 
 `I18nServiceTranslator` turns `localization.t(key, params)` into
 `i18n.translate(key, { locale, args: params })`, and runs each channel delivery inside
-`I18nContext.run(locale)`. Code that reads the ambient locale — `@nestjs/i18n`'s `t()`, a
-[`@nestjs/mail` mail class](/docs/channels/mail#mail-classes) injecting `I18nService` — renders in the
-recipient's language too.
+`I18nContext.run(locale)`, so code that reads the ambient locale during the delivery
+(`@nestjs/i18n`'s `t()`) renders in the recipient's language too. A
+[`@nestjs/mail` mail class](/docs/channels/mail#mail-classes) gets the locale explicitly instead: the
+mail channel passes the recipient's `locale` to `mailer.send()`, and the class reads it from its
+render context (`{ locale }`).
 
 `LocalizationOptions` is `{ defaultLocale?, resolver?, translator? }` — all optional. Without a
 translator, `t(key)` returns the key.

@@ -9,7 +9,7 @@ import {
   Req,
   type Type,
 } from '@nestjs/common';
-import { finishController } from '../controller-decorators';
+import { finishController, rejectRemovedGuards } from '../controller-decorators';
 import { DeliveryTrackingService } from '../delivery-tracking.service';
 import type { DeliveryStatus } from '../interfaces';
 
@@ -105,6 +105,7 @@ function requestUrl(req: any): string {
 export function createTwilioStatusController(
   options: TwilioStatusControllerOptions,
 ): Type<unknown> {
+  rejectRemovedGuards(options, 'createTwilioStatusController()');
   const path = options.path ?? 'webhooks/twilio/status';
 
   @Controller(path)

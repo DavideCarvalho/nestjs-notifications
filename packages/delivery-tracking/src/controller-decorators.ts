@@ -33,3 +33,19 @@ export function finishController(
     decorator(controller);
   }
 }
+
+/**
+ * Refuses a `guards` option. `guards` was removed in favour of `decorators`; TypeScript callers
+ * get a type error, but a JavaScript caller (or a stale `as any`) would otherwise see the option
+ * ignored and the routes mount open. Throwing at registration keeps a removed option from silently
+ * weakening who reaches the routes.
+ *
+ * @internal Not exported from the package entry point.
+ */
+export function rejectRemovedGuards(options: unknown, where: string): void {
+  if (options !== null && typeof options === 'object' && 'guards' in options) {
+    throw new Error(
+      `${where}: the \`guards\` option was removed and is not applied. Pass \`decorators: [UseGuards(...)]\` instead, or mount the controller in your own module.`,
+    );
+  }
+}

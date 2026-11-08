@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   Controller,
   ForbiddenException,
   HttpCode,
@@ -7,7 +8,7 @@ import {
   Req,
   type Type,
 } from '@nestjs/common';
-import { finishController } from '../controller-decorators';
+import { finishController, rejectRemovedGuards } from '../controller-decorators';
 import { DeliveryTrackingService } from '../delivery-tracking.service';
 import type { DeliveryStatus } from '../interfaces';
 import {
@@ -50,6 +51,7 @@ export interface SesNotificationControllerOptions {
   /**
    * Maximum age of the message `Timestamp`, in ms, or `false` to skip. Default one hour. SNS keeps
    * the original timestamp across retries, so keep this above your delivery retry window.
+   * It does not shorten the `MessageId` dedupe window: that is {@link messageIdTtlMs}.
    */
   maxMessageAgeMs?: number | false;
   /**
@@ -58,12 +60,24 @@ export interface SesNotificationControllerOptions {
    * across instances, or `false` to turn it off.
    */
   messageIdStore?: SnsMessageIdStore | false;
+  /**
+   * How long a processed `MessageId` is remembered, in ms. Independent of `maxMessageAgeMs`, and
+   * never shorter than it (a message still fresh enough to be accepted is always deduplicated).
+   * Default 24 hours — above SNS's HTTP/S retry window, and above `maxMessageAgeMs: false`'s
+   * unbounded acceptance for any retry SNS actually makes.
+   */
+  messageIdTtlMs?: number;
   /** Loads the PEM at a validated `SigningCertURL`. Default: HTTPS `fetch`. Inject in tests. */
   certificateLoader?: SnsCertificateLoader;
   /** Timeout for the default certificate fetch, in ms. Default `5000`. */
   certificateTimeoutMs?: number;
-  /** `fetch` used to GET the `SubscribeURL`. Default global `fetch`. Inject in tests. */
-  fetch?: (url: string) => Promise<{ ok: boolean; status: number }>;
+  /** Timeout for confirming the subscription (GET `SubscribeURL`), in ms. Default `5000`. */
+  confirmTimeoutMs?: number;
+  /**
+   * `fetch` used to GET the `SubscribeURL`. Default global `fetch` with `redirect: 'error'` and
+   * a {@link confirmTimeoutMs} timeout (the `init` passed carries both). Inject in tests.
+   */
+  fetch?: (url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number }>;
   /**
    * Class decorators applied to the controller, in order, after its own (e.g. an IP-allowlist
    * guard via `UseGuards(...)`). The controller is marked open to `@nestjs/authorization`'s
@@ -113,6 +127,9 @@ async function readBody(req: any): Promise<unknown> {
   return body;
 }
 
+/** Default {@link SesNotificationControllerOptions.messageIdTtlMs}: 24 hours. */
+const DEFAULT_MESSAGE_ID_TTL_MS = 24 * 60 * 60 * 1000;
+
 const MAX_BODY_BYTES = 256 * 1024 + 16 * 1024; // SNS messages are at most 256 KiB, plus envelope.
 
 /**
@@ -140,6 +157,7 @@ const MAX_BODY_BYTES = 256 * 1024 + 16 * 1024; // SNS messages are at most 256 K
 export function createSesNotificationController(
   options: SesNotificationControllerOptions,
 ): Type<unknown> {
+  rejectRemovedGuards(options, 'createSesNotificationController()');
   const path = options.path ?? 'webhooks/ses';
   const verifier = new SnsMessageVerifier({
     topicArns: options.topicArns,
@@ -152,9 +170,12 @@ export function createSesNotificationController(
     options.messageIdStore === false
       ? null
       : (options.messageIdStore ?? new InMemorySnsMessageIdStore());
-  const dedupeTtlMs =
-    typeof options.maxMessageAgeMs === 'number' ? options.maxMessageAgeMs : 3_600_000;
-  const doFetch = options.fetch ?? ((url: string) => fetch(url));
+  const dedupeTtlMs = Math.max(
+    options.messageIdTtlMs ?? DEFAULT_MESSAGE_ID_TTL_MS,
+    typeof options.maxMessageAgeMs === 'number' ? options.maxMessageAgeMs : 0,
+  );
+  const doFetch = options.fetch ?? ((url: string, init?: RequestInit) => fetch(url, init));
+  const confirmTimeoutMs = options.confirmTimeoutMs ?? 5000;
 
   @Controller(path)
   class SesNotificationController {
@@ -202,10 +223,16 @@ export function createSesNotificationController(
         return;
       }
       try {
-        const res = await doFetch(message.SubscribeURL as string);
+        const res = await doFetch(message.SubscribeURL as string, {
+          redirect: 'error',
+          signal: AbortSignal.timeout(confirmTimeoutMs),
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
       } catch (error) {
         this.logger.error(`SES controller: failed to confirm SNS subscription: ${describe(error)}`);
+        // Not a 2xx, so SNS redelivers the SubscriptionConfirmation and the confirm is retried,
+        // instead of the subscription sitting in PendingConfirmation behind a 204.
+        throw new BadGatewayException('Could not confirm the SNS subscription');
       }
     }
 

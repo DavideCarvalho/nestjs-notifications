@@ -95,6 +95,8 @@ MailChannelModule.forRoot({ renderer: MarkdownMailRenderer });
 ```ts
 new MailMessage().attach({ filename: 'report.pdf', content: pdfBuffer });       // or a local `path`
 new MailMessage().attach({ filename: 'report.pdf', url: 'https://files.example.com/r.pdf' }); // downloaded
+// url downloads: https only, public hosts only, 30 s timeout, 25 MiB cap, no redirects. Loosen per app:
+MailChannelModule.forRoot({ attachments: { allowPrivateHosts: true, allowHttp: true, timeoutMs: 10_000, maxBytes: 5 * 1024 * 1024 } });
 ```
 
 Per-tenant provider: give `MailModule` a `TenantRoutingMailTransport((tenant) => transports.get(tenant), fallback)`;

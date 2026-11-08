@@ -40,12 +40,31 @@ export interface DrizzleStoreConnectionOptions extends TablesOption {
 /** Options for the Drizzle store modules' `forRoot`. */
 export type DrizzleStoreModuleOptions = DrizzleStoreDbOptions | DrizzleStoreConnectionOptions;
 
-/** Options for the Drizzle store modules' `forRootAsync`. */
-export interface DrizzleStoreModuleAsyncOptions {
+interface AsyncFactoryOptions {
   imports?: ModuleMetadata['imports'];
   inject?: Array<InjectionToken | OptionalFactoryDependency>;
-  useFactory: (...args: never[]) => DrizzleStoreDbOptions | Promise<DrizzleStoreDbOptions>;
 }
+
+/** `forRootAsync` with a database the factory returns. */
+export interface DrizzleStoreDbAsyncOptions extends AsyncFactoryOptions {
+  useFactory: (...args: never[]) => DrizzleStoreDbOptions | Promise<DrizzleStoreDbOptions>;
+  connectionName?: never;
+}
+
+/**
+ * `forRootAsync` on a `@nestjs/drizzle` connection. The connection name is static (it picks the
+ * provider to inject); the optional factory resolves the rest (`tables`).
+ */
+export interface DrizzleStoreConnectionAsyncOptions extends AsyncFactoryOptions {
+  /** The `DrizzleModule` connection to use (`'default'` for the unnamed one). */
+  connectionName: string;
+  useFactory?: (...args: never[]) => TablesOption | Promise<TablesOption>;
+}
+
+/** Options for the Drizzle store modules' `forRootAsync`. */
+export type DrizzleStoreModuleAsyncOptions =
+  | DrizzleStoreDbAsyncOptions
+  | DrizzleStoreConnectionAsyncOptions;
 
 /**
  * `@nestjs/drizzle`'s `getDrizzleToken(name)`, inlined: `@nestjs/drizzle` is an OPTIONAL peer
@@ -75,22 +94,36 @@ export function asyncProviders(options: DrizzleStoreModuleAsyncOptions): {
   imports: NonNullable<DynamicModule['imports']>;
   providers: Provider[];
 } {
+  const connectionName = options.connectionName;
   return {
     imports: options.imports ?? [],
     providers: [
       {
         provide: OPTIONS,
-        useFactory: options.useFactory as (...args: unknown[]) => unknown,
+        useFactory: (options.useFactory ?? (() => ({}))) as (...args: unknown[]) => unknown,
         inject: options.inject ?? [],
       },
-      {
-        provide: DRIZZLE_NOTIFICATIONS_DB,
-        useFactory: (o: DrizzleStoreDbOptions) => o.db,
-        inject: [OPTIONS],
-      },
+      connectionName !== undefined
+        ? {
+            provide: DRIZZLE_NOTIFICATIONS_DB,
+            useFactory: (o: TablesOption & { db?: unknown }, db: DrizzlePgDatabase) => {
+              if (o?.db !== undefined) {
+                throw new Error(
+                  'Drizzle store forRootAsync: pass either `connectionName` or a factory `db`, not both.',
+                );
+              }
+              return db;
+            },
+            inject: [OPTIONS, drizzleConnectionToken(connectionName)],
+          }
+        : {
+            provide: DRIZZLE_NOTIFICATIONS_DB,
+            useFactory: (o: DrizzleStoreDbOptions) => o.db,
+            inject: [OPTIONS],
+          },
       {
         provide: DRIZZLE_NOTIFICATION_TABLES,
-        useFactory: (o: DrizzleStoreDbOptions) => o.tables ?? null,
+        useFactory: (o: TablesOption) => o?.tables ?? null,
         inject: [OPTIONS],
       },
     ],

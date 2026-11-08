@@ -16,7 +16,9 @@ export {
 } from './tokens';
 export {
   drizzleConnectionToken,
+  type DrizzleStoreConnectionAsyncOptions,
   type DrizzleStoreConnectionOptions,
+  type DrizzleStoreDbAsyncOptions,
   type DrizzleStoreDbOptions,
   type DrizzleStoreModuleAsyncOptions,
   type DrizzleStoreModuleOptions,

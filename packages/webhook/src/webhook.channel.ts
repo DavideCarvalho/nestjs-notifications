@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   BaseChannel,
   type ChannelContext,
@@ -23,6 +23,8 @@ import { WebhookEvent, WebhookMessage } from './webhook-message';
 
 const DEFAULT_SIGNATURE_HEADER = 'X-Signature-256';
 const DEFAULT_TIMEOUT_MS = 15_000;
+/** Tenants whose `HttpWebhookTransport` is kept (oldest built first out). */
+const MAX_CACHED_TRANSPORTS = 1000;
 
 /**
  * The outbox inbox consumer under which subscription deliveries record the `webhook-id`s they
@@ -111,7 +113,15 @@ export interface WebhookAlreadyDispatched {
 @Injectable()
 export class WebhookChannel extends BaseChannel {
   readonly channel = 'webhook';
-  private readonly transports = new WeakMap<WebhookChannelOptions, WebhookTransport>();
+  /**
+   * `HttpWebhookTransport`s by tenant (`''` without one), rebuilt only when that tenant's
+   * `delivery` options change. Keyed by tenant rather than by the resolved options object, since a
+   * resolver may return a fresh object on every call.
+   */
+  private readonly transports = new Map<
+    string,
+    { delivery: HttpWebhookTransportOptions | undefined; transport: WebhookTransport }
+  >();
 
   constructor(
     @Inject(WEBHOOK_OPTIONS)
@@ -172,7 +182,7 @@ export class WebhookChannel extends BaseChannel {
       }
     }
 
-    const response = await this.transportFor(options).send(
+    const response = await this.transportFor(options, context?.tenant).send(
       {
         url,
         headers,
@@ -229,12 +239,19 @@ export class WebhookChannel extends BaseChannel {
     return outcome.result;
   }
 
-  private transportFor(options: WebhookChannelOptions): WebhookTransport {
+  private transportFor(
+    options: WebhookChannelOptions,
+    tenant: string | undefined,
+  ): WebhookTransport {
     if (options.transport) return options.transport;
-    let transport = this.transports.get(options);
-    if (!transport) {
-      transport = new HttpWebhookTransport(options.delivery);
-      this.transports.set(options, transport);
+    const key = tenant && this.resolveOptions ? tenant : '';
+    const cached = this.transports.get(key);
+    if (cached && sameDelivery(cached.delivery, options.delivery)) return cached.transport;
+    const transport = new HttpWebhookTransport(options.delivery);
+    this.transports.delete(key);
+    this.transports.set(key, { delivery: options.delivery, transport });
+    while (this.transports.size > MAX_CACHED_TRANSPORTS) {
+      this.transports.delete(this.transports.keys().next().value as string);
     }
     return transport;
   }
@@ -246,7 +263,37 @@ function lowerCase(headers: Record<string, string> | undefined): Record<string, 
   return out;
 }
 
-/** `webhook-id` allows letters, digits, `_` and `-`, at most 128. */
-function webhookId(key: string): string {
-  return `msg_${key.replace(/[^A-Za-z0-9_-]/g, '_')}`.slice(0, 128);
+/**
+ * Whether two `delivery` option objects configure the same transport: the same object, or the
+ * same keys with identical values (arrays compared element by element), so a resolver returning a
+ * fresh literal with the same settings reuses the transport.
+ */
+function sameDelivery(
+  a: HttpWebhookTransportOptions | undefined,
+  b: HttpWebhookTransportOptions | undefined,
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keys = Object.keys(a) as (keyof HttpWebhookTransportOptions)[];
+  if (keys.length !== Object.keys(b).length) return false;
+  return keys.every((key) => {
+    const x = a[key];
+    const y = b[key];
+    if (Array.isArray(x) && Array.isArray(y)) {
+      return x.length === y.length && x.every((item, i) => Object.is(item, y[i]));
+    }
+    return Object.is(x, y);
+  });
+}
+
+/**
+ * The `webhook-id` for an idempotency key. `webhook-id` allows letters, digits, `_` and `-`, at
+ * most 128 characters: a key that fits is kept readable (`msg_<key>`); any other is hashed
+ * (`msgh_<sha256 hex>`), so distinct keys never share an id. The two prefixes differ, so a kept key
+ * can't collide with a hashed one.
+ */
+export function webhookId(key: string): string {
+  const kept = `msg_${key}`;
+  if (/^[A-Za-z0-9_-]+$/.test(key) && kept.length <= 128) return kept;
+  return `msgh_${createHash('sha256').update(key).digest('hex')}`;
 }
