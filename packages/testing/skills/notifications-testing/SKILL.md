@@ -4,7 +4,7 @@ description: >-
   Test NestJS notifications with @dudousxd/nestjs-notifications-testing. Use when asserting that
   notifications were (or were not) sent without delivering them: swap the real NotificationService
   for NotificationFake via provideNotificationFake() or .overrideProvider(NotificationService).useClass,
-  record sends with send/notify/sendNow/sendAsync/route/forTenant/only/except, and assert with the
+  record sends with send/notify/sendNow/sendAsync/route/forTenant/only/except/inTransaction, and assert with the
   Laravel-style API assertSent, assertSentTo, assertSentTimes, assertSentOnChannel, assertCount,
   assertNothingSent, plus sent()/records inspection and reset(). Also RecordingChannel for integration tests.
 license: MIT
@@ -59,7 +59,7 @@ fake.assertSent(InvoicePaid);
 ### 1. Record then assert
 
 The fake implements the full `NotificationService` surface (`send`, `notify`, `sendNow`,
-`sendAsync`, `route`, `forTenant`/`forTenants`, `only`/`except`). Channels are resolved exactly like
+`sendAsync`, `route`, `forTenant`/`forTenants`, `only`/`except`, `inTransaction`). Channels are resolved exactly like
 production (decorator inference or `via()`), so channel assertions are meaningful.
 
 ```ts
@@ -82,7 +82,7 @@ fake.assertSent(InvoicePaid, (record) => {
 
 // Or read the raw SentNotificationRecord[] for custom expectations
 const records = fake.sent(InvoicePaid); // { notifiable, notification, channels, mode, tenant }
-expect(records[0].mode).toBe('sync');   // 'async' when shouldQueue/delay set
+expect(records[0].mode).toBe('sync');   // 'async' when shouldQueue/delay set or inTransaction(tx) is used
 ```
 
 `assertSentTo` also accepts a predicate over the notifiable:
@@ -97,6 +97,7 @@ fake.reset();               // clear records between cases
 
 Scoping is recorded too: `await fake.forTenant('acme').send(user, n)` stores `tenant: 'acme'`, and
 `fake.only(['mail']).send(...)` / `except(['sms'])` filter the recorded channels.
+`fake.inTransaction(tx).send(...)` records with `mode: 'async'`, mirroring the transactional send.
 
 ## Common mistakes
 
