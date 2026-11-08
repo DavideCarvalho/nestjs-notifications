@@ -293,7 +293,8 @@ describe('SES notification controller', () => {
     await make({ messageIdTtlMs: 5_000, maxMessageAgeMs: 7_200_000, messageIdStore }).post(
       sesNotification(signer, 'd'),
     );
-    expect(added.map(([, ttl]) => ttl)).toEqual([86_400_000, 86_400_000, 5_000, 7_200_000]);
+    // An unset maxMessageAgeMs is the verifier's 1 h default, so a 5 s TTL is raised to it.
+    expect(added.map(([, ttl]) => ttl)).toEqual([86_400_000, 86_400_000, 3_600_000, 7_200_000]);
   });
 
   it('verifySignature: false skips only the signature (topic still enforced)', async () => {

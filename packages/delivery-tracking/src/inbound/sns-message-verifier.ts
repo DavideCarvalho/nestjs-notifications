@@ -216,6 +216,9 @@ export function fetchSnsCertificate(timeoutMs = 5000): SnsCertificateLoader {
  * from an SNS-hosted `SigningCertURL`), topic allowlist and timestamp freshness. Certificates are
  * cached by URL (bounded, least-recently-used evicted; failed loads are not cached).
  */
+/** Default `maxMessageAgeMs`: how old (by its `Timestamp`) a message may be, 1 hour. */
+export const DEFAULT_SNS_MAX_MESSAGE_AGE_MS = 3_600_000;
+
 export class SnsMessageVerifier {
   private readonly topicArns: ReadonlySet<string>;
   private readonly maxAgeMs: number | false;
@@ -230,7 +233,7 @@ export class SnsMessageVerifier {
       throw new Error('SnsMessageVerifier: `topicArns` must list at least one SNS topic ARN.');
     }
     this.topicArns = new Set(topics);
-    this.maxAgeMs = options.maxMessageAgeMs ?? 3_600_000;
+    this.maxAgeMs = options.maxMessageAgeMs ?? DEFAULT_SNS_MAX_MESSAGE_AGE_MS;
     this.loader = options.certificateLoader ?? fetchSnsCertificate(options.certificateTimeoutMs);
     this.cacheSize = Math.max(1, options.certificateCacheSize ?? 20);
     this.now = options.now ?? Date.now;

@@ -12,6 +12,7 @@ import { finishController, rejectRemovedGuards } from '../controller-decorators'
 import { DeliveryTrackingService } from '../delivery-tracking.service';
 import type { DeliveryStatus } from '../interfaces';
 import {
+  DEFAULT_SNS_MAX_MESSAGE_AGE_MS,
   InMemorySnsMessageIdStore,
   type SnsCertificateLoader,
   type SnsMessage,
@@ -172,7 +173,10 @@ export function createSesNotificationController(
       : (options.messageIdStore ?? new InMemorySnsMessageIdStore());
   const dedupeTtlMs = Math.max(
     options.messageIdTtlMs ?? DEFAULT_MESSAGE_ID_TTL_MS,
-    typeof options.maxMessageAgeMs === 'number' ? options.maxMessageAgeMs : 0,
+    // The freshness window actually enforced: the verifier's default when unset, none when off.
+    options.maxMessageAgeMs === false
+      ? 0
+      : (options.maxMessageAgeMs ?? DEFAULT_SNS_MAX_MESSAGE_AGE_MS),
   );
   const doFetch = options.fetch ?? ((url: string, init?: RequestInit) => fetch(url, init));
   const confirmTimeoutMs = options.confirmTimeoutMs ?? 5000;
