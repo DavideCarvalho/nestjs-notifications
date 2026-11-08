@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-mail
 
+## 0.11.0
+
+### Minor Changes
+
+- [#124](https://github.com/DavideCarvalho/nestjs-notifications/pull/124) [`b6ba0bc`](https://github.com/DavideCarvalho/nestjs-notifications/commit/b6ba0bc0395c5d122353981e123cc748dc3c3d5c) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - `url` attachments are downloaded with limits and an SSRF guard. Defaults: `https:` only, hosts that are or resolve to loopback/private/link-local/other non-public addresses are refused (checked at connect time), a 30 s timeout and a 25 MiB cap enforced while streaming; redirects are still refused. Configure with `MailChannelModule.forRoot({ attachments: { allowHttp, allowPrivateHosts, timeoutMs, maxBytes } })`. An `http:` or internal-host attachment that downloaded before now fails until you allow it.
+
 ## 0.10.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-preferences
 
+## 0.8.0
+
+### Minor Changes
+
+- [#124](https://github.com/DavideCarvalho/nestjs-notifications/pull/124) [`b6ba0bc`](https://github.com/DavideCarvalho/nestjs-notifications/commit/b6ba0bc0395c5d122353981e123cc748dc3c3d5c) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - Removed route-protection options now throw instead of being ignored. A `guards` option passed to `createNotificationsController`, `createNotificationsStreamController`, `createPreferenceCenterController`, `createSesNotificationController`, `createTwilioStatusController` or inside `DatabaseChannelModule`'s `controller`, and a boolean `controller` (`controller: false`), throw at registration with a pointer to `decorators` / `routes: false`. A JavaScript caller no longer gets an inbox that mounts again, or mounts without its guards.
+
 ## 0.7.0
 
 ### Minor Changes

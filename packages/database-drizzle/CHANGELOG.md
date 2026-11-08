@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-database-drizzle
 
+## 0.3.0
+
+### Minor Changes
+
+- [#124](https://github.com/DavideCarvalho/nestjs-notifications/pull/124) [`b6ba0bc`](https://github.com/DavideCarvalho/nestjs-notifications/commit/b6ba0bc0395c5d122353981e123cc748dc3c3d5c) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - `forRootAsync({ connectionName, useFactory? })` on both Drizzle store modules: the `@nestjs/drizzle` connection name is given statically, and the optional factory resolves `tables`. Returning `db` from that factory as well throws.
+
 ## 0.2.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-webhook
 
+## 0.7.1
+
+### Patch Changes
+
+- [#124](https://github.com/DavideCarvalho/nestjs-notifications/pull/124) [`b6ba0bc`](https://github.com/DavideCarvalho/nestjs-notifications/commit/b6ba0bc0395c5d122353981e123cc748dc3c3d5c) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - A subscription delivery's `webhook-id` no longer collides for distinct idempotency keys: a key that isn't header-safe or would exceed 128 characters is hashed (`msgh_<sha256>`) instead of having characters replaced by `_` and being truncated, which reported the second delivery as `duplicate`. Short, safe keys (outbox message ids) keep `msg_<key>`. Direct delivery now caches one `HttpWebhookTransport` per tenant, rebuilt only when that tenant's `delivery` options change, so a resolver returning a fresh object per call no longer builds a transport per send.
+
 ## 0.7.0
 
 ### Minor Changes

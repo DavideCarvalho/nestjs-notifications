@@ -1,5 +1,13 @@
 # @dudousxd/nestjs-notifications-delivery-tracking
 
+## 0.5.0
+
+### Minor Changes
+
+- [#124](https://github.com/DavideCarvalho/nestjs-notifications/pull/124) [`b6ba0bc`](https://github.com/DavideCarvalho/nestjs-notifications/commit/b6ba0bc0395c5d122353981e123cc748dc3c3d5c) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - Removed route-protection options now throw instead of being ignored. A `guards` option passed to `createNotificationsController`, `createNotificationsStreamController`, `createPreferenceCenterController`, `createSesNotificationController`, `createTwilioStatusController` or inside `DatabaseChannelModule`'s `controller`, and a boolean `controller` (`controller: false`), throw at registration with a pointer to `decorators` / `routes: false`. A JavaScript caller no longer gets an inbox that mounts again, or mounts without its guards.
+
+- [#124](https://github.com/DavideCarvalho/nestjs-notifications/pull/124) [`b6ba0bc`](https://github.com/DavideCarvalho/nestjs-notifications/commit/b6ba0bc0395c5d122353981e123cc748dc3c3d5c) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - SES controller: the `MessageId` dedupe window is its own option, `messageIdTtlMs` (default 24 h, never shorter than `maxMessageAgeMs`), instead of following `maxMessageAgeMs` (and falling back to 1 h under `maxMessageAgeMs: false`). The `autoConfirmSubscription` GET refuses redirects and times out (`confirmTimeoutMs`, default 5 s), and a failed confirmation answers `502` so SNS redelivers it, instead of a `204` that left the subscription pending.
+
 ## 0.4.0
 
 ### Minor Changes
