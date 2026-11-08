@@ -1,5 +1,24 @@
 # @dudousxd/nestjs-notifications-mail
 
+## 0.10.0
+
+### Minor Changes
+
+- [#123](https://github.com/DavideCarvalho/nestjs-notifications/pull/123) [`ee86c5c`](https://github.com/DavideCarvalho/nestjs-notifications/commit/ee86c5ca946ece15f5213beb475eda81514b667d) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - **Breaking.** The mail channel sends through `@nestjs/mail`'s `Mailer`; Aviary's transports are removed.
+
+  - Configure `MailModule.forRoot({ transport, from, retry })` from `@nestjs/mail` (peer ~0.0.2, Nest `^11 || ^12`); `MailChannelModule.forRoot({ renderer?, rendererInstance?, retry?, global? })` keeps rendering.
+  - Removed: `NodemailerTransport`, `SesTransport`, `composeRawEmail`, `LogMailTransport`, `NullMailTransport`, the `MailTransport`/`MailTransportPayload`/`SMTPOptions` types, `MAIL_TRANSPORT`, `MAIL_SMTP_OPTIONS`, `MAIL_TRANSPORT_RESOLVER`, and the `from`/`smtp`/`transport`/`transportInstance`/`resolveTransport` options; the `nodemailer` and `@aws-sdk/client-sesv2` peers.
+  - `toMail()` may return `{ mail: MailClass, data }` (a `@nestjs/mail` mail class, sent in the recipient's locale).
+  - The channel returns `MailSendResult`, so delivery tracking records the provider message id (SES bounces now correlate); it forwards the delivery `idempotencyKey` and the optional `retry`.
+  - `TenantRoutingMailTransport` picks a tenant's transport per message from an AsyncLocalStorage mail scope (`runInMailScope`, `currentMailScope`).
+  - `MailMessage.replyTo()` and `.header()`; `attach({ filename, url })` downloads the file (`@nestjs/mail`'s `path` is local only).
+
+  Migration: `MailChannelModule.forRoot({ from, smtp })` → `MailModule.forRoot({ from, transport: new SmtpTransport(smtp) })` + `MailChannelModule.forRoot()`; `resolveTransport` → `new TenantRoutingMailTransport(resolve, fallback)`; `SesTransport({ client })` → `@nestjs/mail`'s `SesTransport({ region })`.
+
+### Patch Changes
+
+- [#123](https://github.com/DavideCarvalho/nestjs-notifications/pull/123) [`ee86c5c`](https://github.com/DavideCarvalho/nestjs-notifications/commit/ee86c5ca946ece15f5213beb475eda81514b667d) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - Fix packages that could be published without files their `exports` point to. The two tsup passes (ESM, CJS) no longer each clean `dist/` while running at the same time; `dist/` is cleaned once before the build. A new `check:exports` step (also `prepack`) fails the release if any `exports`/`main`/`types` path is missing.
+
 ## 0.9.0
 
 ### Minor Changes

@@ -1,5 +1,39 @@
 # @dudousxd/nestjs-notifications-delivery-tracking
 
+## 0.4.0
+
+### Minor Changes
+
+- [#123](https://github.com/DavideCarvalho/nestjs-notifications/pull/123) [`ee86c5c`](https://github.com/DavideCarvalho/nestjs-notifications/commit/ee86c5ca946ece15f5213beb475eda81514b667d) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - **Breaking.** Who reaches a mounted route is now decided only with NestJS's first-party `@nestjs/authentication` / `@nestjs/authorization`: pass `decorators`, or mount the controller yourself.
+
+  - New `decorators?: ClassDecorator[]` option, applied in order to every controller the library mounts: `DatabaseChannelModule.forRoot()`/`forFeature()`, `createNotificationsController()`, `createNotificationsStreamController()`, `createPreferenceCenterController()`, `createTwilioStatusController()` and `createSesNotificationController()`. E.g. `[UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')]`.
+  - `guards` is removed from `DatabaseChannelModule`'s `controller` options and from `createNotificationsController()`, `createNotificationsStreamController()` and `createPreferenceCenterController()`.
+  - `DatabaseChannelModule.forRoot()`/`forFeature()` take `routes?: boolean` (default `true`) to turn the inbox auto-mount off; `controller` now only takes `{ resolveRef, path }` (no more `controller: false`).
+  - The auto-mounted inbox's default resolver answers `401` when there is no `req.user.id`, instead of resolving every anonymous caller to one shared `"undefined"` inbox.
+  - Every controller is marked open to `@nestjs/authorization`'s deny-by-default global guard (`authorization:can-anyone`, what `Can.Anyone()` writes), so registering `AuthorizationModule.forRoot()` doesn't lock them; a `@Can()` passed in `decorators` is still enforced. No dependency on `@nestjs/authorization` is added.
+  - Nothing refuses to boot in production: inbox, SSE and preference routes are scoped to the resolved recipient, and delivery-tracking callbacks stay reachable by the providers (Twilio is signature-verified).
+
+  Migration: `guards: [G]` → `decorators: [UseGuards(G)]` (or mount the controller in your own module); `controller: false` → `routes: false`; `controller: { guards, ... }` → `controller: { ... }` plus top-level `decorators`.
+
+- [#123](https://github.com/DavideCarvalho/nestjs-notifications/pull/123) [`ee86c5c`](https://github.com/DavideCarvalho/nestjs-notifications/commit/ee86c5ca946ece15f5213beb475eda81514b667d) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - New `@dudousxd/nestjs-notifications-delivery-tracking/mail` subpath: `mailDeliveryTracking()` records the mail `@nestjs/mail` sends outside notifications (from `MailEvents`, with the provider message id, so SES bounces correlate). Notification mail is skipped there, since the notification listener records it. Optional peers: `@nestjs/mail`, `@dudousxd/nestjs-notifications-mail`.
+
+- [#123](https://github.com/DavideCarvalho/nestjs-notifications/pull/123) [`ee86c5c`](https://github.com/DavideCarvalho/nestjs-notifications/commit/ee86c5ca946ece15f5213beb475eda81514b667d) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - **Breaking.** `createSesNotificationController()` now verifies every Amazon SNS message, and refuses with `403` (recording nothing) any message it can't verify. Before, `verifySignature: true` only logged a warning and anyone who could reach the path could post forged bounce/delivery events.
+
+  - SNS signatures are checked with AWS's documented algorithm: the canonical string-to-sign per message type, `SignatureVersion` `1` (SHA1withRSA) or `2` (SHA256withRSA), any other version refused. The signing certificate is fetched only from an `https://sns.<region>.amazonaws.com[.cn]/….pem` URL (checked before any request), with a timeout (`certificateTimeoutMs`, default 5000), and cached by URL (bounded).
+  - New required `topicArns: string[]`: messages (including subscription confirmations) from any other topic are refused.
+  - `maxMessageAgeMs` (default one hour, `false` to skip) refuses stale or far-future `Timestamp`s.
+  - Notifications are deduplicated by `MessageId` (in-memory by default; `messageIdStore` for your own, `false` to turn off).
+  - `SubscriptionConfirmation` is acted on only after verification: `onSubscriptionConfirmation(message)` hook, and `autoConfirmSubscription` GETs the `SubscribeURL` only when it is an SNS host.
+  - SNS's `Content-Type: text/plain` bodies are read whatever body parser the app uses.
+  - `verifySignature` now defaults to `true`; `false` skips only the signature (for a verifying gateway in front).
+  - `certificateLoader` and `fetch` can be injected for tests. `SnsMessageVerifier`, `buildSnsStringToSign`, `isSnsUrl`, `parseSnsMessage` and `InMemorySnsMessageIdStore` are exported.
+
+  Migration: `createSesNotificationController({ ... })` → `createSesNotificationController({ topicArns: ['arn:aws:sns:<region>:<account>:<topic>'], ... })`.
+
+### Patch Changes
+
+- [#123](https://github.com/DavideCarvalho/nestjs-notifications/pull/123) [`ee86c5c`](https://github.com/DavideCarvalho/nestjs-notifications/commit/ee86c5ca946ece15f5213beb475eda81514b667d) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - Fix packages that could be published without files their `exports` point to. The two tsup passes (ESM, CJS) no longer each clean `dist/` while running at the same time; `dist/` is cleaned once before the build. A new `check:exports` step (also `prepack`) fails the release if any `exports`/`main`/`types` path is missing.
+
 ## 0.3.3
 
 ### Patch Changes

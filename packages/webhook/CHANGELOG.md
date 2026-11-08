@@ -1,5 +1,28 @@
 # @dudousxd/nestjs-notifications-webhook
 
+## 0.7.0
+
+### Minor Changes
+
+- [#123](https://github.com/DavideCarvalho/nestjs-notifications/pull/123) [`ee86c5c`](https://github.com/DavideCarvalho/nestjs-notifications/commit/ee86c5ca946ece15f5213beb475eda81514b667d) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - Outbox redeliveries no longer repeat channels that already completed, and a retried webhook subscription delivery no longer dispatches its event twice.
+
+  - `OutboxNotificationHandler` records every channel that doesn't fail in the outbox inbox store (consumer `aviary.notifications:<channel>`, id `<outbox message id>:<notifiable type>#<id>`). A redelivery (a `failFast` retry, a crash, a lost lease) skips the recorded channels and reports them as `suppressed`. The records are durable with a SQL inbox store (`PostgresOutboxStore`, `MySqlOutboxStore`) and in-process with the in-memory default; `OutboxInbox.prune()` removes them.
+  - `ChannelRunner.run()` takes an optional `ChannelCompletionLog` (`isComplete(channel)`, `markComplete(channel)`), the hook the handler uses; custom dispatchers that redeliver whole jobs can pass their own.
+  - Webhook subscription delivery with an `idempotencyKey` records its `webhook-id` through `OutboxInbox.processInTransaction()` in the dispatch transaction (consumer `WEBHOOK_DISPATCH_CONSUMER`). A retry dispatches nothing and responds `{ id, duplicate: true }` (`WebhookAlreadyDispatched`) instead of adding the same id to the outbox again.
+
+- [#123](https://github.com/DavideCarvalho/nestjs-notifications/pull/123) [`ee86c5c`](https://github.com/DavideCarvalho/nestjs-notifications/commit/ee86c5ca946ece15f5213beb475eda81514b667d) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - **Breaking.** Webhook delivery builds on `@nestjs/webhooks` (peer ~0.0.4, Nest `^12`).
+
+  - Direct-URL delivery POSTs through `HttpWebhookTransport`: https only, every resolved address checked and pinned, redirects never followed. `delivery` passes its options (`allowHttp`, `allowPrivateNetworks`, `allowedAddresses`, `ca`, …); `transport` overrides it (e.g. `InMemoryWebhookTransport` in tests).
+  - `signing: 'standard'` signs with Standard Webhooks headers, verifiable with `@VerifyWebhook()`; `sha256=` stays the default. The `webhook-id` is the delivery's idempotency key when present.
+  - Subscription delivery: return `new WebhookEvent(type, data)` and it is dispatched with `Webhooks.dispatch(tx, { type, data, tenant })` (needs `WebhooksModule`, `OutboxModule` and `forRoot({ transaction })`).
+  - Removed: `WebhookMessage.method()`/`methodValue` (always POST), the `redirect` option. Headers are sent lower-case; the channel returns `{ id, statusCode }`; `timeoutMs` defaults to 15000.
+
+  Migration: drop `redirect` and `.method()`; for http or private targets in development, set `delivery: { allowHttp: true, allowPrivateNetworks: true }`.
+
+### Patch Changes
+
+- [#123](https://github.com/DavideCarvalho/nestjs-notifications/pull/123) [`ee86c5c`](https://github.com/DavideCarvalho/nestjs-notifications/commit/ee86c5ca946ece15f5213beb475eda81514b667d) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - Fix packages that could be published without files their `exports` point to. The two tsup passes (ESM, CJS) no longer each clean `dist/` while running at the same time; `dist/` is cleaned once before the build. A new `check:exports` step (also `prepack`) fails the release if any `exports`/`main`/`types` path is missing.
+
 ## 0.6.0
 
 ### Minor Changes

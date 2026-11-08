@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-broadcast",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Broadcast channel for nestjs-notifications — push real-time notifications over websockets",
   "license": "MIT",
   "author": "Davide Carvalho",
