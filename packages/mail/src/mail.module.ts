@@ -1,74 +1,35 @@
 import { type DynamicModule, Module, type Provider, type Type } from '@nestjs/common';
 import { MailChannel, type MailChannelOptions } from './mail.channel';
 import { DefaultMailRenderer, type MailRenderer } from './renderer';
-import {
-  MAIL_OPTIONS,
-  MAIL_RENDERER,
-  MAIL_SMTP_OPTIONS,
-  MAIL_TRANSPORT,
-  MAIL_TRANSPORT_RESOLVER,
-} from './tokens';
-import { type MailTransport, NodemailerTransport, type SMTPOptions } from './transport';
+import { MAIL_OPTIONS, MAIL_RENDERER } from './tokens';
 
-export interface MailChannelModuleOptions {
-  /** Default sender address for messages that don't set their own. */
-  from?: string;
-  /** Custom transport class. Defaults to {@link NodemailerTransport}. */
-  transport?: Type<MailTransport>;
-  /**
-   * A pre-built transport instance. Use this for transports that need constructor args, such
-   * as a `resilientTransport()` from `@dudousxd/nestjs-notifications-resilience`. Takes precedence over `transport`.
-   */
-  transportInstance?: MailTransport;
+export interface MailChannelModuleOptions extends MailChannelOptions {
   /** Custom renderer class. Defaults to {@link DefaultMailRenderer}. */
   renderer?: Type<MailRenderer>;
   /** A pre-built renderer instance. Takes precedence over `renderer`. */
   rendererInstance?: MailRenderer;
-  /**
-   * SMTP options for the default nodemailer transport, or a connection URL
-   * (`smtp://user:pass@host:587`, `smtps://host:465`).
-   */
-  smtp?: SMTPOptions | string;
-  /**
-   * Resolve a per-tenant transport. When delivery runs with a `context.tenant`, the
-   * channel uses the returned transport instead of the default. Lets each tenant use
-   * its own SMTP/provider.
-   */
-  resolveTransport?: (tenant: string) => MailTransport;
   /** Register globally so the channel is discoverable app-wide. Default true. */
   global?: boolean;
 }
 
 /**
- * Registers the mail channel.
+ * Registers the mail channel. Sending is `@nestjs/mail`'s: configure `MailModule.forRoot()`
+ * (transport, default `from`, retries; https://docs.nestjs.com/application/mail) next to it.
  *
  * ```ts
- * MailChannelModule.forRoot({
- *   from: 'no-reply@example.com',
- *   smtp: { host: 'smtp.example.com', port: 587, auth: { user, pass } },
- * });
+ * MailModule.forRoot({ transport: new SmtpTransport({ host, port, auth }), from: 'no-reply@example.com' }),
+ * MailChannelModule.forRoot({ renderer: MarkdownMailRenderer }),
  * ```
  */
 @Module({})
 export class MailChannelModule {
   static forRoot(options: MailChannelModuleOptions = {}): DynamicModule {
-    const mailOptions: MailChannelOptions = { from: options.from };
-    const transportClass = options.transport ?? NodemailerTransport;
+    const mailOptions: MailChannelOptions = {
+      ...(options.retry !== undefined ? { retry: options.retry } : {}),
+    };
     const rendererClass = options.renderer ?? DefaultMailRenderer;
 
-    const providers: Provider[] = [
-      { provide: MAIL_OPTIONS, useValue: mailOptions },
-      { provide: MAIL_SMTP_OPTIONS, useValue: options.smtp ?? {} },
-      { provide: MAIL_TRANSPORT_RESOLVER, useValue: options.resolveTransport },
-      MailChannel,
-    ];
-
-    if (options.transportInstance) {
-      providers.push({ provide: MAIL_TRANSPORT, useValue: options.transportInstance });
-    } else {
-      providers.push(transportClass, { provide: MAIL_TRANSPORT, useExisting: transportClass });
-    }
-
+    const providers: Provider[] = [{ provide: MAIL_OPTIONS, useValue: mailOptions }, MailChannel];
     if (options.rendererInstance) {
       providers.push({ provide: MAIL_RENDERER, useValue: options.rendererInstance });
     } else {

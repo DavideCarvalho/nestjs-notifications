@@ -1,13 +1,6 @@
-import {
-  type CanActivate,
-  Controller,
-  type MessageEvent,
-  Req,
-  Sse,
-  type Type,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, type MessageEvent, Req, Sse, type Type } from '@nestjs/common';
 import { type Observable, from, interval, map, merge, switchMap } from 'rxjs';
+import { finishController } from './controller-decorators';
 import { sseKey } from './sse-key';
 import { SseHub } from './sse.hub';
 
@@ -15,7 +8,9 @@ import { SseHub } from './sse.hub';
 export interface NotificationsStreamControllerOptions {
   /**
    * Resolve the SSE route value from the request — must match what the notifiable returns from
-   * `routeNotificationFor('sse')` (typically the user id). E.g. `(req) => req.user.id`.
+   * `routeNotificationFor('sse')` (typically the user id). E.g. `(req) => req.user.id`. The stream
+   * only carries that recipient's events; throw (e.g. `UnauthorizedException`) when the request
+   * carries no identity.
    */
   resolveRoute: (req: any) => string | Promise<string>;
   /**
@@ -27,8 +22,14 @@ export interface NotificationsStreamControllerOptions {
   path?: string;
   /** Sub-path for the `@Sse()` endpoint. Default `'stream'` → `GET {path}/stream`. */
   streamPath?: string;
-  /** Guards to protect the stream with (e.g. your auth guard). Applied via `@UseGuards`. */
-  guards?: Array<Type<CanActivate> | CanActivate>;
+  /**
+   * Class decorators applied to the controller, in order, after its own — how you decide who
+   * reaches the stream (e.g.
+   * `[UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')]` with `@nestjs/authorization`).
+   * The controller is marked open to `@nestjs/authorization`'s deny-by-default guard
+   * (`Can.Anyone()`), so it answers without any; a `@Can()` passed here is still enforced.
+   */
+  decorators?: ClassDecorator[];
   /**
    * Keep-alive interval (ms) emitting a `{ type: 'heartbeat' }` event so idle connections survive
    * proxy/load-balancer timeouts. Default `25000`; set `0` to disable.
@@ -81,9 +82,7 @@ export function createNotificationsStreamController(
     }
   }
 
-  if (options.guards && options.guards.length > 0) {
-    UseGuards(...options.guards)(NotificationsStreamController);
-  }
+  finishController(NotificationsStreamController, options.decorators);
 
   return NotificationsStreamController;
 }

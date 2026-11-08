@@ -7,6 +7,7 @@ import { injectServices } from './decorators';
 import { ChannelNotRegisteredError } from './errors';
 import { NotificationFailedEvent, NotificationSendingEvent, NotificationSentEvent } from './events';
 import type {
+  ChannelCompletionLog,
   ChannelResult,
   DeliveryContext,
   DigestSink,
@@ -35,6 +36,10 @@ import {
  * - `failFast`: deliver sequentially and rethrow on the first channel failure.
  * - `continueOnError` (default): deliver to every channel; failures are logged and
  *   surfaced through the `notification.failed` event rather than thrown.
+ *
+ * With a {@link ChannelCompletionLog} (passed by dispatchers that redeliver whole jobs), a channel
+ * the log marks complete is not run again (`suppressed`), and every channel that doesn't fail is
+ * recorded in it, under both policies.
  */
 @Injectable()
 export class ChannelRunner {
@@ -61,6 +66,7 @@ export class ChannelRunner {
     notification: Notification,
     channels: string[],
     context: DeliveryContext = {},
+    completion?: ChannelCompletionLog,
   ): Promise<ChannelResult[]> {
     // Populate @InjectService properties from the container (no-op if there are none).
     injectServices(notification, this.moduleRef);
@@ -77,13 +83,15 @@ export class ChannelRunner {
     if (failFast) {
       const results: ChannelResult[] = [];
       for (const channel of channels) {
-        results.push(await this.deliver(notifiable, notification, channel, true, ctx));
+        results.push(await this.deliver(notifiable, notification, channel, true, ctx, completion));
       }
       return results;
     }
 
     const settled = await Promise.allSettled(
-      channels.map((channel) => this.deliver(notifiable, notification, channel, false, ctx)),
+      channels.map((channel) =>
+        this.deliver(notifiable, notification, channel, false, ctx, completion),
+      ),
     );
     return settled.map((s, i) =>
       s.status === 'fulfilled'
@@ -92,7 +100,30 @@ export class ChannelRunner {
     );
   }
 
+  /** {@link attempt}, skipped when the completion log has the channel and recorded when it doesn't fail. */
   private async deliver(
+    notifiable: Notifiable,
+    notification: Notification,
+    channel: string,
+    rethrow: boolean,
+    context: DeliveryContext,
+    completion: ChannelCompletionLog | undefined,
+  ): Promise<ChannelResult> {
+    if (!completion) return this.attempt(notifiable, notification, channel, rethrow, context);
+    if (await completion.isComplete(channel)) return { channel, status: 'suppressed' };
+    const result = await this.attempt(notifiable, notification, channel, rethrow, context);
+    if (result.status === 'failed') return result;
+    try {
+      await completion.markComplete(channel);
+    } catch (error) {
+      // The channel did deliver; without the record a redelivery runs it again (at-least-once).
+      this.logger.error(`Could not record channel "${channel}" as complete: ${describe(error)}`);
+      if (rethrow) throw error;
+    }
+    return result;
+  }
+
+  private async attempt(
     notifiable: Notifiable,
     notification: Notification,
     channel: string,
@@ -163,7 +194,12 @@ export class ChannelRunner {
 
     const startedAt = Date.now();
     try {
-      const response = await driver.send(notifiable, notification, context);
+      // Deliver in the recipient's locale, so translators with an ambient locale (@nestjs/i18n)
+      // render the payload and any mail class in it.
+      const send = () => driver.send(notifiable, notification, context);
+      const response = await (this.localization
+        ? this.localization.run(context.localization?.locale, send)
+        : send());
       this.events.emit(
         NotificationEvents.sent,
         new NotificationSentEvent(

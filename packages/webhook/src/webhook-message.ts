@@ -1,29 +1,24 @@
-/** The HTTP method used for a webhook request. */
-export type WebhookMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'GET';
-
 /** The resolved request description produced by {@link WebhookMessage.toRequest}. */
 export interface WebhookRequest {
   /** Target URL, when set on the message; otherwise resolved by the channel. */
   url?: string | undefined;
-  method: WebhookMethod;
   headers: Record<string, string>;
-  /** The JSON body to send (a plain object). */
+  /** The JSON body to POST (a plain object). */
   body: Record<string, unknown>;
 }
 
 /**
- * A fluent builder for a webhook request.
+ * A fluent builder for a direct webhook request (always a `POST` with a JSON body).
  *
  * ```ts
  * new WebhookMessage()
  *   .url('https://example.com/hooks/orders')
- *   .header('X-Signature', sign(payload))
+ *   .header('X-App', 'shop')
  *   .payload({ event: 'order.paid', id: 42 });
  * ```
  */
 export class WebhookMessage {
   private _url?: string;
-  private _method: WebhookMethod = 'POST';
   private _headers: Record<string, string> = {};
   private _payload: Record<string, unknown> = {};
 
@@ -51,18 +46,8 @@ export class WebhookMessage {
     return this;
   }
 
-  /** Set the HTTP method (default `POST`). */
-  method(m: WebhookMethod): this {
-    this._method = m;
-    return this;
-  }
-
   get urlValue(): string | undefined {
     return this._url;
-  }
-
-  get methodValue(): WebhookMethod {
-    return this._method;
   }
 
   get headerValues(): Record<string, string> {
@@ -75,11 +60,24 @@ export class WebhookMessage {
 
   /** Serialize to a {@link WebhookRequest}. */
   toRequest(): WebhookRequest {
-    return {
-      url: this._url,
-      method: this._method,
-      headers: { ...this._headers },
-      body: this._payload,
-    };
+    return { url: this._url, headers: { ...this._headers }, body: this._payload };
   }
+}
+
+/**
+ * A webhook event for subscription delivery: `@nestjs/webhooks` fans it out to every endpoint of
+ * the tenant subscribed to `type`, signs it (Standard Webhooks), retries and logs each delivery.
+ * Return one from `toWebhook(ctx)` instead of a {@link WebhookMessage}.
+ *
+ * ```ts
+ * toWebhook() { return new WebhookEvent('invoice.paid', { id: this.invoice.id }); }
+ * ```
+ */
+export class WebhookEvent<D = unknown> {
+  constructor(
+    /** Full-stop delimited: `invoice.paid`. In `WebhooksModule`'s `eventTypes` when that is set. */
+    readonly type: string,
+    /** JSON-serializable data, sent as the body's `data`. */
+    readonly data: D,
+  ) {}
 }

@@ -5,6 +5,7 @@
     "index",
     "event-emitter",
     "bullmq",
-    "redis"
+    "redis",
+    "outbox"
   ]
 }

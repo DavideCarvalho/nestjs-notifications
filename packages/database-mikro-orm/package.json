@@ -27,6 +27,7 @@
     "dist"
   ],
   "scripts": {
+    "prepack": "node ../../scripts/check-package-exports.mjs",
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -53,7 +54,7 @@
     "@dudousxd/nestjs-notifications-core": "workspace:^",
     "@dudousxd/nestjs-notifications-database": "workspace:^",
     "@dudousxd/nestjs-notifications-preferences": "workspace:^",
-    "@nestjs/common": "12.0.1",
+    "@nestjs/common": "12.3.2",
     "@testcontainers/mysql": "10.18.0",
     "@testcontainers/postgresql": "10.18.0",
     "reflect-metadata": "0.2.2",

@@ -4,6 +4,7 @@
   "pages": [
     "index",
     "configuration",
-    "testing"
+    "testing",
+    "migrating-to-nestjs-first-party"
   ]
 }

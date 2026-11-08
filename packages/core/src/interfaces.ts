@@ -125,7 +125,9 @@ export interface Notification {
 
 /**
  * Outcome of delivering a notification on one channel.
- * - `suppressed`: dropped as a duplicate by the idempotency guard.
+ * - `suppressed`: dropped as a duplicate: by the idempotency guard, or because a
+ *   {@link ChannelCompletionLog} says this channel already completed for this delivery (a
+ *   redelivery).
  * - `throttled`: dropped (or, when deferred, not delivered now) by the rate-limit guard.
  * - `deferred`: held back by the preference gate (e.g. quiet hours) and re-queued through the
  *   async dispatcher to deliver after the window — not dropped.
@@ -138,6 +140,20 @@ export type ChannelDeliveryStatus =
   | 'suppressed'
   | 'throttled'
   | 'deferred';
+
+/**
+ * Which channels of one delivery already completed, so a redelivery of the same job skips them.
+ * Dispatchers that redeliver a whole job (the outbox dispatcher) pass one to
+ * {@link ChannelRunner.run}; the runner checks it before a channel runs and records every channel
+ * that didn't fail (`sent`, `skipped`, `deferred`, ...). A failed channel is never recorded, so it
+ * runs again on the next delivery.
+ */
+export interface ChannelCompletionLog {
+  /** Whether `channel` already completed for this delivery. */
+  isComplete(channel: string): boolean | Promise<boolean>;
+  /** Record that `channel` completed for this delivery. */
+  markComplete(channel: string): void | Promise<void>;
+}
 
 /** Per-channel result returned from a send. */
 export interface ChannelResult {
@@ -228,6 +244,12 @@ export interface DeliveryContext {
    * Undefined when no resolver/translator is bound (behavior unchanged).
    */
   localization?: Localization;
+  /**
+   * A stable key identifying this delivery across redeliveries, set by dispatchers that have one
+   * (the outbox dispatcher passes its message id). Channels forward it to providers that
+   * deduplicate (the mail channel passes it to `@nestjs/mail` as `idempotencyKey`).
+   */
+  idempotencyKey?: string | undefined;
 }
 
 /**
@@ -284,6 +306,12 @@ export interface NotificationJob {
    * deferred again. JSON-safe (array of strings).
    */
   deferredChannels?: string[] | undefined;
+  /**
+   * The caller's open transaction, set by `notifications.inTransaction(tx)`. In memory only: it
+   * is never serialized. A transactional dispatcher (the outbox dispatcher) writes the job through
+   * it, so the notification is only delivered if the transaction commits.
+   */
+  transaction?: unknown;
 }
 
 /** Decides where/when a job is processed: inline, in-process events, Redis, BullMQ. */
@@ -295,6 +323,12 @@ export interface DispatchDriver {
    * through {@link dispatch}.
    */
   dispatchMany?(jobs: NotificationJob[]): Promise<void>;
+  /**
+   * `true` when the driver honors {@link NotificationJob.transaction} (writes the job through the
+   * caller's transaction). `notifications.inTransaction(tx)` refuses to send through a driver
+   * that doesn't, instead of silently delivering outside the transaction.
+   */
+  readonly transactional?: boolean;
 }
 
 /** Context handed to a {@link PreferenceGate} before a channel is delivered. */

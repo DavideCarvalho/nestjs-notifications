@@ -353,6 +353,15 @@ the channel that consumes it.
     export class AppModule {}
     ```
 
+    If the database is registered with [`@nestjs/drizzle`](https://docs.nestjs.com/data/drizzle)'s
+    `DrizzleModule`, name its connection instead (`'default'` for the unnamed one); the store injects
+    `getDrizzleToken(connectionName)`:
+
+    ```ts
+    DrizzleModule.forRoot({ drizzle, connection: process.env.DATABASE_URL }),
+    DrizzleNotificationStoreModule.forRoot({ connectionName: 'default' }),
+    ```
+
     `DrizzleNotificationStoreModule` binds `DrizzleNotificationStore` to `NOTIFICATION_STORE`. The
     tables are plain `pgTable`s from `createNotificationTables()`. Columns are snake_case, as in
     Laravel's table. You can also pass `{ tableNames, schema }`. If you already provide

@@ -25,6 +25,7 @@
     "dist"
   ],
   "scripts": {
+    "prepack": "node ../../scripts/check-package-exports.mjs",
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -37,7 +38,7 @@
   "devDependencies": {
     "@dudousxd/nestjs-notifications-core": "workspace:^",
     "@nestjs/bullmq": "12.0.0",
-    "@nestjs/common": "12.0.1",
+    "@nestjs/common": "12.3.2",
     "bullmq": "5.81.5",
     "reflect-metadata": "0.2.2",
     "typescript": "5.9.3"

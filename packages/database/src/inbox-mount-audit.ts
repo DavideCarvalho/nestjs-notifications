@@ -6,9 +6,9 @@ import { type MountedInbox, mountedInboxes } from './inbox-registry';
  * `DatabaseChannelModule.forRoot()`/`forFeature()` and once by the application via
  * `createNotificationsController()`.
  *
- * `controller` defaults to **true**, so passing your own controller does NOT replace the
- * auto-mounted one: both are live, the auto-mounted one carrying whatever `resolveRef` and guards
- * were configured on the module (by default, none). Apps have shipped believing the opposite, with
+ * `routes` defaults to **true**, so passing your own controller does NOT replace the
+ * auto-mounted one: both are live, the auto-mounted one carrying whatever `resolveRef` and
+ * `decorators` were configured on the module (by default, the `req.user` resolver and none). Apps have shipped believing the opposite, with
  * the auto-mounted duplicate shadowing an unrelated page route on the default `notifications` path.
  *
  * Runs at `onApplicationBootstrap` rather than inside `forRoot()` because module metadata is
@@ -35,8 +35,8 @@ export class InboxMountAudit implements OnApplicationBootstrap {
         `and this application also mounted ${count(manual)} at ${paths(manual)}`,
         'via createNotificationsController(). Mounting your own does NOT disable the',
         'auto-mounted one — both are live, and the auto-mounted one uses whatever resolveRef',
-        'and guards were passed to the module (by default, the req.user resolver and no guards).',
-        'Pass `controller: false` to DatabaseChannelModule.forRoot()/forFeature() to disable',
+        'and decorators were passed to the module (by default, the req.user resolver and none).',
+        'Pass `routes: false` to DatabaseChannelModule.forRoot()/forFeature() to disable',
         'the auto-mount.',
       ].join(' '),
     );

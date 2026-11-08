@@ -1,0 +1,109 @@
+---
+title: Authorization of the mounted routes
+icon: ShieldCheck
+description: Decide who reaches the inbox, SSE stream, preference center and delivery callbacks with NestJS's own @nestjs/authentication and @nestjs/authorization — by passing decorators or by mounting the controller yourself.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The library ships these HTTP controllers:
+
+| Controller | Who mounts it | Routes |
+| --- | --- | --- |
+| Inbox — `DatabaseChannelModule.forRoot()` / `forFeature()` | **the module, by default** | `GET/POST/DELETE /notifications…` |
+| Inbox — `createNotificationsController()` | you | same |
+| SSE stream — `createNotificationsStreamController()` | you | `GET /notifications/stream` |
+| Preference center — `createPreferenceCenterController()` | you | `GET/PUT/DELETE /preferences…` |
+| Twilio status — `createTwilioStatusController()` | you | `POST /webhooks/twilio/status` |
+| SES/SNS events — `createSesNotificationController()` | you | `POST /webhooks/ses` |
+
+The library has no access-control options of its own. You decide who reaches these routes with
+NestJS's first-party [`@nestjs/authentication`](https://docs.nestjs.com/security/authentication)
+and [`@nestjs/authorization`](https://docs.nestjs.com/security/authorization), in one of two ways.
+
+## 1. `decorators`
+
+Every module and factory above takes `decorators?: ClassDecorator[]`, class decorators applied in
+order to the controller it builds:
+
+```ts
+import { AuthenticationGuard } from '@nestjs/authentication';
+import { Can } from '@nestjs/authorization';
+import { UseGuards } from '@nestjs/common';
+
+DatabaseChannelModule.forRoot({
+  decorators: [UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')],
+});
+
+createNotificationsStreamController({
+  resolveRoute: (req) => String(req.user.id),
+  decorators: [UseGuards(AuthenticationGuard)],
+});
+```
+
+Each registration builds a fresh controller class, so decorators never leak from one registration
+to another.
+
+## 2. Mount the controller yourself
+
+The factories return a controller class; put it in your own module's `controllers`, next to your
+other routes and whatever protects them. For the inbox, turn the module's auto-mount off with
+`routes: false`, or you get two inboxes:
+
+```ts
+const NotificationsController = createNotificationsController({
+  resolveRef: (req) => ({ type: 'User', id: req.user.id }),
+  decorators: [UseGuards(AuthenticationGuard)],
+});
+
+@Module({
+  imports: [DatabaseChannelModule.forFeature({ routes: false })],
+  controllers: [NotificationsController],
+})
+export class InboxModule {}
+```
+
+`routes: false` is the same option name the other Aviary libraries use to stop a module from
+mounting anything.
+
+## `@nestjs/authorization`'s deny-by-default guard
+
+`AuthorizationModule.forRoot()` registers a global guard that refuses any route declaring no
+`@Can()`. Every controller this library builds is marked open to it (the metadata `Can.Anyone()`
+writes), so adopting `@nestjs/authorization` doesn't lock them. The mark only opens routes with no
+requirement: a `@Can()` you pass in `decorators` is still enforced (`401` for a guest, `403` for a
+user the policy denies).
+
+## Production defaults
+
+Nothing refuses to boot here. Each route already checks something on every request:
+
+- **Inbox, SSE stream, preference center** — every route that reads or changes data is scoped to
+  the recipient your `resolveRef` / `resolveRoute` returns, so a caller only ever reaches their own
+  inbox, stream or preferences. The auto-mounted inbox's default resolver reads `req.user.id` and
+  answers `401` when there is none. Your own resolvers should throw (e.g. `UnauthorizedException`)
+  when the request carries no identity. The one unscoped route, `GET /preferences/categories`,
+  returns your configured category definitions, not anyone's data.
+- **Delivery-tracking callbacks** are called by the provider, which has no user, so they stay
+  outside any "must be decorated" rule. They authenticate the provider instead, and answer `403`
+  when that fails:
+  - the **Twilio** controller verifies `X-Twilio-Signature` on every request;
+  - the **SES** controller verifies the SNS message signature (certificate fetched only from an
+    SNS host), requires the `TopicArn` to be one of your `topicArns`, and refuses stale
+    timestamps. See [Delivery tracking](/docs/recipes/delivery-tracking#aws-ses-email).
+
+## Migrating from `guards`
+
+`guards` was removed from `DatabaseChannelModule`'s `controller` options and from every factory:
+
+```ts
+// before
+createNotificationsController({ resolveRef, guards: [AuthGuard] });
+DatabaseChannelModule.forRoot({ controller: { guards: [AuthGuard] } });
+DatabaseChannelModule.forRoot({ controller: false });
+
+// after
+createNotificationsController({ resolveRef, decorators: [UseGuards(AuthGuard)] });
+DatabaseChannelModule.forRoot({ decorators: [UseGuards(AuthGuard)] });
+DatabaseChannelModule.forRoot({ routes: false });
+```

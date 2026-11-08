@@ -222,7 +222,7 @@ export class SmsChannelModule {
 
 `ChannelModuleConfig` is `{ module, channel, optionsToken, options, resolver?, global? }`. Pass
 `resolver: { token, value }` to register a per-tenant/per-notifiable options resolver (it defaults to
-`null` when the value is absent), exactly as the mail channel's `resolveTransport` does. Under the
+`null` when the value is absent), exactly as the sms channel's `resolveTransport` does. Under the
 hood it builds `{ module, global, providers: [optionsProvider, resolverProvider?, channel], exports:
 [channel] }` — the same module the hand-written version produced, minus the repetition.
 

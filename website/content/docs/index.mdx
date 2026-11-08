@@ -31,7 +31,7 @@ Install the core and a channel, mark a recipient, write a notification, and send
 Install the core, the mail channel, and the event emitter the core uses for lifecycle events:
 
 ```bash
-pnpm add @dudousxd/nestjs-notifications-core @dudousxd/nestjs-notifications-mail @nestjs/event-emitter
+pnpm add @dudousxd/nestjs-notifications-core @dudousxd/nestjs-notifications-mail @nestjs/mail @nestjs/event-emitter
 ```
 
 Register the modules in your root module. Channels register themselves and are discovered automatically:
@@ -41,15 +41,17 @@ import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
 import { MailChannelModule } from '@dudousxd/nestjs-notifications-mail';
+import { MailModule, SmtpTransport } from '@nestjs/mail';
 
 @Module({
   imports: [
     EventEmitterModule.forRoot(),
     NotificationsModule.forRoot(),
-    MailChannelModule.forRoot({
+    MailModule.forRoot({
+      transport: new SmtpTransport({ host: 'smtp.example.com', port: 587, auth: { user: '…', pass: '…' } }),
       from: 'billing@example.com',
-      smtp: { host: 'smtp.example.com', port: 587, auth: { user: '…', pass: '…' } },
     }),
+    MailChannelModule.forRoot(),
   ],
 })
 export class AppModule {}

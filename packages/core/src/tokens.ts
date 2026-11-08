@@ -34,7 +34,7 @@ export const NOTIFICATION_DELIVERY_CONFIRMATION = Symbol('NOTIFICATION_DELIVERY_
 /** Optional DI token for a {@link LocaleResolver}. Defaults to {@link PropertyLocaleResolver}. */
 export const NOTIFICATION_LOCALE_RESOLVER = Symbol('NOTIFICATION_LOCALE_RESOLVER');
 
-/** Optional DI token for a {@link Translator}. Defaults to an empty {@link InMemoryTranslator}. */
+/** Optional DI token for a {@link Translator}. Defaults to {@link keyTranslator} (keys translate to themselves). */
 export const NOTIFICATION_TRANSLATOR = Symbol('NOTIFICATION_TRANSLATOR');
 
 /**

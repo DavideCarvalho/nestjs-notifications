@@ -101,15 +101,16 @@ Channels can resolve their transport or options per tenant, so each workspace se
 provider, credentials, or endpoint. When a delivery runs with a tenant scope, the channel calls your
 resolver with the tenant id:
 
-- **Transport resolvers** — `resolveTransport(tenant)` on [mail](/docs/channels/mail#per-tenant-transport),
-  [sms](/docs/channels/sms#per-tenant-config), and [push](/docs/channels/push#per-tenant-config).
+- **Transport resolvers** — `resolveTransport(tenant)` on [sms](/docs/channels/sms#per-tenant-config)
+  and [push](/docs/channels/push#per-tenant-config). For mail, `@nestjs/mail` owns the transport:
+  give it a [`TenantRoutingMailTransport`](/docs/channels/mail#per-tenant-transport).
 - **Options resolvers** — `resolveOptions(tenant)` on [slack](/docs/channels/slack#per-tenant-config)
   and [webhook](/docs/channels/webhook#per-tenant-config).
 
 ```ts title="app.module.ts"
-MailChannelModule.forRoot({
-  from: 'no-reply@example.com',
-  resolveTransport: (tenant) => tenantTransports.get(tenant) ?? defaultTransport,
+SmsChannelModule.forRoot({
+  from: '+15555550100',
+  resolveTransport: (tenant) => tenantSmsTransports.get(tenant) ?? defaultTransport,
 });
 ```
 

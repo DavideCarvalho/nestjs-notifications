@@ -57,7 +57,8 @@ import { SlackChannelModule } from '@dudousxd/nestjs-notifications-slack';
 @Module({
   imports: [
     NotificationsModule.forRoot(),
-    MailChannelModule.forRoot({ from: 'no-reply@example.com' }),
+    MailModule.forRoot({ transport, from: 'no-reply@example.com' }), // @nestjs/mail
+    MailChannelModule.forRoot(),
     SlackChannelModule.forRoot({ webhookUrl: process.env.SLACK_WEBHOOK_URL }),
   ],
 })

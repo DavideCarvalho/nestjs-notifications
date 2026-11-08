@@ -188,6 +188,17 @@ const PreferenceCenterController = createPreferenceCenterController({
 | `PUT /preferences/:category/channels/:channel` | `{ enabled }` — toggle one cell |
 | `PUT /preferences/:category/digest` | `{ digest }` — set a category's frequency |
 
+Every route except `GET /preferences/categories` is scoped to the notifiable `resolveRef` returns.
+Decide who reaches the controller with `decorators` (or by mounting it in your own module) — see
+[Authorization of the mounted routes](/docs/recipes/route-authorization):
+
+```ts
+createPreferenceCenterController({
+  resolveRef: (req) => ({ type: 'User', id: req.user.id }),
+  decorators: [UseGuards(AuthenticationGuard), Can(PreferencesPolicy, 'manage')],
+});
+```
+
 <Callout type="info">
   The center is additive — the simple `forRoot` opt-out API above still works unchanged. Pick `forRoot`
   for a single mute switch, `forCenter` when users need the full grid.

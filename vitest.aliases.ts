@@ -15,14 +15,24 @@ export function workspaceSourceAliases(): AliasOptions {
   const packagesDir = fileURLToPath(new URL('./packages', import.meta.url));
   return readdirSync(packagesDir, { withFileTypes: true })
     .filter((e) => e.isDirectory())
-    .map((e) => {
+    .flatMap((e) => {
       const dir = e.name;
-      const { name } = JSON.parse(
+      const { name, exports } = JSON.parse(
         readFileSync(new URL(`./packages/${dir}/package.json`, import.meta.url), 'utf8'),
-      ) as { name: string };
-      return {
-        find: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`),
-        replacement: fileURLToPath(new URL(`./packages/${dir}/src/index.ts`, import.meta.url)),
-      };
+      ) as { name: string; exports?: Record<string, unknown> };
+      // Subpath exports (`./outbox` → `src/outbox.ts`) first, then the main entry.
+      const subpaths = Object.keys(exports ?? {}).filter(
+        (key) => key !== '.' && key.startsWith('./'),
+      );
+      return [...subpaths.map((key) => key.slice(2)), ''].map((sub) => ({
+        find: new RegExp(`^${escapeRegExp(sub ? `${name}/${sub}` : name)}$`),
+        replacement: fileURLToPath(
+          new URL(`./packages/${dir}/src/${sub || 'index'}.ts`, import.meta.url),
+        ),
+      }));
     });
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

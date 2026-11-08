@@ -1,16 +1,6 @@
 import type { NotifiableRef } from '@dudousxd/nestjs-notifications-core';
-import {
-  Body,
-  type CanActivate,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Put,
-  Req,
-  type Type,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Put, Req, type Type } from '@nestjs/common';
+import { finishController } from './controller-decorators';
 import type {
   CategoryDefinition,
   DigestFrequency,
@@ -23,15 +13,22 @@ import { PreferenceCenterService } from './preference-center.service';
 export interface PreferenceCenterControllerOptions {
   /**
    * Resolves the current notifiable from the request (e.g. from `req.user`). May be async.
-   * The returned ref scopes every read/write to that notifiable.
+   * The returned ref scopes every read/write to that notifiable; throw (e.g.
+   * `UnauthorizedException`) when the request carries no identity.
    */
   resolveRef: (req: any) => NotifiableRef | Promise<NotifiableRef>;
   /** Optional resolver for the tenant scope (multi-tenant apps). May be async. */
   resolveTenant?: (req: any) => string | undefined | Promise<string | undefined>;
   /** Controller base path. Default `'preferences'`. */
   path?: string;
-  /** Guards to protect the endpoints with (e.g. your auth guard). Applied via `@UseGuards`. */
-  guards?: Array<Type<CanActivate> | CanActivate>;
+  /**
+   * Class decorators applied to the controller, in order, after its own — how you decide who
+   * reaches it (e.g.
+   * `[UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')]` with `@nestjs/authorization`).
+   * The controller is marked open to `@nestjs/authorization`'s deny-by-default guard
+   * (`Can.Anyone()`), so it answers without any; a `@Can()` passed here is still enforced.
+   */
+  decorators?: ClassDecorator[];
 }
 
 /** Body of `PUT /preferences/:category/channels/:channel`. */
@@ -125,9 +122,7 @@ export function createPreferenceCenterController(
     }
   }
 
-  if (options.guards && options.guards.length > 0) {
-    UseGuards(...options.guards)(PreferenceCenterController);
-  }
+  finishController(PreferenceCenterController, options.decorators);
 
   return PreferenceCenterController;
 }

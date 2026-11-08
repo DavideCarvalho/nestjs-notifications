@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import {
   BaseChannel,
   type ChannelContext,
@@ -6,61 +6,112 @@ import {
   type Notifiable,
   type Notification,
   createChannel,
-  postJson,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { WEBHOOK_OPTIONS, WEBHOOK_OPTIONS_RESOLVER } from './tokens';
-import { WebhookMessage } from './webhook-message';
+import { OutboxInbox } from '@nestjs/outbox';
+import {
+  type WebhookMessage as DispatchedWebhookMessage,
+  HttpWebhookTransport,
+  type HttpWebhookTransportOptions,
+  WebhookTransport,
+  Webhooks,
+} from '@nestjs/webhooks';
+import { sha256Signature, standardWebhookHeaders } from './signing';
+import { WEBHOOK_OPTIONS, WEBHOOK_OPTIONS_RESOLVER, WEBHOOK_TRANSACTION } from './tokens';
+import { WebhookEvent, WebhookMessage } from './webhook-message';
 
 const DEFAULT_SIGNATURE_HEADER = 'X-Signature-256';
+const DEFAULT_TIMEOUT_MS = 15_000;
+
+/**
+ * The outbox inbox consumer under which subscription deliveries record the `webhook-id`s they
+ * dispatched, so a retried notification doesn't dispatch the same event twice.
+ */
+export const WEBHOOK_DISPATCH_CONSUMER = 'aviary.notifications.webhook-dispatch';
 
 /** Channel handle: use as `@Webhook()` on a payload method, or as a token in `via()`. */
 export const Webhook = createChannel('webhook');
 
-/** Resolved runtime options for the webhook channel. */
+/** Opens a transaction for subscription delivery, e.g. `(work) => db.transaction(work)`. */
+export type WebhookTransactionRunner = <T>(work: (tx: unknown) => Promise<T>) => Promise<T>;
+
+/** Resolved runtime options for direct-URL delivery. */
 export interface WebhookChannelOptions {
   /** Default URL used when neither the message nor the route supplies one. */
   url?: string;
   /** Default headers merged into every request. */
   headers?: Record<string, string>;
-  /**
-   * HMAC-SHA256 secret. When set, the request is signed: the header (default
-   * `X-Signature-256`) is set to `sha256=<hex digest of the raw JSON body>`, so the receiver
-   * can verify authenticity. Per-tenant secrets work via `resolveOptions`.
-   */
+  /** Signing secret. Unset: requests are not signed. */
   secret?: string;
-  /** Header name for the signature. Default `X-Signature-256`. */
+  /**
+   * `'sha256'` (default): `<signatureHeader>: sha256=<hex HMAC of the body>`.
+   * `'standard'`: Standard Webhooks headers, verifiable with `@nestjs/webhooks`'
+   * `@VerifyWebhook()` and a `scheme: 'standard'` receiver; `secret` is then `whsec_…`.
+   */
+  signing?: 'sha256' | 'standard';
+  /** Header for the `'sha256'` signature. Default `X-Signature-256`. */
   signatureHeader?: string;
-  /** Abort a request that takes longer than this (ms). Unset = no timeout. */
+  /** Abort a request that takes longer than this (ms). Default 15000. */
   timeoutMs?: number;
   /**
-   * Redirect handling. Default `'follow'` (the `fetch` default). Use `'error'` when webhook URLs
-   * are user-supplied, so a 3xx can't bounce the (possibly signed) request somewhere else.
+   * The SSRF policy of `@nestjs/webhooks`' `HttpWebhookTransport` (https only, every resolved
+   * address checked and pinned, redirects never followed): `allowHttp`, `allowPrivateNetworks`,
+   * `allowedAddresses`, `ca`, `maxResponseSize`, `lookup`.
    */
-  redirect?: 'follow' | 'error' | 'manual';
+  delivery?: HttpWebhookTransportOptions;
+  /**
+   * A `@nestjs/webhooks` transport instance to send through instead (a proxy, mTLS, or
+   * `InMemoryWebhookTransport` in tests). Takes precedence over `delivery`.
+   */
+  transport?: WebhookTransport;
 }
 
 /**
- * Implement this on a notification to define its webhook payload. Returning a plain
- * object is treated as the JSON body to POST; return a {@link WebhookMessage} for full
- * control over the url, method and headers.
+ * Implement this on a notification to define its webhook payload: a plain object (the JSON body),
+ * a {@link WebhookMessage} (url, headers, body), or a {@link WebhookEvent} for subscription
+ * delivery through `@nestjs/webhooks`.
  */
 export interface WebhookNotification extends Notification {
-  toWebhook(ctx: ChannelContext): WebhookMessage | Record<string, unknown>;
+  toWebhook(ctx: ChannelContext): WebhookMessage | WebhookEvent | Record<string, unknown>;
 }
 
 /** Resolves per-tenant {@link WebhookChannelOptions} from a tenant id. */
 export type WebhookOptionsResolver = (tenant: string) => WebhookChannelOptions;
 
+/** What a direct delivery returns (the channel response). */
+export interface WebhookDeliveryResult {
+  /** The `webhook-id` (Standard signing) or a generated id. */
+  id: string;
+  statusCode: number;
+}
+
 /**
- * Delivers a notification by sending an HTTP request (JSON body) to a webhook endpoint.
- * The target URL comes from the {@link WebhookMessage}, else from
- * `routeNotificationFor('webhook')` (a URL string), else from the configured default.
+ * What a subscription delivery returns when its `webhook-id` was already dispatched by an earlier
+ * attempt of the same delivery: nothing was dispatched this time.
+ */
+export interface WebhookAlreadyDispatched {
+  id: string;
+  duplicate: true;
+}
+
+/**
+ * Delivers a notification as a webhook, two ways:
+ *
+ * - **Direct**: a signed `POST` of the JSON body to one URL (the message's, else the
+ *   `routeNotificationFor('webhook')` URL, else the configured default), through `@nestjs/webhooks`'
+ *   SSRF-guarded `HttpWebhookTransport`. A non-2xx answer fails the delivery.
+ * - **Subscriptions**: a {@link WebhookEvent} is handed to `Webhooks.dispatch()`, which fans it
+ *   out to the endpoints subscribed to its type (for the delivery's tenant), with retries and a
+ *   delivery log. Needs `WebhooksModule` + `OutboxModule` and the `transaction` option. A
+ *   delivery with an `idempotencyKey` (the outbox dispatcher's message id) records its
+ *   `webhook-id` in the outbox inbox in the same transaction as the dispatch, so a retry of it
+ *   dispatches nothing and returns {@link WebhookAlreadyDispatched}.
  */
 @Injectable()
 export class WebhookChannel extends BaseChannel {
   readonly channel = 'webhook';
+  private readonly transports = new WeakMap<WebhookChannelOptions, WebhookTransport>();
 
   constructor(
     @Inject(WEBHOOK_OPTIONS)
@@ -68,6 +119,13 @@ export class WebhookChannel extends BaseChannel {
     @Optional()
     @Inject(WEBHOOK_OPTIONS_RESOLVER)
     private readonly resolveOptions?: WebhookOptionsResolver,
+    @Optional()
+    @Inject(WEBHOOK_TRANSACTION)
+    private readonly transaction?: WebhookTransactionRunner,
+    @Optional()
+    private readonly webhooks?: Webhooks,
+    @Optional()
+    private readonly inbox?: OutboxInbox,
   ) {
     super();
   }
@@ -76,21 +134,21 @@ export class WebhookChannel extends BaseChannel {
     notifiable: Notifiable,
     notification: Notification,
     context?: DeliveryContext,
-  ): Promise<void> {
-    const options = this.forTenant(this.options, context, this.resolveOptions);
-    const result = this.buildPayload<WebhookMessage | Record<string, unknown>>(
+  ): Promise<WebhookDeliveryResult | DispatchedWebhookMessage | WebhookAlreadyDispatched> {
+    const result = this.buildPayload<WebhookMessage | WebhookEvent | Record<string, unknown>>(
       notification,
       notifiable,
       'toWebhook',
       context,
     );
+    if (result instanceof WebhookEvent) return this.dispatch(result, context);
+
+    const options = this.forTenant(this.options, context, this.resolveOptions);
     const message =
       result instanceof WebhookMessage ? result : new WebhookMessage().payload(result);
     const request = message.toRequest();
-
     const route = routeFor(notifiable, 'webhook', notification);
     const url = request.url ?? (typeof route === 'string' ? route : undefined) ?? options.url;
-
     if (!url) {
       throw new Error(
         'The webhook channel needs a target URL. Set one on the WebhookMessage via .url(), ' +
@@ -98,20 +156,97 @@ export class WebhookChannel extends BaseChannel {
       );
     }
 
-    const headers: Record<string, string> = { ...options.headers, ...request.headers };
+    const body = JSON.stringify(request.body);
+    const id = context?.idempotencyKey ?? `msg_${randomUUID().replaceAll('-', '')}`;
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+      ...lowerCase(options.headers),
+      ...lowerCase(request.headers),
+    };
     if (options.secret) {
-      const signature = createHmac('sha256', options.secret)
-        .update(JSON.stringify(request.body))
-        .digest('hex');
-      headers[options.signatureHeader ?? DEFAULT_SIGNATURE_HEADER] = `sha256=${signature}`;
+      if (options.signing === 'standard') {
+        Object.assign(headers, standardWebhookHeaders(options.secret, id, body));
+      } else {
+        headers[(options.signatureHeader ?? DEFAULT_SIGNATURE_HEADER).toLowerCase()] =
+          sha256Signature(options.secret, body);
+      }
     }
 
-    await postJson(url, request.body, {
-      label: 'Webhook',
-      method: request.method,
-      headers,
-      ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
-      ...(options.redirect !== undefined ? { redirect: options.redirect } : {}),
-    });
+    const response = await this.transportFor(options).send(
+      {
+        url,
+        headers,
+        body,
+        endpointId: 'aviary',
+        deliveryId: id,
+        messageId: id,
+        type: 'notification',
+      },
+      { signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS), attempt: 1 },
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw new Error(`Webhook request to ${url} failed with status ${response.statusCode}.`);
+    }
+    return { id, statusCode: response.statusCode };
   }
+
+  private async dispatch(
+    event: WebhookEvent,
+    context: DeliveryContext | undefined,
+  ): Promise<DispatchedWebhookMessage | WebhookAlreadyDispatched> {
+    const webhooks = this.webhooks;
+    if (!webhooks) {
+      throw new Error(
+        'A WebhookEvent needs WebhooksModule (and OutboxModule) from @nestjs/webhooks.',
+      );
+    }
+    if (!this.transaction) {
+      throw new Error(
+        'A WebhookEvent needs WebhookChannelModule.forRoot({ transaction: (work) => db.transaction(work) }): ' +
+          '@nestjs/webhooks writes the event through a transaction.',
+      );
+    }
+    // The outbox message id of this delivery: a retry derives the same webhook-id.
+    const id = context?.idempotencyKey ? webhookId(context.idempotencyKey) : undefined;
+    const inbox = this.inbox;
+    const outcome = await this.transaction(async (tx) => {
+      const dispatch = () =>
+        webhooks.dispatch(tx, {
+          type: event.type,
+          data: event.data,
+          tenant: context?.tenant ?? null,
+          ...(id ? { id } : {}),
+        });
+      if (!id || !inbox) return { duplicate: false as const, result: await dispatch() };
+      // The record commits with the dispatched message, so an attempt whose transaction
+      // committed is the only one that dispatches: a retry finds the record and skips it,
+      // instead of adding the webhook-id to the outbox again (a duplicate key while the first
+      // message is pending).
+      return inbox.processInTransaction(tx, WEBHOOK_DISPATCH_CONSUMER, id, dispatch);
+    });
+    if (outcome.duplicate) return { id: id as string, duplicate: true };
+    webhooks.notify();
+    return outcome.result;
+  }
+
+  private transportFor(options: WebhookChannelOptions): WebhookTransport {
+    if (options.transport) return options.transport;
+    let transport = this.transports.get(options);
+    if (!transport) {
+      transport = new HttpWebhookTransport(options.delivery);
+      this.transports.set(options, transport);
+    }
+    return transport;
+  }
+}
+
+function lowerCase(headers: Record<string, string> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [name, value] of Object.entries(headers ?? {})) out[name.toLowerCase()] = value;
+  return out;
+}
+
+/** `webhook-id` allows letters, digits, `_` and `-`, at most 128. */
+function webhookId(key: string): string {
+  return `msg_${key.replace(/[^A-Za-z0-9_-]/g, '_')}`.slice(0, 128);
 }

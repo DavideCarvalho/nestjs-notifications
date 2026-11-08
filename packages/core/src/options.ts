@@ -7,7 +7,7 @@ import type {
   NotifiableRef,
   NotificationClass,
 } from './interfaces';
-import type { LocaleResolver, TranslationCatalog, Translator } from './localization';
+import type { LocaleResolver, Translator } from './localization';
 
 /** i18n / localization configuration for {@link NotificationsModule.forRoot}. All optional. */
 export interface LocalizationOptions {
@@ -15,10 +15,11 @@ export interface LocalizationOptions {
   defaultLocale?: string;
   /** Custom locale resolver; defaults to reading a locale property off the notifiable. */
   resolver?: LocaleResolver;
-  /** Custom translator; defaults to an in-memory translator over {@link catalog}. */
+  /**
+   * The translator. Default: keys translate to themselves. Use `@nestjs/i18n` through
+   * `I18nServiceTranslator` (`@dudousxd/nestjs-notifications-core/i18n`) for catalogs.
+   */
   translator?: Translator;
-  /** Translation catalog for the default in-memory translator (`{ locale: { key: text } }`). */
-  catalog?: TranslationCatalog;
 }
 
 /** Static configuration for {@link NotificationsModule.forRoot}. */

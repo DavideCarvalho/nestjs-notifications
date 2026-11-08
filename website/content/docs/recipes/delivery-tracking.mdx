@@ -86,31 +86,91 @@ export class WebhooksModule {}
 Point your Twilio messaging service's status callback URL at that path. Invalid signatures are
 rejected with `403`.
 
+<Callout type="info">
+  Provider callbacks carry no user, so these controllers are not meant to sit behind your app's
+  authentication: Twilio and SES/SNS are authenticated by their signatures. Both factories take `decorators` (e.g.
+  an IP-allowlist `UseGuards(...)`). See [Authorization of the mounted routes](/docs/recipes/route-authorization).
+</Callout>
+
 ### AWS SES (email)
 
-SES delivers bounce / complaint / delivery events via SNS. The controller handles the SNS
-subscription handshake and the notifications:
+SES publishes bounce / complaint / delivery events to an SNS topic, and SNS POSTs them to your
+endpoint. The controller verifies every SNS message before acting on it, handles the subscription
+handshake, and updates the matching record:
 
 ```ts
 import { createSesNotificationController } from '@dudousxd/nestjs-notifications-delivery-tracking';
 
 const SesController = createSesNotificationController({
+  topicArns: [process.env.SES_EVENTS_TOPIC_ARN!], // required: the topic(s) SES publishes to
   path: 'webhooks/ses',
-  autoConfirmSubscription: true, // GET the SubscribeURL on first connect
+  autoConfirmSubscription: true, // GET the SubscribeURL once the confirmation is verified
 });
 ```
 
-<Callout type="warn">
-  SNS message-signature verification is off by default (it pulls no heavy dependency). For
-  internet-facing endpoints, terminate the webhook behind a verified API gateway, or implement SNS
-  signature verification before trusting the payload.
+What happens to each request, following [AWS's verification algorithm](https://docs.aws.amazon.com/sns/latest/dg/sns-verify-signature-of-message.html):
+
+1. **Topic** — `TopicArn` must be in `topicArns`. Anyone can create an SNS topic and subscribe your
+   URL, and SNS signs *their* messages too, so the signature alone doesn't make an event yours.
+2. **Freshness** — `Timestamp` must be within `maxMessageAgeMs` (default one hour; SNS keeps the
+   original timestamp across retries, so keep it above your retry window). `false` turns it off.
+3. **Certificate URL** — `SigningCertURL` must be `https://sns.<region>.amazonaws.com/…pem`
+   (`…amazonaws.com.cn` in China, `sns.us-gov-*` in GovCloud). Anything else is refused before any
+   request is made. Certificates are fetched with a 5 s timeout (`certificateTimeoutMs`) and cached
+   by URL.
+4. **Signature** — the canonical string-to-sign is rebuilt for the message type and checked with
+   RSA: `SignatureVersion` `1` is SHA1withRSA, `2` is SHA256withRSA; any other version is refused.
+
+A message that fails any check gets `403` and nothing is recorded. Verified notifications are
+deduplicated by `MessageId` (SNS delivers at least once) in a bounded in-memory store per
+controller; pass `messageIdStore` (`{ has, add }`) to share it across instances, or `false` to turn
+it off.
+
+**Subscription confirmation.** When you subscribe the endpoint, SNS first sends a
+`SubscriptionConfirmation`. Once verified (same checks, so only your topics), it is passed to
+`onSubscriptionConfirmation(message)` if you set it, and its `SubscribeURL` is GET-ed when
+`autoConfirmSubscription: true` (only if that URL is an `https://` SNS host). With neither, confirm
+the subscription in the AWS console or with `aws sns confirm-subscription` using the `Token`.
+
+<Callout type="info">
+  **Body parsing.** SNS posts its JSON with `Content-Type: text/plain`. Nothing to configure: the
+  controller reads the raw body itself when Nest's default JSON/urlencoded parsers skip it, and
+  also accepts a body already read by a text parser (`app.useBodyParser('text')`, Fastify's
+  default), `rawBody: true`, or a JSON parser (e.g. a subscription with `headerContentType:
+  application/json`). Just don't put a parser in front of the route that consumes the stream and
+  throws the body away.
 </Callout>
+
+`verifySignature: false` skips only the signature (the topic and timestamp checks still run). Use it
+only when something in front of the route already verifies SNS signatures. For tests, inject
+`certificateLoader: async (url) => pem` and `fetch`.
+
+The verifier is exported on its own too (`SnsMessageVerifier`, `buildSnsStringToSign`,
+`isSnsUrl`) if you consume SNS elsewhere.
 
 ## Correlating sends to callbacks
 
 A webhook says "message `SM123` was delivered" — the tracker needs to know which record that is. When
-a channel transport returns the provider's id (Twilio's `MessageSid`, SES's `messageId`), the listener
-captures it automatically, so delivered/bounced updates just work.
+a channel returns the provider's id (Twilio's `MessageSid`; the mail channel returns `@nestjs/mail`'s
+`MailSendResult`, whose `providerMessageId` is the SES `MessageId`), the listener captures it
+automatically, so delivered/bounced updates just work.
+
+### Mail sent outside notifications
+
+Mail your app sends with `@nestjs/mail`'s `Mailer` directly isn't a notification, so the listener
+never sees it. `mailDeliveryTracking()` from the `/mail` subpath records it from `MailEvents`
+(`sent` / `failed`, with the provider message id, so SES bounces correlate). Mail the mail channel
+sends is skipped there, so nothing is recorded twice:
+
+```ts title="app.module.ts"
+import { mailDeliveryTracking } from '@dudousxd/nestjs-notifications-delivery-tracking/mail';
+
+@Module({
+  imports: [DeliveryTrackingModule.forRoot(), MailModule.forRoot({ transport })],
+  providers: [...mailDeliveryTracking()],
+})
+export class AppModule {}
+```
 
 If a transport doesn't surface its id, attach it yourself after sending and the next callback will
 correlate:

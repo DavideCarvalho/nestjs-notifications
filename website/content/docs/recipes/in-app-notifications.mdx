@@ -71,10 +71,11 @@ await this.notifications.unreadCount({ type: 'User', id: req.user.id });
 
 `DatabaseChannelModule.forRoot()` **auto-mounts** the inbox controller by default — you get
 `GET/POST/DELETE /notifications` out of the box, with the current notifiable resolved from
-`req.user` (`{ type: 'User', id: req.user.id }`). Customize the resolver, or turn it off:
+`req.user` (`{ type: 'User', id: req.user.id }`, `401` when there is no `req.user.id`). Customize
+the resolver, or turn it off:
 
 ```ts
-// Default: controller on, resolveRef reads req.user.
+// Default: routes on, resolveRef reads req.user.
 DatabaseChannelModule.forRoot();
 
 // Custom resolver (e.g. a different id field or notifiable type):
@@ -82,32 +83,29 @@ DatabaseChannelModule.forRoot({
   controller: { resolveRef: (req) => ({ type: 'User', id: req.auth.sub }) },
 });
 
-// Auth guard + a custom base path (avoids colliding with a `/notifications` page
+// Authentication + a custom base path (avoids colliding with a `/notifications` page
 // route under a shared global prefix):
 DatabaseChannelModule.forRoot({
-  controller: {
-    resolveRef: (req) => ({ type: 'User', id: req.user.id }),
-    guards: [AuthGuard],
-    path: 'notifications-inbox',
-  },
+  controller: { path: 'notifications-inbox' },
+  decorators: [UseGuards(AuthenticationGuard)],
 });
 
 // Off — mount it yourself, or expose your own endpoints:
-DatabaseChannelModule.forRoot({ controller: false });
+DatabaseChannelModule.forRoot({ routes: false });
 ```
 
 <Callout type="warn">
-  **Mounting your own controller does not turn this one off.** `controller` defaults to `true`, so
+  **Mounting your own controller does not turn this one off.** `routes` defaults to `true`, so
   `forRoot()` auto-mounts the inbox whether or not you also call `createNotificationsController()`
   — you end up with two, and the auto-mounted one sits on the default `notifications` path with the
-  module's `resolveRef` and guards rather than yours. That duplicate will shadow a page route your
-  app serves at `/notifications`. Pass `controller: false` whenever you mount the controller
+  module's `resolveRef` and `decorators` rather than yours. That duplicate will shadow a page route
+  your app serves at `/notifications`. Pass `routes: false` whenever you mount the controller
   yourself; the library logs a warning at bootstrap when it detects both.
 </Callout>
 
 ### Mounting it yourself
 
-When you pass `controller: false` (or want it in a specific module), `createNotificationsController()`
+When you pass `routes: false` (or want it in a specific module), `createNotificationsController()`
 builds the same `@Controller('notifications')`. Tell it how to resolve the current notifiable from the
 request, then add the returned class to a module's `controllers`:
 
@@ -123,8 +121,8 @@ const NotificationsController = createNotificationsController({
 });
 
 @Module({
-  // `controller: false` — without it you get this controller AND the auto-mounted one.
-  imports: [DatabaseChannelModule.forFeature({ controller: false })],
+  // `routes: false` — without it you get this controller AND the auto-mounted one.
+  imports: [DatabaseChannelModule.forFeature({ routes: false })],
   controllers: [NotificationsController],
 })
 export class InboxModule {}
@@ -149,11 +147,17 @@ Absent, or empty after parsing, means no filter — every type matches.
 <Callout type="info">
   The controller relies on `resolveRef` to scope every route to the current user. The per-id routes
   (`:id/read`, `DELETE :id`) are ownership-checked: a notification belonging to someone else
-  responds `404` rather than `403`, so the endpoint can't be used to probe which ids exist. Still
-  pass your auth guard via the `guards` option (on either `controller: { guards }` or
-  `createNotificationsController({ guards })`) — ownership scoping is only as good as the identity
-  `resolveRef` reads off the request.
+  responds `404` rather than `403`, so the endpoint can't be used to probe which ids exist.
+  Ownership scoping is only as good as the identity `resolveRef` reads off the request, so put
+  authentication in front of it — see below.
 </Callout>
+
+### Authorization
+
+Decide who reaches the inbox with `@nestjs/authentication` / `@nestjs/authorization`: pass
+`decorators` (e.g. `[UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')]`) to
+`DatabaseChannelModule.forRoot()`/`forFeature()` or `createNotificationsController()`, or mount the
+controller yourself with `routes: false`. See [Authorization of the mounted routes](/docs/recipes/route-authorization).
 
 ### Ownership scoping and custom stores
 

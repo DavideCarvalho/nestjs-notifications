@@ -117,14 +117,14 @@ from the request; it mounts a native `@Sse()` endpoint that subscribes to the `S
 key the channel publishes to, and adds a keep-alive heartbeat:
 
 ```ts title="inbox.module.ts"
-import { Module } from '@nestjs/common';
+import { AuthenticationGuard } from '@nestjs/authentication';
+import { Module, UseGuards } from '@nestjs/common';
 import { createNotificationsStreamController } from '@dudousxd/nestjs-notifications-sse';
-import { AuthGuard } from './auth.guard';
 
 const NotificationsStreamController = createNotificationsStreamController({
   resolveRoute: (req) => String(req.user.id),          // must match routeNotificationFor('sse')
   resolveTenant: (req) => req.tenantId,                // optional; match the send's tenant scope
-  guards: [AuthGuard],                                 // the stream is per-user — protect it
+  decorators: [UseGuards(AuthenticationGuard)],        // the stream is per-user — protect it
 });
 
 @Module({ controllers: [NotificationsStreamController] })
@@ -139,7 +139,7 @@ That mounts `GET notifications/stream`. `NotificationsStreamControllerOptions`:
 | `resolveTenant` | `(req) => string \| undefined \| Promise<…>` | — | Resolve the tenant so the stream key lines up with the send's tenant scope. Omit in single-tenant apps. |
 | `path` | `string` | `'notifications'` | Controller base path. |
 | `streamPath` | `string` | `'stream'` | Sub-path for the `@Sse()` endpoint → `GET {path}/{streamPath}`. |
-| `guards` | `Array<Type<CanActivate> \| CanActivate>` | — | Guards applied via `@UseGuards` — almost always your auth guard. |
+| `decorators` | `ClassDecorator[]` | — | Class decorators applied, in order, to the controller — e.g. `[UseGuards(AuthenticationGuard), Can(StreamPolicy, 'listen')]`. See [Authorization of the mounted routes](/docs/recipes/route-authorization). |
 | `heartbeatMs` | `number` | `25000` | Interval for a `{ type: 'heartbeat' }` keep-alive frame so idle connections survive proxy/load-balancer timeouts. Set `0` to disable. |
 
 Under the hood it does exactly what the hand-written controller does — builds `sseKey(tenant, route)`

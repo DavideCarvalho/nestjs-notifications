@@ -14,7 +14,13 @@ export {
   DRIZZLE_NOTIFICATION_TABLES,
   type DrizzlePgDatabase,
 } from './tokens';
-export type { DrizzleStoreModuleAsyncOptions, DrizzleStoreModuleOptions } from './module-options';
+export {
+  drizzleConnectionToken,
+  type DrizzleStoreConnectionOptions,
+  type DrizzleStoreDbOptions,
+  type DrizzleStoreModuleAsyncOptions,
+  type DrizzleStoreModuleOptions,
+} from './module-options';
 export { DrizzleNotificationStore } from './drizzle-notification.store';
 export { DrizzleNotificationStoreModule } from './drizzle-notification-store.module';
 

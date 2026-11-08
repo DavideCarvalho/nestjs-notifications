@@ -26,6 +26,8 @@ export interface SerializedJob {
    * async-delivered notification still records WHO triggered it.
    */
   captured?: CapturedContext | undefined;
+  /** Channels re-queued by a gate `defer`; the worker bypasses the gate for them. */
+  deferredChannels?: string[] | undefined;
 }
 
 /**
@@ -132,6 +134,8 @@ export class NotificationSerializer {
       queue: job.queue,
       tenant: job.tenant,
       captured: job.captured,
+      ...(job.deferredChannels?.length ? { deferredChannels: job.deferredChannels } : {}),
+      // `job.transaction` is deliberately left out: it is an in-memory handle, never serialized.
     };
   }
 

@@ -28,13 +28,14 @@ Install core, at least one channel, and `@nestjs/event-emitter` (a core peer, us
 events):
 
 ```bash
-pnpm add @dudousxd/nestjs-notifications-core @dudousxd/nestjs-notifications-mail @nestjs/event-emitter
+pnpm add @dudousxd/nestjs-notifications-core @dudousxd/nestjs-notifications-mail @nestjs/mail @nestjs/event-emitter
 ```
 
 ```ts
 // app.module.ts
 import { NotificationsModule } from '@dudousxd/nestjs-notifications-core';
 import { MailChannelModule } from '@dudousxd/nestjs-notifications-mail';
+import { MailModule, SmtpTransport } from '@nestjs/mail';
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { InvoicePaid } from './notifications/invoice-paid.notification';
@@ -45,10 +46,11 @@ import { InvoicePaid } from './notifications/invoice-paid.notification';
     NotificationsModule.forRoot({
       notifications: [InvoicePaid], // only needed for async dispatch; harmless otherwise
     }),
-    MailChannelModule.forRoot({
+    MailModule.forRoot({ // @nestjs/mail owns sending
+      transport: new SmtpTransport({ host: 'smtp.example.com', port: 587, auth: { user: 'u', pass: 'p' } }),
       from: 'billing@example.com',
-      smtp: { host: 'smtp.example.com', port: 587, auth: { user: 'u', pass: 'p' } },
     }),
+    MailChannelModule.forRoot(),
   ],
 })
 export class AppModule {}

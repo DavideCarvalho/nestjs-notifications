@@ -1,197 +1,352 @@
-import { createHmac } from 'node:crypto';
-import type { Notifiable, Notification } from '@dudousxd/nestjs-notifications-core';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WEBHOOK_OPTIONS } from './tokens';
-import { WebhookMessage } from './webhook-message';
-import { WebhookChannel } from './webhook.channel';
-import type { WebhookNotification } from './webhook.channel';
+import { randomBytes } from 'node:crypto';
+import {
+  type ChannelDriver,
+  ChannelRegistry,
+  type Notification,
+  NotificationService,
+  NotificationsModule,
+} from '@dudousxd/nestjs-notifications-core';
+import { outboxDispatcher } from '@dudousxd/nestjs-notifications-core/outbox';
+import { InMemoryOutboxStore, OutboxModule, OutboxRelay, OutboxStorage } from '@nestjs/outbox';
+import { Test } from '@nestjs/testing';
+import {
+  InMemoryWebhookTransport,
+  WebhookDestinationBlockedError,
+  WebhookEndpoints,
+  WebhookTransport,
+  WebhookVerifier,
+  WebhooksModule,
+} from '@nestjs/webhooks';
+import { describe, expect, it } from 'vitest';
+import { sha256Signature } from './signing';
+import { WebhookEvent, WebhookMessage } from './webhook-message';
+import {
+  WEBHOOK_DISPATCH_CONSUMER,
+  Webhook,
+  WebhookChannel,
+  type WebhookChannelOptions,
+} from './webhook.channel';
 import { WebhookChannelModule } from './webhook.module';
 
 const URL = 'https://example.com/hooks/notifications';
+const secret = `whsec_${randomBytes(32).toString('base64')}`;
 
-class TestUser implements Notifiable {
-  constructor(private route: unknown) {}
+class Customer {
+  constructor(private readonly route?: string) {}
   routeNotificationFor(): unknown {
     return this.route;
   }
 }
 
-class OrderPaidMessage implements WebhookNotification {
-  via(): string[] {
-    return ['webhook'];
-  }
-  toWebhook(): WebhookMessage {
-    return new WebhookMessage()
-      .url(URL)
-      .header('X-Signature', 'abc123')
-      .payload({ event: 'order.paid', id: 42 });
-  }
-}
-
-class OrderPaidPlain implements WebhookNotification {
-  via(): string[] {
-    return ['webhook'];
-  }
-  toWebhook(): Record<string, unknown> {
+class OrderPaid {
+  @Webhook()
+  toWebhook() {
     return { event: 'order.paid', id: 7 };
   }
 }
 
-describe('WebhookChannel', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
+class OrderPaidMessage {
+  @Webhook()
+  toWebhook() {
+    return new WebhookMessage()
+      .url(URL)
+      .header('X-App', 'shop')
+      .payload({ event: 'order.paid', id: 42 });
+  }
+}
+
+class InvoicePaid {
+  constructor(readonly id: number) {}
+  @Webhook()
+  toWebhook() {
+    return new WebhookEvent('invoice.paid', { id: this.id });
+  }
+}
+
+function channel(
+  options: WebhookChannelOptions,
+  resolve?: (tenant: string) => WebhookChannelOptions,
+) {
+  return new WebhookChannel(options, resolve);
+}
+
+describe('WebhookChannel (direct URL)', () => {
+  it('POSTs the WebhookMessage body to its url with merged headers', async () => {
+    const transport = new InMemoryWebhookTransport();
+    await channel({ transport, headers: { 'X-Tenant-App': 'flip' } }).send(
+      new Customer(),
+      new OrderPaidMessage() as Notification,
+    );
+    const sent = transport.single({ url: URL });
+    expect(JSON.parse(sent.request.body)).toEqual({ event: 'order.paid', id: 42 });
+    expect(sent.request.headers['x-app']).toBe('shop');
+    expect(sent.request.headers['x-tenant-app']).toBe('flip');
+    expect(sent.request.headers['content-type']).toBe('application/json');
   });
 
-  it('posts the WebhookMessage payload to its url with merged headers', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const channel = new WebhookChannel({ headers: { 'X-App': 'flip' } });
-    await channel.send(new TestUser(undefined), new OrderPaidMessage());
-
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(url).toBe(URL);
-    expect(init.method).toBe('POST');
-    expect(init.headers['Content-Type']).toBe('application/json');
-    expect(init.headers['X-App']).toBe('flip');
-    expect(init.headers['X-Signature']).toBe('abc123');
-    const body = JSON.parse(init.body as string);
-    expect(body).toEqual({ event: 'order.paid', id: 42 });
+  it('uses the route url for a plain-object payload, then the configured default', async () => {
+    const transport = new InMemoryWebhookTransport();
+    await channel({ transport, url: 'https://default.example.com/h' }).send(
+      new Customer(URL),
+      new OrderPaid() as Notification,
+    );
+    await channel({ transport, url: 'https://default.example.com/h' }).send(
+      new Customer(),
+      new OrderPaid() as Notification,
+    );
+    expect(transport.filter().map((s) => s.request.url)).toEqual([
+      URL,
+      'https://default.example.com/h',
+    ]);
   });
 
-  it('treats a plain object return as the JSON body and uses the route url', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const channel = new WebhookChannel({});
-    await channel.send(new TestUser(URL), new OrderPaidPlain());
-
-    const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(url).toBe(URL);
-    expect(JSON.parse(init.body as string)).toEqual({ event: 'order.paid', id: 7 });
-  });
-
-  it('falls back to the configured url when neither message nor route supplies one', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const channel = new WebhookChannel({ url: URL });
-    await channel.send(new TestUser(undefined), new OrderPaidPlain());
-
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(URL);
-  });
-
-  it('uses the per-tenant options (url and headers) when a tenant is in the context', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
-
+  it('uses the per-tenant options when a tenant is in the context', async () => {
+    const transport = new InMemoryWebhookTransport();
     const tenantUrl = 'https://acme.example.com/hooks';
-    const resolveOptions = vi
-      .fn()
-      .mockReturnValue({ url: tenantUrl, headers: { 'X-Tenant': 'acme' } });
-    const channel = new WebhookChannel({ url: URL }, resolveOptions);
-
-    await channel.send(new TestUser(undefined), new OrderPaidPlain(), { tenant: 'acme' });
-
-    expect(resolveOptions).toHaveBeenCalledWith('acme');
-    const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(url).toBe(tenantUrl);
-    expect(init.headers['X-Tenant']).toBe('acme');
+    await channel({ transport, url: URL }, () => ({ transport, url: tenantUrl })).send(
+      new Customer(),
+      new OrderPaid() as Notification,
+      { tenant: 'acme' },
+    );
+    expect(transport.single().request.url).toBe(tenantUrl);
   });
 
-  it('uses the default options when no tenant is provided', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
+  it('keeps the sha256= signature by default', async () => {
+    const transport = new InMemoryWebhookTransport();
+    await channel({ transport, url: URL, secret: 's3cret' }).send(
+      new Customer(),
+      new OrderPaid() as Notification,
+    );
+    const { headers, body } = transport.single().request;
+    expect(headers['x-signature-256']).toBe(sha256Signature('s3cret', body));
+  });
 
-    const resolveOptions = vi.fn().mockReturnValue({ url: 'https://acme.example.com/hooks' });
-    const channel = new WebhookChannel({ url: URL }, resolveOptions);
+  it("signing: 'standard' is verified by a @nestjs/webhooks standard receiver", async () => {
+    const transport = new InMemoryWebhookTransport();
+    await channel({ transport, url: URL, secret, signing: 'standard' }).send(
+      new Customer(),
+      new OrderPaid() as Notification,
+      {
+        idempotencyKey: 'outbox-msg-1',
+      },
+    );
+    const { headers, body } = transport.single().request;
+    expect(headers['webhook-id']).toBe('outbox-msg-1');
 
-    await channel.send(new TestUser(undefined), new OrderPaidPlain());
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        OutboxModule.forRoot({ relay: { enabled: false } }),
+        WebhooksModule.forRoot({
+          outgoing: false,
+          receivers: { aviary: { scheme: 'standard', secret } },
+        }),
+      ],
+    }).compile();
+    const verified = moduleRef.get(WebhookVerifier).verify('aviary', { headers, rawBody: body });
+    expect(verified.id).toBe('outbox-msg-1');
+    expect(verified.payload).toEqual({ event: 'order.paid', id: 7 });
+    expect(() =>
+      moduleRef.get(WebhookVerifier).verify('aviary', { headers, rawBody: body.replace('7', '8') }),
+    ).toThrow();
+    await moduleRef.close();
+  });
 
-    expect(resolveOptions).not.toHaveBeenCalled();
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(URL);
+  it('fails on a non-2xx answer', async () => {
+    const transport = new InMemoryWebhookTransport().respondWith(503);
+    await expect(
+      channel({ transport, url: URL }).send(new Customer(), new OrderPaid() as Notification),
+    ).rejects.toThrow(/failed with status 503/);
+  });
+
+  it('sends through HttpWebhookTransport by default: private addresses and http are refused', async () => {
+    await expect(
+      channel({ url: 'https://127.0.0.1/hook' }).send(
+        new Customer(),
+        new OrderPaid() as Notification,
+      ),
+    ).rejects.toBeInstanceOf(WebhookDestinationBlockedError);
+    await expect(
+      channel({ url: 'http://example.com/hook' }).send(
+        new Customer(),
+        new OrderPaid() as Notification,
+      ),
+    ).rejects.toBeInstanceOf(WebhookDestinationBlockedError);
   });
 
   it('throws a clear error when no target url can be resolved', async () => {
-    vi.stubGlobal('fetch', vi.fn());
-
-    const channel = new WebhookChannel({});
-    await expect(channel.send(new TestUser(undefined), new OrderPaidPlain())).rejects.toThrow(
+    await expect(channel({}).send(new Customer(), new OrderPaid() as Notification)).rejects.toThrow(
       /needs a target URL/,
     );
   });
 
-  it('throws on a non-ok response', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
-
-    const channel = new WebhookChannel({ url: URL });
-    await expect(channel.send(new TestUser(undefined), new OrderPaidPlain())).rejects.toThrow(
-      /failed with status 503/,
+  it('throws MissingChannelMethodError when toWebhook is absent', async () => {
+    await expect(channel({ url: URL }).send(new Customer(URL), {})).rejects.toThrow(
+      /toWebhook\(\)/,
     );
   });
+});
 
-  it('throws MissingChannelMethodError when toWebhook is absent', async () => {
-    const channel = new WebhookChannel({ url: URL });
-    const bare: Notification = { via: () => ['webhook'] };
+/** The in-memory store `OutboxModule` falls back to without a registered one. */
+function outboxStore(moduleRef: { get(token: typeof OutboxStorage): OutboxStorage }) {
+  return moduleRef.get(OutboxStorage).messages as InMemoryOutboxStore;
+}
 
-    await expect(channel.send(new TestUser(URL), bare)).rejects.toThrow(/toWebhook\(\)/);
-  });
+async function waitFor(check: () => boolean, timeoutMs = 3000): Promise<void> {
+  const started = Date.now();
+  while (!check()) {
+    if (Date.now() - started > timeoutMs) throw new Error('timed out waiting');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
 
-  it('forRoot() forwards secret / signatureHeader / timeoutMs / redirect to the channel options', () => {
-    const module = WebhookChannelModule.forRoot({
-      url: URL,
-      secret: 's3cret',
-      signatureHeader: 'X-Hub-Signature-256',
-      timeoutMs: 15_000,
-      redirect: 'error',
+describe('WebhookChannel (subscriptions via @nestjs/webhooks)', () => {
+  it('dispatches a WebhookEvent to the endpoints of the delivery tenant', async () => {
+    const transport = new InMemoryWebhookTransport();
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        NotificationsModule.forRoot({ emitter: true }),
+        OutboxModule.forRoot({ relay: { pollInterval: 10 } }),
+        WebhooksModule.forRoot({ eventTypes: ['invoice.paid'], worker: { pollInterval: 10 } }),
+        WebhookChannelModule.forRoot({ transaction: (work) => work({}) }),
+      ],
+    })
+      .overrideProvider(WebhookTransport)
+      .useValue(transport)
+      .compile();
+    await moduleRef.init();
+
+    const endpoints = moduleRef.get(WebhookEndpoints);
+    const acme = await endpoints.create({
+      url: 'https://acme.example.com/hooks',
+      eventTypes: ['invoice.paid'],
+      tenant: 'acme',
     });
-    const provider = (module.providers ?? []).find(
-      (p) => typeof p === 'object' && 'provide' in p && p.provide === WEBHOOK_OPTIONS,
-    ) as { useValue: unknown } | undefined;
-    expect(provider?.useValue).toEqual({
-      url: URL,
-      secret: 's3cret',
-      signatureHeader: 'X-Hub-Signature-256',
-      timeoutMs: 15_000,
-      redirect: 'error',
+    await endpoints.create({
+      url: 'https://other.example.com/hooks',
+      eventTypes: ['invoice.paid'],
+      tenant: 'other',
     });
+
+    const [result] = await moduleRef
+      .get(NotificationService)
+      .forTenant('acme')
+      .send(new Customer(), new InvoicePaid(9) as Notification);
+    expect(result?.results[0]?.status).toBe('sent');
+
+    await waitFor(() => transport.sent.length > 0);
+    const sent = transport.single({ type: 'invoice.paid' });
+    expect(sent.request.url).toBe(acme.url);
+    expect(JSON.parse(sent.request.body).data).toEqual({ id: 9 });
+    await moduleRef.close();
   });
 
-  it('signs with the configured secret through forRoot options (documented usage)', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const channel = new WebhookChannel({ url: URL, secret: 's3cret' });
-    await channel.send(new TestUser(undefined), new OrderPaidPlain());
-
-    const [, init] = fetchMock.mock.calls[0] ?? [];
-    const expected = createHmac('sha256', 's3cret')
-      .update(init.body as string)
-      .digest('hex');
-    expect(init.headers['X-Signature-256']).toBe(`sha256=${expected}`);
+  it('explains what is missing without WebhooksModule or a transaction runner', async () => {
+    await expect(
+      channel({}).send(new Customer(), new InvoicePaid(1) as Notification),
+    ).rejects.toThrow(/WebhooksModule/);
   });
 
-  it('passes a timeout signal and the redirect mode to fetch when configured', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
+  it('a retried delivery (same idempotency key) dispatches the event once and succeeds', async () => {
+    const transport = new InMemoryWebhookTransport();
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        NotificationsModule.forRoot({ emitter: true }),
+        // Relay run by hand, so the first message is still pending when the retry dispatches.
+        OutboxModule.forRoot({ relay: { enabled: false } }),
+        WebhooksModule.forRoot({ eventTypes: ['invoice.paid'], worker: { pollInterval: 10 } }),
+        WebhookChannelModule.forRoot({
+          transaction: (work) => outboxStore(moduleRef).transaction(work),
+        }),
+      ],
+    })
+      .overrideProvider(WebhookTransport)
+      .useValue(transport)
+      .compile();
+    await moduleRef.init();
+    const store = outboxStore(moduleRef);
+    await moduleRef.get(WebhookEndpoints).create({
+      url: 'https://acme.example.com/hooks',
+      eventTypes: ['invoice.paid'],
+    });
+    const webhook = moduleRef.get(WebhookChannel);
+    const send = () =>
+      webhook.send(new Customer(), new InvoicePaid(5) as Notification, {
+        idempotencyKey: 'outbox-msg-5',
+      });
 
-    const channel = new WebhookChannel({ url: URL, timeoutMs: 1_000, redirect: 'error' });
-    await channel.send(new TestUser(undefined), new OrderPaidPlain());
+    const first = await send();
+    expect(first).toMatchObject({ id: 'msg_outbox-msg-5', type: 'invoice.paid' });
+    // While the first message is pending: no duplicate outbox id, no error.
+    await expect(send()).resolves.toEqual({ id: 'msg_outbox-msg-5', duplicate: true });
+    expect(store.stats(Date.now()).pending).toBe(1);
+    expect(store.hasInbox(WEBHOOK_DISPATCH_CONSUMER, 'msg_outbox-msg-5')).toBe(true);
 
-    const [, init] = fetchMock.mock.calls[0] ?? [];
-    expect(init.signal).toBeInstanceOf(AbortSignal);
-    expect(init.redirect).toBe('error');
+    await moduleRef.get(OutboxRelay).runOnce();
+    await waitFor(() => transport.sent.length === 1);
+    // After it was published and fanned out, a retry is still a no-op.
+    await expect(send()).resolves.toEqual({ id: 'msg_outbox-msg-5', duplicate: true });
+    await moduleRef.get(OutboxRelay).runOnce();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(transport.sent).toHaveLength(1);
+    expect(transport.single().request.headers['webhook-id']).toBe('msg_outbox-msg-5');
+    await moduleRef.close();
   });
 
-  it('leaves fetch defaults untouched when no timeout / redirect is configured', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
+  it('through the outbox dispatcher: a failFast retry caused by another channel delivers the webhook once', async () => {
+    const transport = new InMemoryWebhookTransport();
+    const flaky: ChannelDriver & { sends: number; failures: number } = {
+      channel: 'flaky',
+      sends: 0,
+      failures: 1,
+      async send() {
+        this.sends++;
+        if (this.failures-- > 0) throw new Error('flaky is down');
+      },
+    };
+    class InvoiceSettled extends InvoicePaid {
+      via() {
+        return ['webhook', 'flaky'];
+      }
+    }
+    const transaction = <T>(work: (tx: unknown) => Promise<T>) =>
+      outboxStore(moduleRef).transaction(work);
+    const moduleRef = await Test.createTestingModule({
+      imports: [
+        OutboxModule.forRoot({
+          relay: { pollInterval: 10 },
+          retry: { attempts: 5, backoff: { delay: 20, jitter: 'none' } },
+        }),
+        WebhooksModule.forRoot({ eventTypes: ['invoice.paid'], worker: { pollInterval: 10 } }),
+        NotificationsModule.forRoot({
+          emitter: true,
+          errorPolicy: 'failFast',
+          ...outboxDispatcher({ transaction }),
+          notifications: [InvoiceSettled],
+          resolveNotifiable: () => new Customer(),
+        }),
+        WebhookChannelModule.forRoot({ transaction }),
+      ],
+    })
+      .overrideProvider(WebhookTransport)
+      .useValue(transport)
+      .compile();
+    moduleRef.get(ChannelRegistry).register(flaky);
+    await moduleRef.init();
+    const store = outboxStore(moduleRef);
+    await moduleRef.get(WebhookEndpoints).create({
+      url: 'https://acme.example.com/hooks',
+      eventTypes: ['invoice.paid'],
+    });
 
-    await new WebhookChannel({ url: URL }).send(new TestUser(undefined), new OrderPaidPlain());
-
-    const [, init] = fetchMock.mock.calls[0] ?? [];
-    expect(init).not.toHaveProperty('signal');
-    expect(init).not.toHaveProperty('redirect');
+    const customer = Object.assign(new Customer(), {
+      toNotifiableRef: () => ({ type: 'Customer', id: 1 }),
+    });
+    await moduleRef.get(NotificationService).sendAsync(customer, new InvoiceSettled(6));
+    await waitFor(() => flaky.sends === 2 && transport.sent.length === 1);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(transport.sent).toHaveLength(1);
+    expect(store.stats(Date.now()).pending).toBe(0);
+    expect(store.listDeadLetters({})).toEqual([]);
+    await moduleRef.close();
   });
 });

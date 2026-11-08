@@ -1,16 +1,6 @@
 import type { NotifiableRef } from '@dudousxd/nestjs-notifications-core';
-import {
-  type CanActivate,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Post,
-  Query,
-  Req,
-  type Type,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Delete, Get, Param, Post, Query, Req, type Type } from '@nestjs/common';
+import { finishController } from './controller-decorators';
 import { type InboxMountOrigin, recordInboxMount } from './inbox-registry';
 import type { PaginatedNotifications } from './notifications-query.service';
 import { NotificationsQueryService } from './notifications-query.service';
@@ -19,15 +9,20 @@ import { NotificationsQueryService } from './notifications-query.service';
 export interface NotificationsControllerOptions {
   /**
    * Resolves the current notifiable from the request (e.g. from `req.user`). May be async.
+   * Every route is scoped to the ref it returns; throw (e.g. `UnauthorizedException`) when the
+   * request carries no identity.
    */
   resolveRef: (req: any) => NotifiableRef | Promise<NotifiableRef>;
   /** Controller base path. Default `'notifications'`. */
   path?: string | undefined;
   /**
-   * Guards to protect the endpoints with (e.g. your auth guard). Applied via `@UseGuards` — the
-   * inbox is per-user, so it should almost always be authenticated.
+   * Class decorators applied to the controller, in order, after its own — how you decide who
+   * reaches it (e.g.
+   * `[UseGuards(AuthenticationGuard), Can(InboxPolicy, 'read')]` with `@nestjs/authorization`).
+   * The controller is marked open to `@nestjs/authorization`'s deny-by-default guard
+   * (`Can.Anyone()`), so it answers without any; a `@Can()` passed here is still enforced.
    */
-  guards?: Array<Type<CanActivate> | CanActivate> | undefined;
+  decorators?: ClassDecorator[] | undefined;
 }
 
 /**
@@ -57,16 +52,16 @@ export interface NotificationsControllerOptions {
  * });
  *
  * @Module({
- *   imports: [DatabaseChannelModule.forFeature({ controller: false })],
+ *   imports: [DatabaseChannelModule.forFeature({ routes: false })],
  *   controllers: [NotificationsController],
  * })
  * export class InboxModule {}
  * ```
  *
- * **Pass `controller: false`** when you mount it yourself, as above. The module's `controller`
- * option defaults to `true`, so building your own controller does not replace the auto-mounted
- * one — without `controller: false` you get both, and the auto-mounted one carries the module's
- * `resolveRef` and guards rather than the ones passed here.
+ * **Pass `routes: false`** when you mount it yourself, as above. The module's `routes` option
+ * defaults to `true`, so building your own controller does not replace the auto-mounted one —
+ * without `routes: false` you get both, and the auto-mounted one carries the module's
+ * `resolveRef` and `decorators` rather than the ones passed here.
  */
 export function createNotificationsController(
   options: NotificationsControllerOptions,
@@ -141,9 +136,7 @@ export function buildNotificationsController(
     }
   }
 
-  if (options.guards && options.guards.length > 0) {
-    UseGuards(...options.guards)(NotificationsController);
-  }
+  finishController(NotificationsController, options.decorators);
 
   return NotificationsController;
 }
