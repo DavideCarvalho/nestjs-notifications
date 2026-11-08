@@ -1,6 +1,6 @@
 import { Controller, type MessageEvent, Req, Sse, type Type } from '@nestjs/common';
 import { type Observable, from, interval, map, merge, switchMap } from 'rxjs';
-import { finishController } from './controller-decorators';
+import { finishController, rejectRemovedGuards } from './controller-decorators';
 import { sseKey } from './sse-key';
 import { SseHub } from './sse.hub';
 
@@ -58,6 +58,7 @@ export interface NotificationsStreamControllerOptions {
 export function createNotificationsStreamController(
   options: NotificationsStreamControllerOptions,
 ): Type<unknown> {
+  rejectRemovedGuards(options, 'createNotificationsStreamController()');
   const heartbeatMs = options.heartbeatMs ?? 25_000;
 
   @Controller(options.path ?? 'notifications')

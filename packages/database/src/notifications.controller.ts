@@ -1,6 +1,6 @@
 import type { NotifiableRef } from '@dudousxd/nestjs-notifications-core';
 import { Controller, Delete, Get, Param, Post, Query, Req, type Type } from '@nestjs/common';
-import { finishController } from './controller-decorators';
+import { finishController, rejectRemovedGuards } from './controller-decorators';
 import { type InboxMountOrigin, recordInboxMount } from './inbox-registry';
 import type { PaginatedNotifications } from './notifications-query.service';
 import { NotificationsQueryService } from './notifications-query.service';
@@ -66,6 +66,7 @@ export interface NotificationsControllerOptions {
 export function createNotificationsController(
   options: NotificationsControllerOptions,
 ): Type<unknown> {
+  rejectRemovedGuards(options, 'createNotificationsController()');
   return buildNotificationsController(options, 'manual');
 }
 

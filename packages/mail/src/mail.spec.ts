@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import {
   type ChannelContext,
   ChannelRunner,
@@ -64,16 +66,6 @@ class OrderShipped {
   @Mail()
   toMail(_ctx: ChannelContext) {
     return { mail: OrderShippedMail, data: { id: this.id } };
-  }
-}
-
-class Remote {
-  @Mail()
-  toMail(): MailMessage {
-    return new MailMessage()
-      .subject('Report')
-      .line('Attached.')
-      .attach({ filename: 'report.pdf', url: 'https://files.example.com/report.pdf' });
   }
 }
 
@@ -180,22 +172,56 @@ describe('MailChannel over @nestjs/mail', () => {
   });
 
   it('downloads url attachments (official `path` is local only)', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(new Uint8Array([37, 80, 68, 70]), {
-        headers: { 'content-type': 'application/pdf' },
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/pdf' });
+      res.end('%PDF');
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    class Local {
+      @Mail()
+      toMail(): MailMessage {
+        return new MailMessage()
+          .subject('Report')
+          .attach({ filename: 'report.pdf', url: `http://127.0.0.1:${port}/report.pdf` });
+      }
+    }
+    try {
+      const mailbox = new InMemoryMailTransport();
+      const moduleRef = await app(mailbox, {
+        attachments: { allowHttp: true, allowPrivateHosts: true },
+      });
+      await moduleRef.get(NotificationService).send(new User('ada@example.com'), new Local());
+
+      const attachment = mailbox.assertSent().attachment('report.pdf');
+      expect(attachment.content.toString()).toBe('%PDF');
+      expect(attachment.contentType).toBe('application/pdf');
+      await moduleRef.close();
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
+  it('refuses a url attachment on a private host by default (no mail sent)', async () => {
+    class Metadata {
+      @Mail()
+      toMail(): MailMessage {
+        return new MailMessage()
+          .subject('Report')
+          .attach({ filename: 'creds', url: 'https://169.254.169.254/latest/meta-data' });
+      }
+    }
     const mailbox = new InMemoryMailTransport();
     const moduleRef = await app(mailbox);
-    await moduleRef.get(NotificationService).send(new User('ada@example.com'), new Remote());
-
-    const attachment = mailbox.assertSent().attachment('report.pdf');
-    expect(attachment.content.toString()).toBe('%PDF');
-    expect(attachment.contentType).toBe('application/pdf');
-    expect(fetchMock).toHaveBeenCalledWith('https://files.example.com/report.pdf', {
-      redirect: 'error',
-    });
+    const runner = moduleRef.get(ChannelRunner);
+    const results = await runner.run(
+      new User('ada@example.com') as Notifiable,
+      new Metadata() as Notification,
+      ['mail'],
+    );
+    expect(results[0]?.status).toBe('failed');
+    expect(String(results[0]?.error)).toMatch(/non-public address/);
+    expect(mailbox.mails).toHaveLength(0);
     await moduleRef.close();
   });
 

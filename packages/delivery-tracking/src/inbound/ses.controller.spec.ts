@@ -1,5 +1,7 @@
 import { X509Certificate } from 'node:crypto';
-import { ForbiddenException } from '@nestjs/common';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { BadGatewayException, ForbiddenException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { DeliveryTrackingService } from '../delivery-tracking.service';
 import { InMemoryDeliveryTrackingStore } from '../in-memory.store';
@@ -276,6 +278,25 @@ describe('SES notification controller', () => {
     expect((await store.get(rec.id))?.status).toBe('sent');
   });
 
+  it('remembers MessageIds for messageIdTtlMs (default 24 h), also with maxMessageAgeMs: false', async () => {
+    const added: Array<[string, number]> = [];
+    const messageIdStore = {
+      has: () => false,
+      add: (id: string, ttl: number) => {
+        added.push([id, ttl]);
+      },
+    };
+    await make({ maxMessageAgeMs: false, messageIdStore }).post(sesNotification(signer, 'a'));
+    await make({ maxMessageAgeMs: 60_000, messageIdStore }).post(sesNotification(signer, 'b'));
+    await make({ messageIdTtlMs: 5_000, messageIdStore }).post(sesNotification(signer, 'c'));
+    // Never shorter than the freshness window: a message still accepted is still deduplicated.
+    await make({ messageIdTtlMs: 5_000, maxMessageAgeMs: 7_200_000, messageIdStore }).post(
+      sesNotification(signer, 'd'),
+    );
+    // An unset maxMessageAgeMs is the verifier's 1 h default, so a 5 s TTL is raised to it.
+    expect(added.map(([, ttl]) => ttl)).toEqual([86_400_000, 86_400_000, 3_600_000, 7_200_000]);
+  });
+
   it('verifySignature: false skips only the signature (topic still enforced)', async () => {
     const { store, post, certificateLoader } = make({ verifySignature: false });
     const rec = await tracked(store, 'ses-10');
@@ -293,7 +314,10 @@ describe('SES notification controller', () => {
       const { post } = make({ autoConfirmSubscription: true, fetch });
       const msg = subscriptionConfirmation();
       await post(msg);
-      expect(fetch).toHaveBeenCalledWith(msg.SubscribeURL);
+      expect(fetch).toHaveBeenCalledWith(msg.SubscribeURL, {
+        redirect: 'error',
+        signal: expect.any(AbortSignal),
+      });
     });
 
     it('accepts a v1-signed confirmation', async () => {
@@ -333,6 +357,39 @@ describe('SES notification controller', () => {
       });
       await expect(post(msg)).rejects.toBeInstanceOf(ForbiddenException);
       expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('answers 502 when the confirm GET fails, so SNS redelivers it', async () => {
+      const fetch = vi
+        .fn<(url: string, init?: RequestInit) => Promise<{ ok: boolean; status: number }>>()
+        .mockResolvedValueOnce({ ok: false, status: 500 })
+        .mockRejectedValueOnce(new Error('The operation was aborted due to timeout'))
+        .mockResolvedValue({ ok: true, status: 200 });
+      const { post } = make({ autoConfirmSubscription: true, fetch });
+      const msg = subscriptionConfirmation();
+      await expect(post(msg)).rejects.toBeInstanceOf(BadGatewayException);
+      await expect(post(msg)).rejects.toBeInstanceOf(BadGatewayException);
+      await expect(post(msg)).resolves.toBeUndefined();
+      expect(fetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('times out a hung confirm GET (default fetch, confirmTimeoutMs)', async () => {
+      const server = createServer(() => {
+        /* never answers */
+      });
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const { port } = server.address() as AddressInfo;
+      // The real global fetch with the init the controller passes, pointed at a local server.
+      const fetch = vi.fn((_url: string, init?: RequestInit) =>
+        globalThis.fetch(`http://127.0.0.1:${port}/`, init),
+      );
+      try {
+        const { post } = make({ autoConfirmSubscription: true, fetch, confirmTimeoutMs: 100 });
+        await expect(post(subscriptionConfirmation())).rejects.toBeInstanceOf(BadGatewayException);
+      } finally {
+        server.closeAllConnections();
+        await new Promise((resolve) => server.close(resolve));
+      }
     });
 
     it('does not GET a signed SubscribeURL that is not on an SNS host', async () => {

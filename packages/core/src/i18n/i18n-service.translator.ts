@@ -6,8 +6,9 @@ import { NOTIFICATION_TRANSLATOR } from '../tokens';
 /**
  * Adapts `@nestjs/i18n` to the notifications {@link Translator}: `localization.t(key, params)`
  * becomes `i18n.translate(key, { locale, args: params })`, and every channel delivery runs inside
- * `I18nContext.run(locale)`, so `t()` and mail classes rendered by `@nestjs/mail` see the
- * recipient's locale. Catalogs, plurals, fallbacks and formatting are `@nestjs/i18n`'s
+ * `I18nContext.run(locale)`, so `t()` (and anything else reading the ambient `I18nContext` during
+ * the delivery) sees the recipient's locale. Mail classes rendered by `@nestjs/mail` get it a
+ * different way: `MailChannel` passes `locale` to `mailer.send()` explicitly. Catalogs, plurals, fallbacks and formatting are `@nestjs/i18n`'s
  * (https://docs.nestjs.com/application/i18n); the recipient's locale still comes from the
  * notifications `LocaleResolver`.
  */

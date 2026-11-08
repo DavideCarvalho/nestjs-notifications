@@ -149,12 +149,23 @@ else `MailModule`'s.
 ## Attachments from a URL
 
 `@nestjs/mail` reads an attachment `path` from the local disk only. For a file at a URL, give `url`:
-the channel downloads it (no redirects followed) before sending. Use URLs your app chooses, never
-ones built from user input.
+the channel downloads it before sending. Prefer URLs your app chooses over ones built from user input.
 
 ```ts
 new MailMessage().subject('Your report').attach({ filename: 'report.pdf', url: report.downloadUrl });
 ```
+
+The download is guarded by default, and a refused one fails the delivery:
+
+| Option (`MailChannelModule.forRoot({ attachments })`) | Default | |
+| --- | --- | --- |
+| `allowHttp` | `false` | Only `https:` URLs. |
+| `allowPrivateHosts` | `false` | Refuses hosts that are or resolve to loopback, private, link-local (cloud metadata), CGNAT or other non-public addresses. The resolved address is checked when the connection is made, so DNS rebinding can't slip one in. |
+| `timeoutMs` | `30000` | The whole download, headers and body. |
+| `maxBytes` | `26214400` (25 MiB) | Checked against `Content-Length` and while streaming. |
+
+Redirects are never followed. For an internal file server, set
+`attachments: { allowPrivateHosts: true }` (and `allowHttp: true` if it has no TLS).
 
 ## Retries
 

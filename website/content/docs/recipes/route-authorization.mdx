@@ -107,3 +107,7 @@ createNotificationsController({ resolveRef, decorators: [UseGuards(AuthGuard)] }
 DatabaseChannelModule.forRoot({ decorators: [UseGuards(AuthGuard)] });
 DatabaseChannelModule.forRoot({ routes: false });
 ```
+
+The old options are refused, not ignored: passing `guards` to any factory or in `controller`, or a
+boolean `controller`, throws at registration with a pointer to the replacement, so a JavaScript
+caller (no type checker) never ends up with an inbox that mounts again, or mounts without its guards.

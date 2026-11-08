@@ -124,12 +124,15 @@ What happens to each request, following [AWS's verification algorithm](https://d
 A message that fails any check gets `403` and nothing is recorded. Verified notifications are
 deduplicated by `MessageId` (SNS delivers at least once) in a bounded in-memory store per
 controller; pass `messageIdStore` (`{ has, add }`) to share it across instances, or `false` to turn
-it off.
+it off. A `MessageId` is remembered for `messageIdTtlMs` (default 24 hours, and never less than
+`maxMessageAgeMs`), independently of the freshness check.
 
 **Subscription confirmation.** When you subscribe the endpoint, SNS first sends a
 `SubscriptionConfirmation`. Once verified (same checks, so only your topics), it is passed to
 `onSubscriptionConfirmation(message)` if you set it, and its `SubscribeURL` is GET-ed when
-`autoConfirmSubscription: true` (only if that URL is an `https://` SNS host). With neither, confirm
+`autoConfirmSubscription: true` (only if that URL is an `https://` SNS host; redirects are refused
+and the GET times out after `confirmTimeoutMs`, default 5 s). If that GET fails, the endpoint
+answers `502`, so SNS redelivers the confirmation and it is tried again. With neither, confirm
 the subscription in the AWS console or with `aws sns confirm-subscription` using the `Token`.
 
 <Callout type="info">

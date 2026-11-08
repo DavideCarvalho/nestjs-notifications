@@ -117,6 +117,27 @@ channels run.
   `idempotencyKey` on.
 </Callout>
 
+### Delivery is at-least-once
+
+The records narrow redeliveries; they don't make a channel exactly-once. A channel runs again
+(and emits `notification.sent` again) when:
+
+- **two deliveries of the same message run concurrently**: a relay worker loses its lease while
+  still delivering and another picks the message up, or two relays claim it. Each checks the record
+  before sending and writes it after, so both can find it missing and both send. Nothing serializes
+  them per message; the outbox's `key` option only orders messages that share a key.
+- **the record can't be written after a successful send** (the process dies, or the inbox store
+  throws). Under `failFast` a failed write is thrown, and the outbox retry sends the channel again,
+  even though it delivered: the `notification.sent` event (and the delivery-tracking `sent` row)
+  for the first send was already emitted, so listeners see it twice. Under `continueOnError` the
+  write failure is logged and the next redelivery, if any, sends it again.
+
+So treat every channel as at-least-once and make the receiving side idempotent: mail passes the
+`idempotencyKey` to `@nestjs/mail` (same `Message-ID`, which providers and clients dedupe), the
+webhook channel sends it as `webhook-id` (receivers verifying Standard Webhooks dedupe on it, and a
+subscription delivery is recorded in the inbox inside the dispatch transaction), and `notification.sent`
+listeners should tolerate a repeat for the same message id.
+
 The records are inbox rows like the outbox's own, kept until you prune them: the
 `OutboxInbox.prune(olderThan)` the NestJS docs recommend removes them too.
 

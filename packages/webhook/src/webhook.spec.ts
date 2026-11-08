@@ -25,6 +25,7 @@ import {
   Webhook,
   WebhookChannel,
   type WebhookChannelOptions,
+  webhookId,
 } from './webhook.channel';
 import { WebhookChannelModule } from './webhook.module';
 
@@ -171,6 +172,48 @@ describe('WebhookChannel (direct URL)', () => {
         new OrderPaid() as Notification,
       ),
     ).rejects.toBeInstanceOf(WebhookDestinationBlockedError);
+  });
+
+  it('reuses one HttpWebhookTransport per tenant when the resolver returns fresh objects', async () => {
+    const lookup = async () => [{ address: '10.0.0.1', family: 4 as const }];
+    const ch = channel({ url: URL }, () => ({
+      url: 'https://hooks.acme.test/h',
+      delivery: { lookup, allowedAddresses: [] },
+    }));
+    const transports = (ch as unknown as { transports: Map<string, { transport: unknown }> })
+      .transports;
+    const send = (tenant: string) =>
+      expect(
+        ch.send(new Customer(), new OrderPaid() as Notification, { tenant }),
+      ).rejects.toBeInstanceOf(WebhookDestinationBlockedError);
+
+    await send('acme');
+    const first = transports.get('acme')?.transport;
+    expect(first).toBeDefined();
+    await send('acme');
+    expect(transports.get('acme')?.transport).toBe(first);
+    await send('globex');
+    expect(transports.size).toBe(2);
+    expect(transports.get('globex')?.transport).not.toBe(first);
+  });
+
+  it('rebuilds a tenant transport when its delivery options change', async () => {
+    let allowHttp = false;
+    const ch = channel({ url: URL }, () => ({
+      url: 'https://127.0.0.1/h',
+      delivery: { allowHttp },
+    }));
+    const transports = (ch as unknown as { transports: Map<string, { transport: unknown }> })
+      .transports;
+    const send = () =>
+      expect(
+        ch.send(new Customer(), new OrderPaid() as Notification, { tenant: 'acme' }),
+      ).rejects.toBeInstanceOf(WebhookDestinationBlockedError);
+    await send();
+    const first = transports.get('acme')?.transport;
+    allowHttp = true;
+    await send();
+    expect(transports.get('acme')?.transport).not.toBe(first);
   });
 
   it('throws a clear error when no target url can be resolved', async () => {
@@ -348,5 +391,30 @@ describe('WebhookChannel (subscriptions via @nestjs/webhooks)', () => {
     expect(store.stats(Date.now()).pending).toBe(0);
     expect(store.listDeadLetters({})).toEqual([]);
     await moduleRef.close();
+  });
+});
+
+describe('webhookId', () => {
+  it('keeps a short, header-safe key readable', () => {
+    expect(webhookId('outbox-msg-5')).toBe('msg_outbox-msg-5');
+    expect(webhookId('0b6c7d3e-1f2a-4b5c-8d9e-0f1a2b3c4d5e')).toBe(
+      'msg_0b6c7d3e-1f2a-4b5c-8d9e-0f1a2b3c4d5e',
+    );
+  });
+
+  it('maps distinct keys to distinct ids (no `_` substitution, no truncation)', () => {
+    const keys = ['a.b', 'a/b', 'a_b', 'a b', `${'x'.repeat(130)}1`, `${'x'.repeat(130)}2`];
+    const ids = keys.map(webhookId);
+    expect(new Set(ids).size).toBe(keys.length);
+    for (const id of ids) {
+      expect(id).toMatch(/^[A-Za-z0-9_-]{1,128}$/);
+    }
+  });
+
+  it('hashes a key that is too long or unsafe, deterministically', () => {
+    expect(webhookId('a.b')).toMatch(/^msgh_[0-9a-f]{64}$/);
+    expect(webhookId('a.b')).toBe(webhookId('a.b'));
+    expect(webhookId('x'.repeat(125))).toMatch(/^msgh_/);
+    expect(webhookId('x'.repeat(124))).toBe(`msg_${'x'.repeat(124)}`);
   });
 });

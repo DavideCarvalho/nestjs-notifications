@@ -17,6 +17,7 @@ import {
   type Mailable,
   Mailer,
 } from '@nestjs/mail';
+import { type AttachmentDownloadOptions, downloadAttachment } from './attachment-download';
 import { type MailAttachment, MailMessage } from './mail-message';
 import { runInMailScope } from './mail-scope';
 import type { MailRenderer } from './renderer';
@@ -33,6 +34,11 @@ export interface MailChannelOptions {
    * `errorPolicy: 'failFast'`), so attempts don't multiply.
    */
   retry?: number | false | MailRetryOptions | undefined;
+  /**
+   * How `url` attachments are downloaded. Defaults: `https:` only, public addresses only (no
+   * loopback/private/link-local hosts), a 30 s timeout and a 25 MiB size cap.
+   */
+  attachments?: AttachmentDownloadOptions | undefined;
 }
 
 /**
@@ -99,7 +105,7 @@ export class MailChannel extends BaseChannel {
 
     if (payload instanceof MailMessage) {
       const rendered = await this.renderer.render(payload);
-      const attachments = await resolveAttachments(payload.attachments);
+      const attachments = await resolveAttachments(payload.attachments, this.options.attachments);
       return runInMailScope(scope, () =>
         this.mailer.send({
           to,
@@ -117,7 +123,10 @@ export class MailChannel extends BaseChannel {
     }
 
     if (isMailableMail(payload)) {
-      const attachments = await resolveAttachments(payload.attachments ?? []);
+      const attachments = await resolveAttachments(
+        payload.attachments ?? [],
+        this.options.attachments,
+      );
       return runInMailScope(scope, () =>
         this.mailer.send(payload.mail, {
           to,
@@ -163,22 +172,16 @@ function recipientOf(route: unknown): MailAddressInput | MailAddressInput[] {
 }
 
 /** `@nestjs/mail` reads `path` from disk only: download the `url` attachments here. */
-async function resolveAttachments(attachments: MailAttachment[]): Promise<MailAttachmentInput[]> {
+async function resolveAttachments(
+  attachments: MailAttachment[],
+  options: AttachmentDownloadOptions | undefined,
+): Promise<MailAttachmentInput[]> {
   return Promise.all(
     attachments.map(async ({ url, ...rest }) => {
       if (url === undefined) return rest;
-      if (!/^https?:\/\//i.test(url)) {
-        throw new Error(`Mail attachment url must be http(s): ${url}`);
-      }
-      const response = await fetch(url, { redirect: 'error' });
-      if (!response.ok) {
-        throw new Error(
-          `Downloading the mail attachment ${url} failed with status ${response.status}.`,
-        );
-      }
-      const content = Buffer.from(await response.arrayBuffer());
-      const contentType = rest.contentType ?? response.headers.get('content-type') ?? undefined;
-      return { ...rest, content, ...(contentType ? { contentType } : {}) };
+      const downloaded = await downloadAttachment(url, options);
+      const contentType = rest.contentType ?? downloaded.contentType;
+      return { ...rest, content: downloaded.content, ...(contentType ? { contentType } : {}) };
     }),
   );
 }

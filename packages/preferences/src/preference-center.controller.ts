@@ -1,6 +1,6 @@
 import type { NotifiableRef } from '@dudousxd/nestjs-notifications-core';
 import { Body, Controller, Delete, Get, Param, Put, Req, type Type } from '@nestjs/common';
-import { finishController } from './controller-decorators';
+import { finishController, rejectRemovedGuards } from './controller-decorators';
 import type {
   CategoryDefinition,
   DigestFrequency,
@@ -64,6 +64,7 @@ interface SetDigestBody {
 export function createPreferenceCenterController(
   options: PreferenceCenterControllerOptions,
 ): Type<unknown> {
+  rejectRemovedGuards(options, 'createPreferenceCenterController()');
   @Controller(options.path ?? 'preferences')
   class PreferenceCenterController {
     constructor(private readonly preferences: PreferenceCenterService) {}

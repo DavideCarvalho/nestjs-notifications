@@ -2,8 +2,10 @@ import type { MailAttachmentInput } from '@nestjs/mail';
 
 /**
  * A file attached to an outgoing email: `@nestjs/mail`'s attachment (`content`, or a local
- * `path`), plus `url` for a file the channel downloads at send time (an `https:` or `http:` URL
- * your app chose: never one built from user input).
+ * `path`), plus `url` for a file the channel downloads at send time. By default the URL must be
+ * `https:` and resolve to a public address, the download times out after 30 s and is capped at
+ * 25 MiB, and redirects are refused; see `MailChannelModule.forRoot({ attachments })`. Prefer URLs
+ * your app chose over ones built from user input.
  */
 export type MailAttachment = MailAttachmentInput & {
   /** Download the content from this URL when the mail is sent. Not with `content` or `path`. */

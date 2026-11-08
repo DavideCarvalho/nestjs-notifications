@@ -26,6 +26,13 @@ const MAX_INBOX_KEY_LENGTH = 255;
  * tracking), not thrown: the message counts as handled and the failed channel is not retried. With
  * `failFast` the first failure is thrown, the outbox retries the message, and the retry runs only
  * the channels not recorded yet: the failed one and those after it.
+ *
+ * Delivery is at-least-once. The records are check-then-act, not a lock: two concurrent
+ * deliveries of one message (a relay that lost its lease while still delivering, parallel relay
+ * workers) can both find a channel unrecorded and both send it, and a send whose record then
+ * fails to write runs again on the next redelivery (under `failFast`, immediately) after its
+ * `notification.sent` event was emitted. Channels rely on the `idempotencyKey` (mail
+ * `Message-ID`, webhook `webhook-id`) for the receiving side to dedupe.
  */
 @Injectable()
 export class OutboxNotificationHandler {
