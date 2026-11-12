@@ -47,6 +47,7 @@ export function tableSql(em: EntityManager, table: string, schema: string | unde
 
 /** Creates `schema` (Postgres) or the database of that name (MySQL) when it is missing. */
 export async function createSchemaIfMissing(em: EntityManager, schema: string): Promise<void> {
+  assertSchemaName(schema);
   assertSchemaSupported(em, schema);
   const mysql = dialectOf(em) === 'mysql';
   const name = em.getPlatform().quoteIdentifier(schema);
@@ -84,6 +85,8 @@ export async function safeStatementsFor(
   schema: string | undefined,
 ): Promise<string[]> {
   const platform = em.getPlatform();
+  // Validated before it reaches any SQL (the MySQL catalog rewrite interpolates it).
+  if (schema !== undefined) assertSchemaName(schema);
   if (schema === undefined) {
     const generator = platform.getSchemaGenerator(em.getDriver(), em);
     const sql = await generator.getUpdateSchemaSQL({ safe: true, wrap: false });

@@ -43,6 +43,21 @@ describe('schema option (MikroORM)', () => {
     }
   });
 
+  it('the migration helpers validate the name before any SQL', async () => {
+    const { notificationsSchemaSql } = await import('./schema');
+    const { pendingDigestSchemaSql } = await import('./pending-digest.schema');
+    const pg = fakeEm('PostgreSqlPlatform');
+    await expect(notificationsSchemaSql(pg, { schema: 'notif-lib' })).rejects.toThrow(
+      /`schema` must match/,
+    );
+    await expect(pendingDigestSchemaSql(pg, { schema: "x';--" })).rejects.toThrow(
+      /`schema` must match/,
+    );
+    await expect(ensureNotificationsTable(pg, { schema: 'notif-lib' })).rejects.toThrow(
+      /`schema` must match/,
+    );
+  });
+
   it('SQLite with a schema fails at construction and at ensure', async () => {
     const sqlite = fakeEm('SqlitePlatform');
     expect(() => new MikroOrmNotificationStore(sqlite, { schema: 'notif_lib' })).toThrow(
