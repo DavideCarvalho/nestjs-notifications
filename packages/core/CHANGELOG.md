@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-core
 
+## 0.12.0
+
+### Minor Changes
+
+- [#128](https://github.com/DavideCarvalho/nestjs-notifications/pull/128) [`b25635f`](https://github.com/DavideCarvalho/nestjs-notifications/commit/b25635f3aff2aca78a9930b5ddd8f4d8fc247779) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - The database channel and inbox can follow the request's tenant from `@dudousxd/nestjs-context`. A new `tenancy` option on `DatabaseChannelModule.forRoot()`/`forFeature()` (`'inherit' | false | { enabled, kinds, nullRows }`, default `'inherit'`) follows the context's tenancy switch, which is off by default. With it on, `NotificationsQueryService` and the inbox controller show a request only its own tenant's rows (rows with no tenant only to requests with no tenant, unless `nullRows: 'shared'`), a row of another tenant answers 404, and sends with no explicit tenant are stored with the request's tenant. An explicit `forTenant(id)` still wins. Core's context accessor mirror gains the optional `tenant()`, `tenancy()` and `tenantFilter()` methods, and the captured context records the tenant's kind.
+
 ## 0.11.1
 
 ### Patch Changes
