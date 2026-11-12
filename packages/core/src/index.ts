@@ -20,7 +20,6 @@ export {
   NotificationService,
   type ScopedNotifier,
   type SendScope,
-  type TenantScopedNotifier,
 } from './notification.service';
 export { ChannelRegistry } from './channel-registry';
 export { ChannelRunner } from './channel-runner';

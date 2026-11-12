@@ -6,7 +6,7 @@
   "author": "Davide Carvalho",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
+    "url": "git+https://github.com/DavideCarvalho/nestjs-notifications.git",
     "directory": "packages/telegram"
   },
   "homepage": "https://davidecarvalho.github.io/aviary/docs/notifications",
@@ -51,5 +51,8 @@
         "default": "./dist/index.cjs"
       }
     }
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

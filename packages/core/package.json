@@ -6,7 +6,7 @@
   "author": "Davide Carvalho",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DavideCarvalho/nestjs-notifications.git",
+    "url": "git+https://github.com/DavideCarvalho/nestjs-notifications.git",
     "directory": "packages/core"
   },
   "homepage": "https://davidecarvalho.github.io/aviary/docs/notifications",
@@ -92,5 +92,8 @@
     "typescript": "5.9.3",
     "@nestjs/outbox": "0.1.4",
     "@nestjs/i18n": "0.0.3"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }
