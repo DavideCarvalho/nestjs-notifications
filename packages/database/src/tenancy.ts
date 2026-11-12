@@ -76,8 +76,6 @@ export function readTenancy(option: TenancyOption = 'inherit', accessor?: unknow
  */
 export interface InboxScope {
   tenant: string | undefined;
-  /** The tenant a cross-device read event is published under (the SSE stream key's tenant). */
-  channel: string | undefined;
   visible?: ((rowTenantId: string | null) => boolean) | undefined;
   fromContext: boolean;
 }
@@ -90,25 +88,23 @@ export interface InboxScope {
  */
 export function inboxScope(explicit: string | undefined, tenancy: Tenancy): InboxScope {
   if (explicit !== undefined || !tenancy.enabled) {
-    return { tenant: explicit, channel: explicit, fromContext: false };
+    return { tenant: explicit, fromContext: false };
   }
   const filter = tenancy.filter();
   if (filter.mode === 'system' || filter.mode === 'all') {
-    return { tenant: undefined, channel: undefined, fromContext: false };
+    return { tenant: undefined, fromContext: false };
   }
   if (filter.mode === 'tenant') {
     const id = filter.tenant.id;
-    if (tenancy.nullRows !== 'shared') return { tenant: id, channel: id, fromContext: true };
+    if (tenancy.nullRows !== 'shared') return { tenant: id, fromContext: true };
     return {
       tenant: undefined,
-      channel: id,
       visible: (row) => row === null || row === undefined || row === id,
       fromContext: true,
     };
   }
   return {
     tenant: undefined,
-    channel: undefined,
     visible: (row) => row === null || row === undefined,
     fromContext: true,
   };

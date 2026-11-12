@@ -198,7 +198,7 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
       await this.assertOwned(id, owner, 'markAsRead');
       await this.store.markAsRead(id);
     }
-    this.publishRead(ref, id, scope.channel);
+    this.publishRead(ref, id, explicitTenant);
   }
 
   /** Delete, enforcing ownership when a `target` is given. See {@link markAsReadScoped}. */
@@ -402,8 +402,9 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
     } else {
       await this.store.markAllAsRead(ref.type, String(ref.id), scope.tenant);
     }
-    // notificationId: null signals "all read" to the other devices.
-    this.publishRead(ref, null, scope.channel);
+    // notificationId: null signals "all read" to the other devices. Published under the explicit
+    // tenant only, the key the SSE channel delivers under.
+    this.publishRead(ref, null, explicitTenant);
   }
 
   /** Broadcast a cross-device read event (no-op when no publisher is bound). Errors are swallowed. */
