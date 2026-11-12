@@ -47,7 +47,7 @@ export class AppModule {}
 | `store` | `Type<NotificationStore>` | `InMemoryStore` | Store class to instantiate. |
 | `imports` | `DynamicModule['imports']` | `[]` | Extra modules to import (e.g. the ORM module the store depends on). |
 | `global` | `boolean` | `true` | Register globally so the channel is discoverable app-wide. |
-| `tenancy` | `'inherit' \| false \| { enabled?, kinds?, nullRows? }` | `'inherit'` | Scope the inbox and stamp rows by the request's tenant from `@dudousxd/nestjs-context`. See [Multi-tenancy](/docs/concepts/multi-tenancy#follow-the-requests-tenant-automatically). |
+| `tenancy` | `'inherit' \| false \| { enabled?, kinds?, family?, required?, nullRows? }` | `'inherit'` | Scope the inbox and stamp rows by the request's tenant from `@dudousxd/nestjs-context`. See [Multi-tenancy](/docs/concepts/multi-tenancy#follow-the-requests-tenant-automatically). |
 
 There's also `DatabaseChannelModule.forFeature()`, which registers only the channel and reuses a
 `NOTIFICATION_STORE` token provided elsewhere — that's how the ORM adapter modules below wire in.

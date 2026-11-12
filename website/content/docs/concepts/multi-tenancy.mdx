@@ -146,10 +146,42 @@ DatabaseChannelModule.forRoot({
 | --- | --- |
 | `'inherit'` (default) | Follow `ContextModule`'s `tenancy.enabled`, which is off by default. |
 | `false` | Never scope the inbox or stamp rows from the context. |
-| `{ enabled, kinds, nullRows }` | `enabled` is `'inherit'` or a boolean; `kinds` replaces the context's allow-list; `nullRows` is `'tenantless'` (default) or `'shared'`. |
+| `{ enabled, kinds, family, required, nullRows }` | `enabled` is `'inherit'` or a boolean; `kinds` replaces the context's allow-list; `family` scopes by a secondary tenant; `required` overrides the context's `tenancy.required`; `nullRows` is `'tenantless'` (default) or `'shared'`. |
 
 `DatabaseChannelModule.forFeature()` takes the same option. Without `@dudousxd/nestjs-context`, or
 with tenancy off, nothing changes.
+
+### Nested tenants
+
+When the context carries a tenant chain (a clinic with units, say), `kinds` picks the level the
+inbox is scoped by: the most specific level of the chain whose kind is listed. A request running in
+a unit reads and stamps the clinic's rows with:
+
+```ts title="app.module.ts"
+ContextModule.forRoot({ tenancy: { enabled: true } });
+// The guard sets the active unit with its clinic above it:
+// Context.setTenant({ id: unitId, kind: 'unit', chain: [{ id: clinicId, kind: 'clinic' }] })
+
+DatabaseChannelModule.forRoot({ tenancy: { kinds: ['clinic'] } });
+```
+
+Without `kinds`, the inbox follows the active tenant (the unit). To scope by a secondary tenant the
+context carries next to the primary one, set `family`, e.g. `tenancy: { family: 'patient' }`.
+
+A queued send keeps the whole chain it was sent from, so the worker stamps the same level.
+
+### Require a tenant
+
+With `tenancy.required` on in `ContextModule`, an inbox read or mutation from a request with no
+tenant answers `403` (`E_TENANT_REQUIRED`) instead of showing the tenantless rows. Set `required` in
+the module's `tenancy` option to override it for the inbox alone (`required: true` turns it on for
+the inbox only, `required: false` turns it off).
+
+Sends never require a tenant: a sender, queue or worker with no tenant stores the row with no
+tenant, as before. `forTenant(id)` and code outside a request (a worker, a cron) are not affected.
+
+Nested tenants, families and `required` need `@dudousxd/nestjs-context` 2.1 or later. An older
+context ignores them and scopes by the flat tenant.
 
 <Callout type="info">
   Rows with no tenant are filtered in memory rather than in the store query, so with

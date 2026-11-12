@@ -3,8 +3,15 @@ import {
   CONTEXT_ACCESSOR,
   type Notifiable,
   type NotifiableRef,
+  captureContext,
 } from '@dudousxd/nestjs-notifications-core';
-import { Global, type INestApplication, Module, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Global,
+  type INestApplication,
+  Module,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DatabaseChannel } from './database.channel';
@@ -18,27 +25,56 @@ import { NOTIFICATION_STORE } from './tokens';
 
 /**
  * A stand-in for `@dudousxd/nestjs-context`'s accessor with the same tenancy semantics: no store is
- * `system`, `allTenants` is `all`, a tenant whose kind is outside `kinds` is `tenantless`.
+ * `system`, `allTenants` is `all`; with `kinds`, the chain is walked from the most specific level up
+ * and the first listed kind wins; with no match, `required` throws a 403, else `tenantless`.
  */
-type Ref = { id: string; kind: string; source: string };
-type Store = { tenant?: Ref; all?: boolean };
+type Level = { id: string; kind: string };
+type Ref = Level & { source: string; chain?: Level[]; family?: string };
+type Store = { tenant?: Ref; families?: Ref[]; all?: boolean };
 const als = new AsyncLocalStorage<Store>();
-const ctx = { enabled: true, kinds: undefined as string[] | undefined };
+const ctx = {
+  enabled: true,
+  kinds: undefined as string[] | undefined,
+  required: false,
+};
+class TenantRequiredError extends ForbiddenException {}
 const accessor = {
   traceId: () => undefined,
   tenantId: () => als.getStore()?.tenant?.id,
   userRef: () => undefined,
   get: () => als.getStore(),
   tenant: () => als.getStore()?.tenant,
-  tenancy: () => ({ enabled: ctx.enabled, ...(ctx.kinds ? { kinds: ctx.kinds } : {}) }),
-  tenantFilter(options?: { kinds?: string[] }) {
+  tenants: () => {
+    const store = als.getStore();
+    return [...(store?.tenant ? [store.tenant] : []), ...(store?.families ?? [])];
+  },
+  tenancy: () => ({
+    enabled: ctx.enabled,
+    required: ctx.required,
+    ...(ctx.kinds ? { kinds: ctx.kinds } : {}),
+  }),
+  tenantFilter(options?: { kinds?: string[]; family?: string; required?: boolean }) {
     const store = als.getStore();
     if (!store) return { mode: 'system' as const };
     if (store.all) return { mode: 'all' as const };
     const kinds = options?.kinds ?? ctx.kinds;
-    if (store.tenant && (!kinds || kinds.includes(store.tenant.kind))) {
-      return { mode: 'tenant' as const, tenant: store.tenant };
+    const all = accessor.tenants();
+    const candidates =
+      options?.family !== undefined
+        ? all.filter((t) => t.family === options.family)
+        : kinds === undefined
+          ? all.slice(0, store.tenant ? 1 : 0)
+          : all;
+    for (const t of candidates) {
+      const chain = t.chain ?? [t];
+      for (let i = chain.length - 1; i >= 0; i--) {
+        const level = chain[i] as Level;
+        if (kinds && !kinds.includes(level.kind)) continue;
+        const tenant = { ...level, source: t.source };
+        return { mode: 'tenant' as const, tenant, chain: chain.slice(0, i + 1) };
+      }
     }
+    if (options?.required ?? (ctx.enabled && ctx.required)) throw new TenantRequiredError();
     return { mode: 'tenantless' as const };
   },
 };
@@ -46,6 +82,18 @@ const asTenant = <T>(id: string, fn: () => T, kind = 'organization') =>
   als.run({ tenant: { id, kind, source: 'app' } }, fn);
 const tenantless = <T>(fn: () => T) => als.run({}, fn);
 const allTenants = <T>(fn: () => T) => als.run({ all: true }, fn);
+/** A clinic → unit chain: the unit is the active (primary) tenant. */
+const unitOfClinic = (clinic: string, unit: string): Ref => ({
+  id: unit,
+  kind: 'unit',
+  source: 'app',
+  chain: [
+    { id: clinic, kind: 'clinic' },
+    { id: unit, kind: 'unit' },
+  ],
+});
+const inUnit = <T>(clinic: string, unit: string, fn: () => T, families?: Ref[]) =>
+  als.run({ tenant: unitOfClinic(clinic, unit), ...(families ? { families } : {}) }, fn);
 
 const ref: NotifiableRef = { type: 'User', id: '42' };
 
@@ -64,6 +112,7 @@ function service(store: NotificationStore, tenancy?: TenancyOption, acc: unknown
 beforeEach(() => {
   ctx.enabled = true;
   ctx.kinds = undefined;
+  ctx.required = false;
   NotificationsQueryService.resetOwnershipWarning();
 });
 
@@ -249,6 +298,156 @@ describe('database channel: stamping the tenant', () => {
   });
 });
 
+describe('nested tenants, families and required (context >= 2.1)', () => {
+  const user: Notifiable = { toNotifiableRef: () => ref };
+  class Hello {
+    toArray() {
+      return {};
+    }
+  }
+  const stamp = async (
+    channel: DatabaseChannel,
+    context?: Parameters<DatabaseChannel['send']>[2],
+  ) => ((await channel.send(user, new Hello(), context)) as StoredNotification).tenantId;
+
+  async function seedChain(store: InMemoryStore) {
+    const row = (tenantId: string | null, type: string) =>
+      store.save({ type, notifiableType: 'User', notifiableId: '42', data: {}, tenantId });
+    await row('clinic_1', 'C1');
+    await row('clinic_2', 'C2');
+    await row('unit_1', 'U1');
+    await row('acct_1', 'P1');
+    await row(null, 'N');
+  }
+
+  it('kinds picks the level of the chain: a unit request reads its clinic’s inbox', async () => {
+    const store = new InMemoryStore();
+    await seedChain(store);
+    await inUnit('clinic_1', 'unit_1', async () => {
+      expect(types(await service(store, { kinds: ['clinic'] }).all(ref))).toEqual(['C1']);
+      expect(types(await service(store).all(ref))).toEqual(['U1']);
+      expect(types(await service(store, { kinds: ['unit', 'clinic'] }).all(ref))).toEqual(['U1']);
+    });
+    ctx.kinds = ['clinic'];
+    await inUnit('clinic_1', 'unit_1', async () => {
+      expect(types(await service(store).all(ref))).toEqual(['C1']);
+    });
+  });
+
+  it('family scopes by a secondary tenant', async () => {
+    const store = new InMemoryStore();
+    await seedChain(store);
+    const account: Ref = { id: 'acct_1', kind: 'account', source: 'app', family: 'patient' };
+    await inUnit(
+      'clinic_1',
+      'unit_1',
+      async () => {
+        expect(types(await service(store, { family: 'patient' }).all(ref))).toEqual(['P1']);
+      },
+      [account],
+    );
+  });
+
+  it('the database channel stamps the matched level, family included', async () => {
+    const clinic = new DatabaseChannel(new InMemoryStore(), accessor, { kinds: ['clinic'] });
+    expect(await inUnit('clinic_1', 'unit_1', () => stamp(clinic))).toBe('clinic_1');
+    const account: Ref = { id: 'acct_1', kind: 'account', source: 'app', family: 'patient' };
+    const patient = new DatabaseChannel(new InMemoryStore(), accessor, { family: 'patient' });
+    expect(await inUnit('clinic_1', 'unit_1', () => stamp(patient), [account])).toBe('acct_1');
+  });
+
+  it('a worker stamps the matched level of the chain captured at send() time', async () => {
+    const account: Ref = { id: 'acct_1', kind: 'account', source: 'app', family: 'patient' };
+    const captured = inUnit('clinic_1', 'unit_1', () => captureContext(accessor), [account]);
+    expect(captured?.tenants).toEqual([
+      {
+        id: 'unit_1',
+        kind: 'unit',
+        chain: [
+          { id: 'clinic_1', kind: 'clinic' },
+          { id: 'unit_1', kind: 'unit' },
+        ],
+      },
+      { id: 'acct_1', kind: 'account', family: 'patient' },
+    ]);
+    const channel = (tenancy: TenancyOption) =>
+      new DatabaseChannel(new InMemoryStore(), accessor, tenancy);
+    // No live context here: the stamp comes from the capture.
+    expect(await stamp(channel({ kinds: ['clinic'] }), { captured })).toBe('clinic_1');
+    expect(await stamp(channel('inherit'), { captured })).toBe('unit_1');
+    expect(await stamp(channel({ family: 'patient' }), { captured })).toBe('acct_1');
+    expect(await stamp(channel({ kinds: ['region'] }), { captured })).toBeNull();
+    ctx.kinds = ['clinic'];
+    expect(await stamp(channel('inherit'), { captured })).toBe('clinic_1');
+  });
+
+  it('a flat tenant captures nothing new', () => {
+    expect(asTenant('org_1', () => captureContext(accessor))).toEqual({
+      tenantId: 'org_1',
+      tenantKind: 'organization',
+    });
+  });
+
+  it('required: an inbox read with no tenant is a 403, a send is not', async () => {
+    const store = new InMemoryStore();
+    await seedChain(store);
+    ctx.required = true;
+    await tenantless(async () => {
+      await expect(service(store).all(ref)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(service(store).unreadCount(ref)).rejects.toBeInstanceOf(ForbiddenException);
+      // The lib can opt out, and an explicit tenant needs no context tenant.
+      expect(types(await service(store, { required: false }).all(ref))).toEqual(['N']);
+      expect(types(await service(store).forTenant('clinic_2').all(ref))).toEqual(['C2']);
+      // Senders never fail for a missing tenant.
+      const channel = new DatabaseChannel(new InMemoryStore(), accessor);
+      expect(await stamp(channel)).toBeNull();
+      const strict = new DatabaseChannel(new InMemoryStore(), accessor, { required: true });
+      expect(await stamp(strict)).toBeNull();
+    });
+    // No live context (a worker, a cron) is `system`: never required.
+    expect(types(await service(store).all(ref))).toHaveLength(5);
+  });
+
+  it('required on the lib only', async () => {
+    const store = new InMemoryStore();
+    await seedChain(store);
+    await tenantless(async () => {
+      await expect(service(store, { required: true }).all(ref)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(types(await service(store).all(ref))).toEqual(['N']);
+    });
+  });
+
+  it('a published (2.0) context that ignores the new options keeps working', async () => {
+    const store = new InMemoryStore();
+    await seed(store);
+    const legacy = {
+      traceId: () => undefined,
+      tenantId: () => als.getStore()?.tenant?.id,
+      userRef: () => undefined,
+      get: () => als.getStore(),
+      tenant: () => als.getStore()?.tenant,
+      tenancy: () => ({ enabled: true }),
+      tenantFilter(options?: { kinds?: string[] }) {
+        const store = als.getStore();
+        if (!store) return { mode: 'system' as const };
+        const t = store.tenant;
+        if (t && (!options?.kinds || options.kinds.includes(t.kind))) {
+          return { mode: 'tenant' as const, tenant: t };
+        }
+        return { mode: 'tenantless' as const };
+      },
+    };
+    const svc = service(store, { required: true }, legacy);
+    await asTenant('org_2', async () => expect(types(await svc.all(ref))).toEqual(['B']));
+    await tenantless(async () => expect(types(await svc.all(ref))).toEqual(['N']));
+    const channel = new DatabaseChannel(new InMemoryStore(), legacy);
+    expect(await asTenant('org_1', () => stamp(channel))).toBe('org_1');
+    expect(captureContext(legacy)).toBeUndefined();
+  });
+});
+
 describe('inbox controller under tenancy (HTTP)', () => {
   const apps: INestApplication[] = [];
   beforeEach(() => resetInboxRegistry());
@@ -298,6 +497,12 @@ describe('inbox controller under tenancy (HTTP)', () => {
     expect((await call(`/notifications/${rows.a.id}`, 'org_1', 'DELETE')).status).toBe(200);
     const orgless = await (await call('/notifications/unread')).json();
     expect(orgless.map((r: StoredNotification) => r.type)).toEqual(['N']);
+  });
+
+  it('required: a request with no tenant gets a 403', async () => {
+    const { call } = await boot({ required: true });
+    expect((await call('/notifications')).status).toBe(403);
+    expect((await call('/notifications/unread/count', 'org_1')).status).toBe(200);
   });
 
   it('tenancy: false keeps the inbox unscoped', async () => {

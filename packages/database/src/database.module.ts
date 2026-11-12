@@ -96,6 +96,11 @@ export interface DatabaseChannelOptions {
    * on, reads and mutations see only the request tenant's rows, a row of another tenant answers
    * `404`, and sends with no explicit tenant are stamped with the context tenant. An explicit
    * `forTenant(id)` always wins. See {@link TenancyOption}.
+   *
+   * The object form takes `enabled`, `kinds` (scope by the most specific level of a nested tenant
+   * whose kind is listed, e.g. `['clinic']` for a clinic → unit chain), `family` (scope by a
+   * secondary tenant family), `required` (override the context's `tenancy.required` for inbox reads;
+   * sends never require a tenant) and `nullRows`.
    */
   tenancy?: TenancyOption;
 }
