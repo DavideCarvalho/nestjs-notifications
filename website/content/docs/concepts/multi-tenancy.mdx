@@ -154,7 +154,8 @@ with tenancy off, nothing changes.
 <Callout type="info">
   Rows with no tenant are filtered in memory rather than in the store query, so with
   `nullRows: 'shared'`, or for a request with no tenant, `paginate` and `unreadCount` load the
-  notifiable's rows before slicing or counting.
+  notifiable's rows before slicing or counting, and `markAllAsRead` loads the unread rows and marks
+  the visible ones one by one.
 </Callout>
 
 ## Per-tenant channel config
