@@ -25,7 +25,11 @@ export interface NotificationTableNames {
 /** Options for {@link createNotificationTables}. */
 export interface NotificationTablesOptions {
   tableNames?: NotificationTableNames;
-  /** Optional Postgres schema the tables live in (default: the connection's search path). */
+  /**
+   * Postgres schema the tables live in, written into every statement (`search_path` is never
+   * used); `ensureSchema()` creates it when missing. Default: unqualified (the connection's own
+   * schema). `'public'` is refused: leave it unset instead.
+   */
   schema?: string;
 }
 
@@ -36,6 +40,52 @@ function assertSafeIdentifier(value: string, what: string): void {
     throw new Error(
       `Unsafe ${what}: ${JSON.stringify(value)}. Identifiers must match ${SAFE_IDENTIFIER} (letters, digits, underscore; not starting with a digit).`,
     );
+  }
+}
+
+/** Validates the `schema` option: a safe identifier of at most 63 characters, never `public`. */
+export function assertSchemaOption(schema: string): void {
+  assertSafeIdentifier(schema, 'schema name');
+  if (schema.length > 63) {
+    throw new Error(`Schema name ${JSON.stringify(schema)} is longer than 63 characters.`);
+  }
+  if (schema === 'public') {
+    // Drizzle's `pgSchema('public')` is refused by drizzle itself: the default schema IS `pgTable`.
+    throw new Error("`schema: 'public'` is the default schema: leave `schema` unset instead.");
+  }
+}
+
+/**
+ * Runs schema DDL. A `CREATE SCHEMA IF NOT EXISTS` runs only when the schema is missing (it needs
+ * the CREATE privilege even when the schema exists), and a permission error names the grant.
+ */
+export async function runSchemaDdl(
+  execute: (statement: string) => Promise<unknown>,
+  query: (statement: string) => Promise<{ rows?: unknown[] } | unknown[]>,
+  ddl: string[],
+): Promise<void> {
+  for (const statement of ddl) {
+    const create = /^CREATE SCHEMA IF NOT EXISTS "([^"]+)"$/.exec(statement);
+    if (create) {
+      const schema = create[1] as string;
+      const result = await query(
+        `SELECT 1 FROM information_schema.schemata WHERE schema_name = '${schema}'`,
+      );
+      const rows = Array.isArray(result) ? result : (result.rows ?? []);
+      if (rows.length > 0) continue;
+      try {
+        await execute(statement);
+      } catch (error) {
+        throw Object.assign(
+          new Error(
+            `[nestjs-notifications] could not create the schema "${schema}". Create it yourself, or grant the role CREATE on the database: GRANT CREATE ON DATABASE <db> TO <role>. (${(error as Error).message})`,
+          ),
+          { cause: error },
+        );
+      }
+      continue;
+    }
+    await execute(statement);
   }
 }
 
@@ -68,7 +118,7 @@ export function createNotificationTables(opts: NotificationTablesOptions = {}) {
   };
   for (const [key, name] of Object.entries(names))
     assertSafeIdentifier(name, `table name (${key})`);
-  if (opts.schema !== undefined) assertSafeIdentifier(opts.schema, 'schema name');
+  if (opts.schema !== undefined) assertSchemaOption(opts.schema);
   // `pgSchema('public')` is rejected by drizzle — the default schema IS `pgTable`.
   const table = (
     opts.schema === undefined ? pgTable : pgSchema(opts.schema).table

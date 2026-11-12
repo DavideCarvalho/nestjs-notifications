@@ -1,6 +1,7 @@
 import { type DataSource, type QueryRunner, Table, TableColumn, TableIndex } from 'typeorm';
 import { TableUtils } from 'typeorm/schema-builder/util/TableUtils.js';
-import { NotificationEntity } from './notification.entity';
+import { notificationEntity } from './notification.entity';
+import { assertSchemaSupported, createSchemaIfMissing, quotePath } from './schema-name';
 
 export const TABLE = 'notifications';
 
@@ -12,8 +13,18 @@ export const TABLE = 'notifications';
  * Derived from the same {@link TABLE} constant `ensureNotificationsTable` targets — one name, so
  * a consumer's denylist can never drift from what this store actually owns.
  */
-export function notificationsManagedTables(): string[] {
-  return [TABLE];
+export function notificationsManagedTables(options: NotificationsSchemaOptions = {}): string[] {
+  return [options.schema !== undefined ? `${options.schema}.${TABLE}` : TABLE];
+}
+
+/** Where the notifications table lives. */
+export interface NotificationsSchemaOptions {
+  /**
+   * The schema (Postgres) or database (MySQL) of the table; every statement names it
+   * (`search_path` is never used). Register `notificationEntity({ schema })` in the DataSource.
+   * SQLite has none: setting it throws.
+   */
+  schema?: string | undefined;
 }
 
 /**
@@ -28,10 +39,18 @@ export function notificationsManagedTables(): string[] {
  * }
  * ```
  */
-export async function createNotificationsTable(queryRunner: QueryRunner): Promise<void> {
-  if (await queryRunner.hasTable(TABLE)) return;
-  const metadata = queryRunner.connection.getMetadata(NotificationEntity);
-  await queryRunner.createTable(Table.create(metadata, queryRunner.connection.driver), true);
+export async function createNotificationsTable(
+  queryRunner: QueryRunner,
+  options: NotificationsSchemaOptions = {},
+): Promise<void> {
+  const dataSource = queryRunner.connection;
+  assertSchemaSupported(dataSource, options.schema);
+  const metadata = dataSource.getMetadata(notificationEntity(options));
+  if (options.schema !== undefined) {
+    await createSchemaIfMissing(queryRunner, dataSource, options.schema);
+  }
+  if (await queryRunner.hasTable(metadata.tablePath)) return;
+  await queryRunner.createTable(Table.create(metadata, dataSource.driver), true);
 }
 
 /**
@@ -49,10 +68,14 @@ export async function createNotificationsTable(queryRunner: QueryRunner): Promis
  * SKIPS the column with a clear `console.warn` (naming it and pointing at a manual migration)
  * rather than letting the raw driver error surface.
  */
-async function addMissingColumns(queryRunner: QueryRunner): Promise<void> {
-  const metadata = queryRunner.connection.getMetadata(NotificationEntity);
+async function addMissingColumns(
+  queryRunner: QueryRunner,
+  options: NotificationsSchemaOptions,
+): Promise<void> {
+  const metadata = queryRunner.connection.getMetadata(notificationEntity(options));
   const driver = queryRunner.connection.driver;
-  const table = await queryRunner.getTable(TABLE);
+  const path = metadata.tablePath;
+  const table = await queryRunner.getTable(path);
   if (!table) return;
 
   // Whether the table already holds rows — only a populated table makes a NOT-NULL-no-default
@@ -61,7 +84,7 @@ async function addMissingColumns(queryRunner: QueryRunner): Promise<void> {
   const hasRows = async (): Promise<boolean> => {
     if (populated === undefined) {
       const [{ count } = { count: 0 }] = await queryRunner.query(
-        `SELECT COUNT(*) as count FROM ${driver.escape(TABLE)}`,
+        `SELECT COUNT(*) as count FROM ${quotePath(queryRunner.connection, path)}`,
       );
       populated = Number(count) > 0;
     }
@@ -81,7 +104,7 @@ async function addMissingColumns(queryRunner: QueryRunner): Promise<void> {
       );
       continue;
     }
-    await queryRunner.addColumn(TABLE, tableColumn);
+    await queryRunner.addColumn(path, tableColumn);
   }
 }
 
@@ -89,14 +112,18 @@ async function addMissingColumns(queryRunner: QueryRunner): Promise<void> {
  * Create any index declared on {@link NotificationEntity} that the live table lacks (matched by
  * name). Non-destructive: existing indexes are never dropped or altered.
  */
-async function addMissingIndices(queryRunner: QueryRunner): Promise<void> {
-  const metadata = queryRunner.connection.getMetadata(NotificationEntity);
-  const table = await queryRunner.getTable(TABLE);
+async function addMissingIndices(
+  queryRunner: QueryRunner,
+  options: NotificationsSchemaOptions,
+): Promise<void> {
+  const metadata = queryRunner.connection.getMetadata(notificationEntity(options));
+  const path = metadata.tablePath;
+  const table = await queryRunner.getTable(path);
   if (!table) return;
   const existing = new Set(table.indices.map((index) => index.name));
   for (const index of metadata.indices) {
     if (index.name && existing.has(index.name)) continue;
-    await queryRunner.createIndex(TABLE, TableIndex.create(index));
+    await queryRunner.createIndex(path, TableIndex.create(index));
   }
 }
 
@@ -106,14 +133,22 @@ async function addMissingIndices(queryRunner: QueryRunner): Promise<void> {
  * indexes that exist in the entity metadata but not yet in the live table (see
  * {@link addMissingColumns}).
  */
-export async function ensureNotificationsTable(dataSource: DataSource): Promise<void> {
+export async function ensureNotificationsTable(
+  dataSource: DataSource,
+  options: NotificationsSchemaOptions = {},
+): Promise<void> {
+  assertSchemaSupported(dataSource, options.schema);
+  const path = dataSource.getMetadata(notificationEntity(options)).tablePath;
   const queryRunner = dataSource.createQueryRunner();
   try {
-    if (await queryRunner.hasTable(TABLE)) {
-      await addMissingColumns(queryRunner);
-      await addMissingIndices(queryRunner);
+    if (options.schema !== undefined) {
+      await createSchemaIfMissing(queryRunner, dataSource, options.schema);
+    }
+    if (await queryRunner.hasTable(path)) {
+      await addMissingColumns(queryRunner, options);
+      await addMissingIndices(queryRunner, options);
     } else {
-      await createNotificationsTable(queryRunner);
+      await createNotificationsTable(queryRunner, options);
     }
   } finally {
     await queryRunner.release();

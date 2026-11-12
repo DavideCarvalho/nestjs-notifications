@@ -1,7 +1,8 @@
 import { NOTIFICATION_STORE } from '@dudousxd/nestjs-notifications-database';
 import { type DynamicModule, Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { NotificationEntity } from './notification.entity';
+import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
+import type { Repository } from 'typeorm';
+import { type NotificationEntity, notificationEntity } from './notification.entity';
 import { TypeOrmNotificationStore } from './typeorm-notification.store';
 
 /**
@@ -21,15 +22,27 @@ import { TypeOrmNotificationStore } from './typeorm-notification.store';
  * })
  * export class AppModule {}
  * ```
+ *
+ * `forFeature({ schema: 'notifications' })` keeps the table in that Postgres schema (MySQL:
+ * database), created at boot; register `notificationEntity({ schema })` in the DataSource (or use
+ * `autoLoadEntities`).
  */
 @Module({})
 export class TypeOrmNotificationStoreModule {
-  static forFeature(): DynamicModule {
+  static forFeature(options: { schema?: string } = {}): DynamicModule {
+    const entity = notificationEntity(options);
     return {
       module: TypeOrmNotificationStoreModule,
-      imports: [TypeOrmModule.forFeature([NotificationEntity])],
+      imports: [TypeOrmModule.forFeature([entity])],
       providers: [
-        TypeOrmNotificationStore,
+        options.schema === undefined
+          ? TypeOrmNotificationStore
+          : {
+              provide: TypeOrmNotificationStore,
+              useFactory: (repo: Repository<NotificationEntity>) =>
+                new TypeOrmNotificationStore(repo),
+              inject: [getRepositoryToken(entity)],
+            },
         { provide: NOTIFICATION_STORE, useExisting: TypeOrmNotificationStore },
       ],
       exports: [TypeOrmNotificationStore, NOTIFICATION_STORE],

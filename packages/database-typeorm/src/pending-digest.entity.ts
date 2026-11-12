@@ -1,4 +1,5 @@
 import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
+import { entityInSchema } from './schema-name';
 
 /**
  * TypeORM entity for notifications suppressed by a non-instant digest cadence and awaiting their
@@ -62,4 +63,20 @@ export class DigestWindowEntity {
 
   @Column({ type: Date, precision: 3 })
   ranAt!: Date;
+}
+
+/** {@link PendingDigestEntity} in `schema` (Postgres schema / MySQL database). See `notificationEntity`. */
+export function pendingDigestEntity(
+  options: { schema?: string | undefined } = {},
+): typeof PendingDigestEntity {
+  if (options.schema === undefined) return PendingDigestEntity;
+  return entityInSchema(PendingDigestEntity, 'notification_pending_digests', options.schema);
+}
+
+/** {@link DigestWindowEntity} in `schema` (Postgres schema / MySQL database). See `notificationEntity`. */
+export function digestWindowEntity(
+  options: { schema?: string | undefined } = {},
+): typeof DigestWindowEntity {
+  if (options.schema === undefined) return DigestWindowEntity;
+  return entityInSchema(DigestWindowEntity, 'notification_digest_windows', options.schema);
 }

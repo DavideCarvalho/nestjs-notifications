@@ -2,8 +2,9 @@ import { NOTIFICATION_STORE } from '@dudousxd/nestjs-notifications-database';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { MikroOrmNotificationStore } from './mikro-orm-notification.store';
-import { NotificationEntity } from './notification.entity';
+import { notificationEntity } from './notification.entity';
 import { NotificationRepository } from './notification.repository';
+import { MIKRO_ORM_NOTIFICATIONS_OPTIONS } from './schema-name';
 
 /**
  * Provides the MikroORM-backed notification store and binds it to the
@@ -25,11 +26,18 @@ import { NotificationRepository } from './notification.repository';
  */
 @Module({})
 export class MikroOrmNotificationStoreModule {
-  static forFeature(): DynamicModule {
+  /**
+   * `forFeature({ schema: 'notifications' })` keeps the table in that Postgres schema (MySQL:
+   * database), created at boot; register `notificationEntity({ schema })` in the ORM config.
+   */
+  static forFeature(options: { schema?: string } = {}): DynamicModule {
     return {
       module: MikroOrmNotificationStoreModule,
-      imports: [MikroOrmModule.forFeature([NotificationEntity])],
+      imports: [MikroOrmModule.forFeature([notificationEntity(options)])],
       providers: [
+        ...(options.schema !== undefined
+          ? [{ provide: MIKRO_ORM_NOTIFICATIONS_OPTIONS, useValue: { schema: options.schema } }]
+          : []),
         MikroOrmNotificationStore,
         { provide: NOTIFICATION_STORE, useExisting: MikroOrmNotificationStore },
       ],

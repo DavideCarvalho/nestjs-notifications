@@ -7,9 +7,15 @@ import type {
   PendingDigestStore,
 } from '@dudousxd/nestjs-notifications-preferences';
 import { EntityManager } from '@mikro-orm/core';
-import { Injectable } from '@nestjs/common';
-import { DigestWindowEntity, PendingDigestEntity } from './pending-digest.entity';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import {
+  DigestWindowEntity,
+  PendingDigestEntity,
+  digestWindowEntity,
+  pendingDigestEntity,
+} from './pending-digest.entity';
 import { ensurePendingDigestTables } from './pending-digest.schema';
+import { MIKRO_ORM_NOTIFICATIONS_OPTIONS, assertSchemaSupported } from './schema-name';
 
 /** Ids per `DELETE … IN (…)`, well under every engine's bind-parameter limit. */
 const CLEAR_CHUNK = 1000;
@@ -90,11 +96,24 @@ function toEntry(row: PendingDigestEntity): PendingDigestEntry {
 @Injectable()
 export class MikroOrmPendingDigestStore implements PendingDigestStore {
   // MikroOrmModule provides EntityManager globally; Nest resolves it by type.
-  constructor(private readonly em: EntityManager) {}
+  private readonly entries: typeof PendingDigestEntity;
+  private readonly windows: typeof DigestWindowEntity;
+  private readonly schema: string | undefined;
+
+  constructor(
+    private readonly em: EntityManager,
+    /** `schema`: see `MikroOrmNotificationStoreOptions.schema`; register the digest entities in it. */
+    @Optional() @Inject(MIKRO_ORM_NOTIFICATIONS_OPTIONS) options?: { schema?: string },
+  ) {
+    assertSchemaSupported(em, options?.schema);
+    this.schema = options?.schema;
+    this.entries = pendingDigestEntity({ schema: this.schema });
+    this.windows = digestWindowEntity({ schema: this.schema });
+  }
 
   async enqueue(entry: NewPendingDigestEntry): Promise<void> {
     const em = this.em.fork();
-    const entity = em.create(PendingDigestEntity, {
+    const entity = em.create(this.entries, {
       id: randomUUID(),
       cadence: entry.cadence,
       notifiableType: entry.notifiable.type,
@@ -111,7 +130,7 @@ export class MikroOrmPendingDigestStore implements PendingDigestStore {
   async listGroups(cadence: DigestCadence): Promise<PendingDigestGroup[]> {
     const rows = await this.em
       .fork()
-      .find(PendingDigestEntity, { cadence }, { orderBy: { createdAt: 'ASC' } });
+      .find(this.entries, { cadence }, { orderBy: { createdAt: 'ASC' } });
     return [...groupRows(rows).values()];
   }
 
@@ -124,7 +143,7 @@ export class MikroOrmPendingDigestStore implements PendingDigestStore {
     };
     const fields = ['tenantId', 'notifiableType', 'notifiableId', 'category'];
     const keys = await em
-      .createQueryBuilder(PendingDigestEntity)
+      .createQueryBuilder(this.entries)
       .select(fields)
       .where({ cadence })
       .groupBy(fields)
@@ -134,7 +153,7 @@ export class MikroOrmPendingDigestStore implements PendingDigestStore {
       .execute('all');
     if (keys.length === 0) return [];
     const rows = await em.find(
-      PendingDigestEntity,
+      this.entries,
       {
         cadence,
         $or: keys.map((key) => ({
@@ -152,7 +171,7 @@ export class MikroOrmPendingDigestStore implements PendingDigestStore {
 
   async clear(ids: string[]): Promise<void> {
     for (let start = 0; start < ids.length; start += CLEAR_CHUNK) {
-      await this.em.nativeDelete(PendingDigestEntity, {
+      await this.em.nativeDelete(this.entries, {
         id: { $in: ids.slice(start, start + CLEAR_CHUNK) },
       });
     }
@@ -162,7 +181,7 @@ export class MikroOrmPendingDigestStore implements PendingDigestStore {
     const id = `${cadence}:${windowKey}`;
     try {
       const em = this.em.fork();
-      const entity = em.create(DigestWindowEntity, { id, ranAt: new Date() });
+      const entity = em.create(this.windows, { id, ranAt: new Date() });
       await em.persist(entity).flush();
       return true;
     } catch {
@@ -173,6 +192,9 @@ export class MikroOrmPendingDigestStore implements PendingDigestStore {
 
   /** Create/patch the digest tables if needed (non-destructive). */
   async ensureSchema(): Promise<void> {
-    await ensurePendingDigestTables(this.em);
+    await ensurePendingDigestTables(
+      this.em,
+      this.schema !== undefined ? { schema: this.schema } : {},
+    );
   }
 }

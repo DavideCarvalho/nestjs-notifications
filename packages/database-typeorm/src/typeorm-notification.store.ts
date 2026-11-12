@@ -13,6 +13,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { type FindOperator, In, IsNull, LessThanOrEqual, Not, type Repository } from 'typeorm';
 import { NotificationEntity } from './notification.entity';
 import { ensureNotificationsTable } from './schema';
+import { assertSchemaSupported, schemaOf } from './schema-name';
 
 /** `types` absent or empty applies no filter; otherwise an IN clause on `type`. */
 function typeFilter(types?: string[]): { type?: FindOperator<string> } {
@@ -50,13 +51,19 @@ function toStored(row: NotificationEntity): StoredNotification {
   };
 }
 
-/** TypeORM-backed {@link NotificationStore}. */
+/**
+ * TypeORM-backed {@link NotificationStore}. The table's schema follows the repository's entity:
+ * hand it the repository of `notificationEntity({ schema })` to keep the table in `schema`.
+ */
 @Injectable()
 export class TypeOrmNotificationStore implements NotificationStore {
   constructor(
     @InjectRepository(NotificationEntity)
     private readonly repo: Repository<NotificationEntity>,
-  ) {}
+  ) {
+    const schema = schemaOf(repo.target);
+    if (schema !== undefined) assertSchemaSupported(repo.manager.connection, schema);
+  }
 
   async save(notification: NewStoredNotification): Promise<StoredNotification> {
     // Timestamps are set in code (millisecond precision) for stable ordering and parity
@@ -230,6 +237,7 @@ export class TypeOrmNotificationStore implements NotificationStore {
 
   /** Create the notifications table if missing (non-destructive). */
   async ensureSchema(): Promise<void> {
-    await ensureNotificationsTable(this.repo.manager.connection);
+    const schema = schemaOf(this.repo.target);
+    await ensureNotificationsTable(this.repo.manager.connection, schema ? { schema } : {});
   }
 }

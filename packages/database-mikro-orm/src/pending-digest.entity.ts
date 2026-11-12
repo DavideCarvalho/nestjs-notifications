@@ -1,5 +1,6 @@
 import { Entity, Index, PrimaryKey, Property } from '@mikro-orm/decorators/legacy';
 import { DigestWindowRepository, PendingDigestRepository } from './pending-digest.repository';
+import { entityInSchema } from './schema-name';
 
 /**
  * MikroORM entity for notifications suppressed by a non-instant digest cadence and awaiting their
@@ -65,4 +66,28 @@ export class DigestWindowEntity {
 
   @Property({ type: 'datetime', length: 3 })
   ranAt!: Date;
+}
+
+/** {@link PendingDigestEntity} in `schema` (Postgres schema / MySQL database). See `notificationEntity`. */
+export function pendingDigestEntity(
+  options: { schema?: string | undefined } = {},
+): typeof PendingDigestEntity {
+  if (options.schema === undefined) return PendingDigestEntity;
+  return entityInSchema(
+    PendingDigestEntity,
+    { tableName: 'notification_pending_digests', repository: () => PendingDigestRepository },
+    options.schema,
+  );
+}
+
+/** {@link DigestWindowEntity} in `schema` (Postgres schema / MySQL database). See `notificationEntity`. */
+export function digestWindowEntity(
+  options: { schema?: string | undefined } = {},
+): typeof DigestWindowEntity {
+  if (options.schema === undefined) return DigestWindowEntity;
+  return entityInSchema(
+    DigestWindowEntity,
+    { tableName: 'notification_digest_windows', repository: () => DigestWindowRepository },
+    options.schema,
+  );
 }

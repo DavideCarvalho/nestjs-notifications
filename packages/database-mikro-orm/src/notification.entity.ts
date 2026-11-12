@@ -1,5 +1,6 @@
 import { Entity, Index, PrimaryKey, Property } from '@mikro-orm/decorators/legacy';
 import { NotificationRepository } from './notification.repository';
+import { entityInSchema } from './schema-name';
 
 /**
  * MikroORM entity mirroring Laravel's `notifications` table.
@@ -63,4 +64,20 @@ export class NotificationEntity {
 
   @Property({ type: 'datetime', onUpdate: () => new Date(), length: 3 })
   updatedAt!: Date;
+}
+
+/**
+ * The notification entity, in `schema` when given: a Postgres schema, or on MySQL a database.
+ * Register the one your store uses (`entities: [notificationEntity({ schema })]`) and pass the same
+ * `schema` to the store. Without `schema` it is {@link NotificationEntity}. Same `schema`, same class.
+ */
+export function notificationEntity(
+  options: { schema?: string | undefined } = {},
+): typeof NotificationEntity {
+  if (options.schema === undefined) return NotificationEntity;
+  return entityInSchema(
+    NotificationEntity,
+    { tableName: 'notifications', repository: () => NotificationRepository },
+    options.schema,
+  );
 }

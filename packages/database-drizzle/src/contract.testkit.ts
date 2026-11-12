@@ -35,9 +35,10 @@ async function open(target: DrizzleTarget): Promise<Handle> {
 
 let counter = 0;
 /** Unique table names per suite so a shared Postgres never mixes two suites' rows. */
-function uniqueTables(): NotificationTables {
+function uniqueTables(schema?: string): NotificationTables {
   const suffix = `${process.pid}_${Date.now().toString(36)}_${counter++}`;
   return createNotificationTables({
+    ...(schema !== undefined ? { schema } : {}),
     tableNames: {
       notifications: `notifications_${suffix}`,
       pendingDigests: `pending_digests_${suffix}`,
@@ -46,16 +47,20 @@ function uniqueTables(): NotificationTables {
   });
 }
 
-async function drop(db: DrizzlePgDatabase, tables: string[]): Promise<void> {
-  for (const table of tables) await db.execute(sql.raw(`DROP TABLE IF EXISTS "${table}"`));
+async function drop(db: DrizzlePgDatabase, tables: string[], schema?: string): Promise<void> {
+  const prefix = schema !== undefined ? `"${schema}".` : '';
+  for (const table of tables) {
+    await db.execute(sql.raw(`DROP TABLE IF EXISTS ${prefix}"${table}"`));
+  }
 }
 
 /** Context for the {@link NotificationStore} contract backed by Drizzle. */
 export async function makeDrizzleNotificationStoreContext(
   target: DrizzleTarget,
+  schema?: string,
 ): Promise<NotificationStoreContractContext> {
   const { db, close } = await open(target);
-  const tables = uniqueTables();
+  const tables = uniqueTables(schema);
   const store = new DrizzleNotificationStore(db, tables);
   await store.ensureSchema();
   return {
@@ -64,7 +69,7 @@ export async function makeDrizzleNotificationStoreContext(
       await db.delete(tables.notifications);
     },
     teardown: async () => {
-      await drop(db, [getTableName(tables.notifications)]);
+      await drop(db, [getTableName(tables.notifications)], schema);
       await close();
     },
   };
@@ -73,9 +78,10 @@ export async function makeDrizzleNotificationStoreContext(
 /** Context for the {@link PendingDigestStore} contract backed by Drizzle. */
 export async function makeDrizzlePendingDigestStoreContext(
   target: DrizzleTarget,
+  schema?: string,
 ): Promise<PendingDigestStoreContractContext> {
   const { db, close } = await open(target);
-  const tables = uniqueTables();
+  const tables = uniqueTables(schema);
   const store = new DrizzlePendingDigestStore(db, tables);
   await store.ensureSchema();
   return {
@@ -85,7 +91,11 @@ export async function makeDrizzlePendingDigestStoreContext(
       await db.delete(tables.digestWindows);
     },
     teardown: async () => {
-      await drop(db, [getTableName(tables.pendingDigests), getTableName(tables.digestWindows)]);
+      await drop(
+        db,
+        [getTableName(tables.pendingDigests), getTableName(tables.digestWindows)],
+        schema,
+      );
       await close();
     },
   };

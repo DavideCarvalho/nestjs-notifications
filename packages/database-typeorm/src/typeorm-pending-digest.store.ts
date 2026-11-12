@@ -11,6 +11,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { type FindOptionsWhere, In, IsNull, type Repository } from 'typeorm';
 import { DigestWindowEntity, PendingDigestEntity } from './pending-digest.entity';
 import { ensurePendingDigestTables } from './pending-digest.schema';
+import { assertSchemaSupported, schemaOf } from './schema-name';
 
 /** Ids per `DELETE … IN (…)`, well under every engine's bind-parameter limit. */
 const CLEAR_CHUNK = 1000;
@@ -81,7 +82,15 @@ export class TypeOrmPendingDigestStore implements PendingDigestStore {
     private readonly entries: Repository<PendingDigestEntity>,
     @InjectRepository(DigestWindowEntity)
     private readonly windows: Repository<DigestWindowEntity>,
-  ) {}
+  ) {
+    const schema = schemaOf(entries.target);
+    if (schema !== schemaOf(windows.target)) {
+      throw new Error(
+        '[nestjs-notifications] TypeOrmPendingDigestStore: the pending-digest and digest-window repositories must use the same `schema`.',
+      );
+    }
+    if (schema !== undefined) assertSchemaSupported(entries.manager.connection, schema);
+  }
 
   async enqueue(entry: NewPendingDigestEntry): Promise<void> {
     await this.entries.save(
@@ -165,6 +174,7 @@ export class TypeOrmPendingDigestStore implements PendingDigestStore {
 
   /** Create the digest tables if missing (non-destructive). */
   async ensureSchema(): Promise<void> {
-    await ensurePendingDigestTables(this.entries.manager.connection);
+    const schema = schemaOf(this.entries.target);
+    await ensurePendingDigestTables(this.entries.manager.connection, schema ? { schema } : {});
   }
 }

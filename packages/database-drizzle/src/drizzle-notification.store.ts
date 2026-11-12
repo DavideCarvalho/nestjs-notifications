@@ -10,7 +10,12 @@ import type {
 } from '@dudousxd/nestjs-notifications-database';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { type SQL, and, count, desc, eq, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm';
-import { type NotificationTables, notificationTables, notificationsSchemaDdl } from './schema';
+import {
+  type NotificationTables,
+  notificationTables,
+  notificationsSchemaDdl,
+  runSchemaDdl,
+} from './schema';
 import {
   DRIZZLE_NOTIFICATIONS_DB,
   DRIZZLE_NOTIFICATION_TABLES,
@@ -261,8 +266,10 @@ export class DrizzleNotificationStore implements NotificationStore {
 
   /** Create the notifications table if missing (`CREATE ... IF NOT EXISTS`, non-destructive). */
   async ensureSchema(): Promise<void> {
-    for (const statement of notificationsSchemaDdl({ notifications: this.table })) {
-      await this.db.execute(sql.raw(statement));
-    }
+    await runSchemaDdl(
+      (statement) => this.db.execute(sql.raw(statement)),
+      (statement) => this.db.execute(sql.raw(statement)) as Promise<{ rows?: unknown[] }>,
+      notificationsSchemaDdl({ notifications: this.table }),
+    );
   }
 }

@@ -1,18 +1,16 @@
 import type { EntityManager } from '@mikro-orm/core';
+import { createSchemaIfMissing, safeStatementsFor } from './schema-name';
 
 const TABLE = 'notifications';
 
-function generatorFor(em: EntityManager) {
-  return em.getPlatform().getSchemaGenerator(em.getDriver(), em);
-}
-
-/** Statements (split, trimmed) from the non-destructive schema diff that touch our table. */
-async function notificationsStatements(em: EntityManager): Promise<string[]> {
-  const sql = await generatorFor(em).getUpdateSchemaSQL({ safe: true, wrap: false });
-  return sql
-    .split(';')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0 && new RegExp(`\\b${TABLE}\\b`, 'i').test(s));
+/** Where the notifications table lives. */
+export interface NotificationsSchemaOptions {
+  /**
+   * The schema (Postgres) or database (MySQL) of the table; every statement names it
+   * (`search_path` is never used). Register `notificationEntity({ schema })` in the ORM. SQLite has
+   * none: setting it throws.
+   */
+  schema?: string | undefined;
 }
 
 /**
@@ -25,16 +23,27 @@ async function notificationsStatements(em: EntityManager): Promise<string[]> {
  *   async up() { this.addSql(await notificationsSchemaSql(this.getEntityManager())); }
  * }
  * ```
+ *
+ * With `schema`, only statements on `schema.notifications` are returned; create the schema first.
  */
-export async function notificationsSchemaSql(em: EntityManager): Promise<string> {
-  const statements = await notificationsStatements(em);
+export async function notificationsSchemaSql(
+  em: EntityManager,
+  options: NotificationsSchemaOptions = {},
+): Promise<string> {
+  const statements = await safeStatementsFor(em, [TABLE], options.schema);
   return statements.length ? `${statements.join(';\n')};` : '';
 }
 
-/** Apply the non-destructive diff for the `notifications` table (used by the store on bootstrap). */
-export async function ensureNotificationsTable(em: EntityManager): Promise<void> {
-  const statements = await notificationsStatements(em);
-  if (statements.length === 0) return;
+/**
+ * Apply the non-destructive diff for the `notifications` table (used by the store on bootstrap).
+ * With `schema`, the schema (MySQL: database) is created first.
+ */
+export async function ensureNotificationsTable(
+  em: EntityManager,
+  options: NotificationsSchemaOptions = {},
+): Promise<void> {
+  if (options.schema !== undefined) await createSchemaIfMissing(em, options.schema);
+  const statements = await safeStatementsFor(em, [TABLE], options.schema);
   const connection = em.getConnection();
   for (const statement of statements) {
     await connection.execute(statement);
