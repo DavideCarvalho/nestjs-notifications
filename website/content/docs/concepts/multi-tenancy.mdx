@@ -159,8 +159,12 @@ a unit reads and stamps the clinic's rows with:
 
 ```ts title="app.module.ts"
 ContextModule.forRoot({ tenancy: { enabled: true } });
-// The guard sets the active unit with its clinic above it:
-// Context.setTenant({ id: unitId, kind: 'unit', chain: [{ id: clinicId, kind: 'clinic' }] })
+// The guard sets the active unit with its chain, root first, the unit last:
+// Context.setTenant({
+//   id: unitId,
+//   kind: 'unit',
+//   chain: [{ id: clinicId, kind: 'clinic' }, { id: unitId, kind: 'unit' }],
+// })
 
 DatabaseChannelModule.forRoot({ tenancy: { kinds: ['clinic'] } });
 ```
