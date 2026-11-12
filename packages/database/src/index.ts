@@ -1,5 +1,6 @@
 export * from './interfaces';
-export { NOTIFICATION_STORE, AUTO_CREATE_SCHEMA, PRUNE_OPTIONS } from './tokens';
+export { NOTIFICATION_STORE, AUTO_CREATE_SCHEMA, PRUNE_OPTIONS, DATABASE_TENANCY } from './tokens';
+export type { TenancyOption } from './tenancy';
 export { Database, DatabaseChannel } from './database.channel';
 export { InMemoryStore } from './in-memory.store';
 export {

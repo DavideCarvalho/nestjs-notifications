@@ -15,7 +15,8 @@ import { NotificationPruner, type PruneOptions } from './notification-pruner';
 import { NotificationsQueryService } from './notifications-query.service';
 import { buildNotificationsController } from './notifications.controller';
 import { SchemaInitializer } from './schema-initializer';
-import { AUTO_CREATE_SCHEMA, NOTIFICATION_STORE, PRUNE_OPTIONS } from './tokens';
+import type { TenancyOption } from './tenancy';
+import { AUTO_CREATE_SCHEMA, DATABASE_TENANCY, NOTIFICATION_STORE, PRUNE_OPTIONS } from './tokens';
 
 /** Resolves the current notifiable from the request for the auto-mounted inbox controller. */
 type ResolveRef = (req: any) => NotifiableRef | Promise<NotifiableRef>;
@@ -89,6 +90,14 @@ export interface DatabaseChannelOptions {
    * ```
    */
   prune?: PruneOptions;
+  /**
+   * Scope the inbox by the request's tenant (from `@dudousxd/nestjs-context`). Default
+   * `'inherit'`: follow `ContextModule`'s `tenancy.enabled`, which is off by default. With tenancy
+   * on, reads and mutations see only the request tenant's rows, a row of another tenant answers
+   * `404`, and sends with no explicit tenant are stamped with the context tenant. An explicit
+   * `forTenant(id)` always wins. See {@link TenancyOption}.
+   */
+  tenancy?: TenancyOption;
 }
 
 export interface DatabaseChannelFeatureOptions {
@@ -102,6 +111,8 @@ export interface DatabaseChannelFeatureOptions {
   decorators?: ClassDecorator[];
   /** See {@link DatabaseChannelOptions.prune}. */
   prune?: PruneOptions;
+  /** See {@link DatabaseChannelOptions.tenancy}. Default `'inherit'`. */
+  tenancy?: TenancyOption;
 }
 
 /**
@@ -153,6 +164,7 @@ export class DatabaseChannelModule {
       { provide: NOTIFICATION_STORE, useExisting: storeClass },
       { provide: AUTO_CREATE_SCHEMA, useValue: options.autoCreateSchema ?? true },
       { provide: PRUNE_OPTIONS, useValue: options.prune ?? null },
+      { provide: DATABASE_TENANCY, useValue: options.tenancy ?? 'inherit' },
       DatabaseChannel,
       NotificationsQueryService,
       SchemaInitializer,
@@ -177,6 +189,7 @@ export class DatabaseChannelModule {
       providers: [
         { provide: AUTO_CREATE_SCHEMA, useValue: options.autoCreateSchema ?? true },
         { provide: PRUNE_OPTIONS, useValue: options.prune ?? null },
+        { provide: DATABASE_TENANCY, useValue: options.tenancy ?? 'inherit' },
         DatabaseChannel,
         NotificationsQueryService,
         SchemaInitializer,
