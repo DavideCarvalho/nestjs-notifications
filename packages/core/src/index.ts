@@ -2,6 +2,8 @@ export * from './interfaces';
 export {
   type ContextAccessor,
   type ContextStore,
+  type ContextTenantFilter,
+  type ContextTenantRef,
   type UserRef,
   captureContext,
 } from './context-accessor';

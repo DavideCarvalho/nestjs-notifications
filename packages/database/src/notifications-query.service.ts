@@ -1,4 +1,5 @@
 import {
+  CONTEXT_ACCESSOR,
   type Notifiable,
   type NotifiableRef,
   notifiableRef,
@@ -6,7 +7,8 @@ import {
 import { Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import type { NotificationOwnerRef, NotificationStore, StoredNotification } from './interfaces';
 import { READ_SYNC_PUBLISHER, type ReadSyncPublisher } from './read-sync';
-import { NOTIFICATION_STORE } from './tokens';
+import { type InboxScope, type TenancyOption, inboxScope, readTenancy } from './tenancy';
+import { DATABASE_TENANCY, NOTIFICATION_STORE } from './tokens';
 
 /** A notifiable, or just a stable reference to one. Accepted by every query method. */
 export type NotifiableTarget = Notifiable | NotifiableRef;
@@ -78,6 +80,10 @@ export interface ScopedNotificationsQuery {
  * persisted, mirroring Laravel's `$user->notifications`, `unreadNotifications`, `markAsRead()`.
  * Scope to a tenant with `forTenant(id)` — the same user has an isolated feed per tenant.
  *
+ * With tenancy on (the module's `tenancy` option, which follows `@dudousxd/nestjs-context` by
+ * default), calls without `forTenant` are scoped to the request's tenant, and a row of another
+ * tenant reads as not found. An explicit `forTenant(id)` always wins.
+ *
  * ```ts
  * const inbox = await this.notifications.all(user);
  * const wsInbox = await this.notifications.forTenant(workspaceId).unread(user);
@@ -89,10 +95,12 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
 
   /** Guards {@link warnUnenforceable} — a store capability gap is worth saying once, not per call. */
   private static warnedUnenforceable = false;
+  private static warnedTenantUnenforceable = false;
 
   /** Test seam: re-arm the once-per-process warning. */
   static resetOwnershipWarning(): void {
     NotificationsQueryService.warnedUnenforceable = false;
+    NotificationsQueryService.warnedTenantUnenforceable = false;
   }
 
   constructor(
@@ -102,7 +110,19 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
     @Optional()
     @Inject(READ_SYNC_PUBLISHER)
     private readonly readSync?: ReadSyncPublisher,
+    // The nestjs-context accessor, read structurally. Absent → the global slot, else tenancy off.
+    @Optional()
+    @Inject(CONTEXT_ACCESSOR)
+    private readonly contextAccessor?: unknown,
+    @Optional()
+    @Inject(DATABASE_TENANCY)
+    private readonly tenancy: TenancyOption = 'inherit',
   ) {}
+
+  /** Resolve the tenant scope of one call: the explicit tenant, else the context's (when on). */
+  private scopeOf(explicit: string | undefined): InboxScope {
+    return inboxScope(explicit, readTenancy(this.tenancy ?? 'inherit', this.contextAccessor));
+  }
 
   all(
     target: NotifiableTarget,
@@ -161,34 +181,41 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
   private async markAsReadScoped(
     id: string,
     target: NotifiableTarget | undefined,
-    tenant: string | undefined,
+    explicitTenant: string | undefined,
   ): Promise<void> {
+    const scope = this.scopeOf(explicitTenant);
     if (!target) {
+      await this.assertTenantVisible(id, scope, 'markAsRead');
       await this.store.markAsRead(id);
       return;
     }
     const ref = this.refOf(target);
-    const owner = this.ownerRef(ref, tenant);
+    const owner = this.ownerRef(ref, scope.tenant);
+    await this.assertVisibleForOwner(id, ref, scope);
     if (this.store.markAsReadOwned) {
       if (!(await this.store.markAsReadOwned(id, owner))) throw new NotFoundException();
     } else {
       await this.assertOwned(id, owner, 'markAsRead');
       await this.store.markAsRead(id);
     }
-    this.publishRead(ref, id, tenant);
+    this.publishRead(ref, id, explicitTenant);
   }
 
   /** Delete, enforcing ownership when a `target` is given. See {@link markAsReadScoped}. */
   private async deleteScoped(
     id: string,
     target: NotifiableTarget | undefined,
-    tenant: string | undefined,
+    explicitTenant: string | undefined,
   ): Promise<void> {
+    const scope = this.scopeOf(explicitTenant);
     if (!target) {
+      await this.assertTenantVisible(id, scope, 'delete');
       await this.store.delete(id);
       return;
     }
-    const owner = this.ownerRef(this.refOf(target), tenant);
+    const ref = this.refOf(target);
+    const owner = this.ownerRef(ref, scope.tenant);
+    await this.assertVisibleForOwner(id, ref, scope);
     if (this.store.deleteOwned) {
       if (!(await this.store.deleteOwned(id, owner))) throw new NotFoundException();
       return;
@@ -225,6 +252,51 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
     }
   }
 
+  /**
+   * The matching rule for a by-id mutation whose scope the store predicate can't express (rows
+   * with no tenant). Reads the row, or finds it in the owner's feed when the store has no
+   * `findById`, and answers `404` when the request may not see it.
+   */
+  private async assertVisibleForOwner(
+    id: string,
+    ref: NotifiableRef,
+    scope: InboxScope,
+  ): Promise<void> {
+    if (!scope.visible) return;
+    const row = this.store.findById
+      ? await this.store.findById(id)
+      : ((await this.store.getForNotifiable(ref.type, String(ref.id))).find((r) => r.id === id) ??
+        null);
+    if (!row || !scope.visible(row.tenantId)) throw new NotFoundException();
+  }
+
+  /**
+   * The matching rule for an unscoped (no `target`) by-id mutation under a context tenant. Needs
+   * `findById`; without it the tenant cannot be checked, which is warned about once.
+   */
+  private async assertTenantVisible(
+    id: string,
+    scope: InboxScope,
+    operation: string,
+  ): Promise<void> {
+    if (!scope.fromContext) return;
+    if (!this.store.findById) {
+      if (!NotificationsQueryService.warnedTenantUnenforceable) {
+        NotificationsQueryService.warnedTenantUnenforceable = true;
+        this.logger.warn(
+          `${this.store.constructor.name} does not implement findById, so the tenant of a notification cannot be checked when ${operation} is called without a target. Pass the owning notifiable, or implement findById on the store.`,
+        );
+      }
+      return;
+    }
+    const row = await this.store.findById(id);
+    if (!row) return; // unchanged: a missing id is a no-op for the unscoped mutation
+    const visible = scope.visible
+      ? scope.visible(row.tenantId)
+      : scope.tenant === undefined || row.tenantId === scope.tenant;
+    if (!visible) throw new NotFoundException();
+  }
+
   /** Warn once per process — this is a store capability gap, not a per-request condition. */
   private warnUnenforceable(operation: string): void {
     if (NotificationsQueryService.warnedUnenforceable) return;
@@ -246,27 +318,33 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
 
   private async allScoped(
     target: NotifiableTarget,
-    tenant?: string,
+    explicitTenant?: string,
     types?: string[],
   ): Promise<StoredNotification[]> {
+    const scope = this.scopeOf(explicitTenant);
     const ref = this.refOf(target);
-    return this.store.getForNotifiable(ref.type, String(ref.id), tenant, types);
+    return keep(
+      await this.store.getForNotifiable(ref.type, String(ref.id), scope.tenant, types),
+      scope,
+    );
   }
 
   private async unreadScoped(
     target: NotifiableTarget,
-    tenant?: string,
+    explicitTenant?: string,
     types?: string[],
   ): Promise<StoredNotification[]> {
+    const scope = this.scopeOf(explicitTenant);
     const ref = this.refOf(target);
-    return this.store.getUnread(ref.type, String(ref.id), tenant, types);
+    return keep(await this.store.getUnread(ref.type, String(ref.id), scope.tenant, types), scope);
   }
 
   private async paginateScoped(
     target: NotifiableTarget,
     { page = 1, perPage = 20, types }: PaginateOptions,
-    tenant?: string,
+    explicitTenant?: string,
   ): Promise<PaginatedNotifications> {
+    const scope = this.scopeOf(explicitTenant);
     const safePage = Math.max(1, Math.floor(page));
     const safePerPage = Math.max(1, Math.floor(perPage));
     const offset = (safePage - 1) * safePerPage;
@@ -277,20 +355,21 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
       lastPage: Math.max(1, Math.ceil(total / safePerPage)),
     });
 
-    // Push limit/offset down into the store when it supports it — scales to large feeds.
-    if (this.store.paginateForNotifiable) {
+    // Push limit/offset down into the store when it supports it — scales to large feeds. A scope
+    // the store predicate can't express (rows with no tenant) takes the in-memory path below.
+    if (this.store.paginateForNotifiable && !scope.visible) {
       const ref = this.refOf(target);
       const { items, total } = await this.store.paginateForNotifiable(ref.type, String(ref.id), {
         limit: safePerPage,
         offset,
-        tenantId: tenant,
+        tenantId: scope.tenant,
         types,
       });
       return { items, meta: meta(total) };
     }
 
     // Fallback for stores without pushdown: fetch all rows and slice (correct, not scalable).
-    const all = await this.allScoped(target, tenant, types);
+    const all = await this.allScoped(target, explicitTenant, types);
     return {
       items: all.slice(offset, offset + safePerPage),
       meta: meta(all.length),
@@ -299,21 +378,33 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
 
   private async unreadCountScoped(
     target: NotifiableTarget,
-    tenant?: string,
+    explicitTenant?: string,
     types?: string[],
   ): Promise<number> {
-    if (this.store.countUnread) {
+    const scope = this.scopeOf(explicitTenant);
+    if (this.store.countUnread && !scope.visible) {
       const ref = this.refOf(target);
-      return this.store.countUnread(ref.type, String(ref.id), tenant, types);
+      return this.store.countUnread(ref.type, String(ref.id), scope.tenant, types);
     }
-    return (await this.unreadScoped(target, tenant, types)).length;
+    return (await this.unreadScoped(target, explicitTenant, types)).length;
   }
 
-  private async markAllAsReadScoped(target: NotifiableTarget, tenant?: string): Promise<void> {
+  private async markAllAsReadScoped(
+    target: NotifiableTarget,
+    explicitTenant?: string,
+  ): Promise<void> {
+    const scope = this.scopeOf(explicitTenant);
     const ref = this.refOf(target);
-    await this.store.markAllAsRead(ref.type, String(ref.id), tenant);
-    // notificationId: null signals "all read" to the other devices.
-    this.publishRead(ref, null, tenant);
+    if (scope.visible) {
+      // The store's bulk update can't express "rows with no tenant": mark the visible rows one by one.
+      const unread = keep(await this.store.getUnread(ref.type, String(ref.id)), scope);
+      for (const row of unread) await this.store.markAsRead(row.id);
+    } else {
+      await this.store.markAllAsRead(ref.type, String(ref.id), scope.tenant);
+    }
+    // notificationId: null signals "all read" to the other devices. Published under the explicit
+    // tenant only, the key the SSE channel delivers under.
+    this.publishRead(ref, null, explicitTenant);
   }
 
   /** Broadcast a cross-device read event (no-op when no publisher is bound). Errors are swallowed. */
@@ -337,6 +428,12 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
   private refOf(target: NotifiableTarget): NotifiableRef {
     return isRef(target) ? target : notifiableRef(target as Notifiable);
   }
+}
+
+/** Apply a scope's row predicate, when it has one, to rows the store already narrowed. */
+function keep(rows: StoredNotification[], scope: InboxScope): StoredNotification[] {
+  const visible = scope.visible;
+  return visible ? rows.filter((row) => visible(row.tenantId)) : rows;
 }
 
 function isRef(value: NotifiableTarget): value is NotifiableRef {

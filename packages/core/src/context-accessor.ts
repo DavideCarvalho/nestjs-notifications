@@ -17,6 +17,22 @@ export interface UserRef {
 /** Opaque shape of the context store. notifications never reads it directly. */
 export type ContextStore = Record<string, unknown>;
 
+/** The customer the request's data belongs to, as `@dudousxd/nestjs-context` describes it. */
+export interface ContextTenantRef {
+  id: string;
+  kind: string;
+  source: string;
+  slug?: string;
+  role?: string;
+}
+
+/** How a lib must scope tenant data right now. See the context "Tenancy" docs. */
+export type ContextTenantFilter =
+  | { mode: 'system' }
+  | { mode: 'all' }
+  | { mode: 'tenantless' }
+  | { mode: 'tenant'; tenant: ContextTenantRef };
+
 export interface ContextAccessor {
   /** Trace id for the current request, or `undefined` when unavailable. */
   traceId(): string | undefined;
@@ -26,6 +42,12 @@ export interface ContextAccessor {
   userRef(): UserRef | undefined;
   /** The raw context store for the current request, or `undefined`. */
   get(): ContextStore | undefined;
+  /** The active tenant. Optional: older contexts lack it, which reads as tenancy off. */
+  tenant?(): ContextTenantRef | undefined;
+  /** The context's tenancy switch. Optional, as above. */
+  tenancy?(): { enabled: boolean; kinds?: string[] };
+  /** How data must be scoped right now. Optional, as above. */
+  tenantFilter?(options?: { kinds?: string[] }): ContextTenantFilter;
 }
 
 /**
@@ -39,6 +61,8 @@ export interface CapturedContext {
   causer?: UserRef;
   /** The tenant the trigger happened in, if multi-tenant context is populated. */
   tenantId?: string;
+  /** The kind of that tenant (`'organization'`, …), when the context reports one. */
+  tenantKind?: string;
   /** Correlation/trace id of the triggering request, for end-to-end tracing. */
   traceId?: string;
 }
@@ -56,7 +80,11 @@ export function captureContext(accessor?: ContextAccessor): CapturedContext | un
     const traceId = accessor.traceId();
     const captured: CapturedContext = {};
     if (causer) captured.causer = { type: causer.type, id: causer.id };
-    if (tenantId !== undefined) captured.tenantId = tenantId;
+    if (tenantId !== undefined) {
+      captured.tenantId = tenantId;
+      const kind = typeof accessor.tenant === 'function' ? accessor.tenant()?.kind : undefined;
+      if (kind !== undefined) captured.tenantKind = kind;
+    }
     if (traceId !== undefined) captured.traceId = traceId;
     return Object.keys(captured).length > 0 ? captured : undefined;
   } catch {

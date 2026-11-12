@@ -74,6 +74,14 @@ describe('captureContext()', () => {
     });
   });
 
+  it('records the tenant kind when the context reports a tenant', () => {
+    const accessor: ContextAccessor = {
+      ...fakeAccessor({ tenant: 'org_1' }),
+      tenant: () => ({ id: 'org_1', kind: 'organization', source: 'app' }),
+    };
+    expect(captureContext(accessor)).toEqual({ tenantId: 'org_1', tenantKind: 'organization' });
+  });
+
   it('swallows accessor errors (defensive)', () => {
     const throwing: ContextAccessor = {
       userRef: () => {

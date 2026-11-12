@@ -95,6 +95,69 @@ export class InboxService {
 that tenant, so a user signed into *Acme* never sees *Globex*'s notifications. See
 [In-app notifications](/docs/recipes/in-app-notifications) for the full read API.
 
+## Follow the request's tenant automatically
+
+If your app sets the tenant of each request with [`@dudousxd/nestjs-context`](https://davidecarvalho.github.io/aviary/docs/context/tenancy)
+(`Context.setTenant(...)` in your auth guard), the database channel and the inbox can follow it with
+no `forTenant` calls. Turn tenancy on in the context:
+
+```ts title="app.module.ts"
+@Module({
+  imports: [
+    ContextModule.forRoot({ tenancy: { enabled: true } }),
+    DatabaseChannelModule.forRoot(), // tenancy: 'inherit' by default
+  ],
+})
+export class AppModule {}
+```
+
+With tenancy on:
+
+- A send with no explicit tenant (no `forTenant`, no `@Tenant()`) stores its row with the request's
+  tenant, or with no tenant when the request has none. A queued send keeps the tenant it was sent from.
+- `NotificationsQueryService` and the inbox controller show a request only the rows it may see:
+
+| Request | Row of this tenant | Row of another tenant | Row with no tenant |
+| --- | --- | --- | --- |
+| with a tenant | visible | hidden | hidden (visible with `nullRows: 'shared'`) |
+| with no tenant | — | hidden | visible |
+| inside `Context.allTenants()`, or with no context | visible | visible | visible |
+
+- Marking read or deleting a row the request can't see answers `404`, never `403`, so ids of other
+  tenants don't leak.
+- An explicit `forTenant(id)` always wins over the request's tenant.
+
+Tenancy only narrows what a request sees. The inbox still scopes every route to the notifiable
+`resolveRef` returns.
+
+Configure it per module with the `tenancy` option:
+
+```ts title="app.module.ts"
+DatabaseChannelModule.forRoot({
+  tenancy: {
+    enabled: 'inherit',        // or true / false; 'inherit' follows ContextModule
+    kinds: ['organization'],   // only these tenant kinds count; others act as no tenant
+    nullRows: 'shared',        // rows with no tenant are visible to every tenant
+  },
+});
+```
+
+| Value | Effect |
+| --- | --- |
+| `'inherit'` (default) | Follow `ContextModule`'s `tenancy.enabled`, which is off by default. |
+| `false` | Never scope the inbox or stamp rows from the context. |
+| `{ enabled, kinds, nullRows }` | `enabled` is `'inherit'` or a boolean; `kinds` replaces the context's allow-list; `nullRows` is `'tenantless'` (default) or `'shared'`. |
+
+`DatabaseChannelModule.forFeature()` takes the same option. Without `@dudousxd/nestjs-context`, or
+with tenancy off, nothing changes.
+
+<Callout type="info">
+  Rows with no tenant are filtered in memory rather than in the store query, so with
+  `nullRows: 'shared'`, or for a request with no tenant, `paginate` and `unreadCount` load the
+  notifiable's rows before slicing or counting, and `markAllAsRead` loads the unread rows and marks
+  the visible ones one by one.
+</Callout>
+
 ## Per-tenant channel config
 
 Channels can resolve their transport or options per tenant, so each workspace sends through its own

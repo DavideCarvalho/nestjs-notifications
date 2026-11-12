@@ -6,3 +6,6 @@ export const AUTO_CREATE_SCHEMA = Symbol('AUTO_CREATE_SCHEMA');
 
 /** DI token for the {@link import('./notification-pruner').PruneOptions} (or null when disabled). */
 export const PRUNE_OPTIONS = Symbol('PRUNE_OPTIONS');
+
+/** DI token for the database channel's `tenancy` option ({@link import('./tenancy').TenancyOption}). */
+export const DATABASE_TENANCY = Symbol('DATABASE_TENANCY');

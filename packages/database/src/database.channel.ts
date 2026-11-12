@@ -1,4 +1,5 @@
 import {
+  CONTEXT_ACCESSOR,
   type ChannelDriver,
   type DeliveryContext,
   type Notifiable,
@@ -10,9 +11,10 @@ import {
   notificationName,
   routeFor,
 } from '@dudousxd/nestjs-notifications-core';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { DatabaseNotification, NewStoredNotification, NotificationStore } from './interfaces';
-import { NOTIFICATION_STORE } from './tokens';
+import { type TenancyOption, readTenancy, stampTenantId } from './tenancy';
+import { DATABASE_TENANCY, NOTIFICATION_STORE } from './tokens';
 
 /** Channel handle: use as `@Database()` on a payload method, or as a token in `via()`. */
 export const Database = createChannel('database');
@@ -29,6 +31,13 @@ export class DatabaseChannel implements ChannelDriver {
   constructor(
     @Inject(NOTIFICATION_STORE)
     private readonly store: NotificationStore,
+    // The nestjs-context accessor, read structurally. Absent → the global slot, else tenancy off.
+    @Optional()
+    @Inject(CONTEXT_ACCESSOR)
+    private readonly contextAccessor?: unknown,
+    @Optional()
+    @Inject(DATABASE_TENANCY)
+    private readonly tenancy: TenancyOption = 'inherit',
   ) {}
 
   async send(
@@ -46,14 +55,15 @@ export class DatabaseChannel implements ChannelDriver {
     // WHO triggered this + the trace, captured from nestjs-context at send() time (present
     // here even for async deliveries — the carrier rides through the dispatcher). The delivery
     // tenant wins for `tenantId`; when unscoped we fall back to the captured tenant so the row
-    // is still attributable. The causer/trace keys are added ONLY when a context was captured —
+    // is still attributable. With tenancy on, an unscoped send is stamped by the matching rule
+    // instead: the context tenant, or no tenant for a tenantless request. The causer/trace keys are added ONLY when a context was captured —
     // omitted otherwise so a schema-first store (Prisma) without these columns is unaffected.
     const captured = context?.captured;
     const input: NewStoredNotification = {
       type,
       notifiableType: ref.type,
       notifiableId: String(ref.id),
-      tenantId: context?.tenant ?? captured?.tenantId ?? null,
+      tenantId: context?.tenant ?? this.unscopedTenantId(captured),
       data,
       ...(captured
         ? {
@@ -77,6 +87,13 @@ export class DatabaseChannel implements ChannelDriver {
 
     // Return the stored row so it flows into afterSending() and the SendResult.
     return this.store.save(input);
+  }
+
+  /** The tenant to stamp on a send with no explicit tenant. */
+  private unscopedTenantId(captured: DeliveryContext['captured']): string | null {
+    const tenancy = readTenancy(this.tenancy ?? 'inherit', this.contextAccessor);
+    if (!tenancy.enabled) return captured?.tenantId ?? null;
+    return stampTenantId(tenancy, captured);
   }
 
   private upsertKeyFor(
