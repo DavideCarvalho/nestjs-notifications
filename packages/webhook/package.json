@@ -1,6 +1,6 @@
 {
   "name": "@dudousxd/nestjs-notifications-webhook",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Webhook channel for nestjs-notifications — direct signed POSTs over @nestjs/webhooks' SSRF-guarded transport, or subscription delivery through @nestjs/webhooks",
   "license": "MIT",
   "author": "Davide Carvalho",

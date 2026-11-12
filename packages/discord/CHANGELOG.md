@@ -1,5 +1,15 @@
 # @dudousxd/nestjs-notifications-discord
 
+## 0.4.0
+
+### Minor Changes
+
+- [#129](https://github.com/DavideCarvalho/nestjs-notifications/pull/129) [`d7fcbe6`](https://github.com/DavideCarvalho/nestjs-notifications/commit/d7fcbe69693ba2894793d01ad0ed875ce4bd1f74) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - **Breaking:** require Node.js 24 or newer. Every package now declares `engines.node` `>=24` (none declared it before). CI tests on Node 24 and 26.
+
+  Also removed (see Reference → Upgrading in the docs):
+
+  - `@dudousxd/nestjs-notifications-core`: the `TenantScopedNotifier` type, a deprecated alias of `ScopedNotifier`. Rename it.
+
 ## 0.3.3
 
 ### Patch Changes
