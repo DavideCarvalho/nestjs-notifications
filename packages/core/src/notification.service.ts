@@ -95,9 +95,6 @@ export interface ScopedNotifier {
   route(channel: string, routeValue: unknown): PendingNotification;
 }
 
-/** @deprecated Use {@link ScopedNotifier}. Kept as an alias for backwards compatibility. */
-export type TenantScopedNotifier = ScopedNotifier;
-
 /**
  * Public API for sending notifications. Mirrors Laravel's `Notification` facade:
  *

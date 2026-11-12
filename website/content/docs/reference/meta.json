@@ -5,6 +5,7 @@
     "index",
     "configuration",
     "testing",
-    "migrating-to-nestjs-first-party"
+    "migrating-to-nestjs-first-party",
+    "upgrading"
   ]
 }

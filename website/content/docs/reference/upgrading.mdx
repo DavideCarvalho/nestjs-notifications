@@ -1,0 +1,23 @@
+---
+title: Upgrading
+icon: ArrowUpCircle
+description: What changes when you move to a new release line of the @dudousxd/nestjs-notifications packages.
+---
+
+## Node.js 24 or newer
+
+Every `@dudousxd/nestjs-notifications-*` package now declares `engines.node` `>=24` (core 0.13 and
+the matching minor of each other package). Releases are tested on Node 24 and 26. Move your app to
+Node 24 before you upgrade.
+
+## `TenantScopedNotifier` is removed
+
+`TenantScopedNotifier` was a type alias of `ScopedNotifier`, the type that `forTenant()`, `only()`,
+`except()` and `inTransaction()` return. Rename it:
+
+```ts
+// before
+import type { TenantScopedNotifier } from '@dudousxd/nestjs-notifications-core';
+// after
+import type { ScopedNotifier } from '@dudousxd/nestjs-notifications-core';
+```

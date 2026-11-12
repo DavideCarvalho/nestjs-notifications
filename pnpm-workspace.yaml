@@ -32,3 +32,7 @@ minimumReleaseAgeExclude:
   # First-party NestJS packages Aviary integrates (pinned narrowly; published days before this pin).
   - '@nestjs/mail@0.0.2'
   - '@nestjs/i18n@0.0.3'
+overrides:
+  # Test-only (sqlite drivers for typeorm/drizzle/mikro-orm and telescope). 11.x and 13.0.x ship no
+  # Node 26 prebuild and fail to compile against its V8; 12.11.1 has prebuilds for Node 24 and 26.
+  better-sqlite3: 12.11.1
