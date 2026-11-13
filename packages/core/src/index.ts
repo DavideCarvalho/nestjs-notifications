@@ -2,6 +2,9 @@ export * from './interfaces';
 export {
   type ContextAccessor,
   type ContextStore,
+  type ContextTenantLevel,
+  type CapturedTenant,
+  type CapturedTenantLevel,
   type ContextTenantFilter,
   type ContextTenantRef,
   type UserRef,

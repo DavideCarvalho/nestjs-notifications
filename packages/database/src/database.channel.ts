@@ -13,7 +13,7 @@ import {
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { DatabaseNotification, NewStoredNotification, NotificationStore } from './interfaces';
-import { type TenancyOption, readTenancy, stampTenantId } from './tenancy';
+import { type TenancyOption, readTenancy, sendTenancyOption, stampTenantId } from './tenancy';
 import { DATABASE_TENANCY, NOTIFICATION_STORE } from './tokens';
 
 /** Channel handle: use as `@Database()` on a payload method, or as a token in `via()`. */
@@ -91,9 +91,10 @@ export class DatabaseChannel implements ChannelDriver {
 
   /** The tenant to stamp on a send with no explicit tenant. */
   private unscopedTenantId(captured: DeliveryContext['captured']): string | null {
-    const tenancy = readTenancy(this.tenancy ?? 'inherit', this.contextAccessor);
+    const option = sendTenancyOption(this.tenancy ?? 'inherit');
+    const tenancy = readTenancy(option, this.contextAccessor);
     if (!tenancy.enabled) return captured?.tenantId ?? null;
-    return stampTenantId(tenancy, captured);
+    return stampTenantId(tenancy, option, this.contextAccessor, captured);
   }
 
   private upsertKeyFor(
