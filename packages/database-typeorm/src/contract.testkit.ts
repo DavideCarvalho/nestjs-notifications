@@ -1,8 +1,9 @@
 import { DataSource, type DataSourceOptions } from 'typeorm';
 import type { NotificationStoreContractContext } from '../../../test-contracts/notification-store.contract';
 import type { PendingDigestStoreContractContext } from '../../../test-contracts/pending-digest-store.contract';
-import { NotificationEntity } from './notification.entity';
-import { DigestWindowEntity, PendingDigestEntity } from './pending-digest.entity';
+import { notificationEntity } from './notification.entity';
+import { digestWindowEntity, pendingDigestEntity } from './pending-digest.entity';
+import { quotePath } from './schema-name';
 import { TypeOrmNotificationStore } from './typeorm-notification.store';
 import { TypeOrmPendingDigestStore } from './typeorm-pending-digest.store';
 
@@ -41,7 +42,7 @@ function options(
 
 async function wipe(dataSource: DataSource, tables: string[]): Promise<void> {
   for (const table of tables) {
-    await dataSource.query(`DELETE FROM ${dataSource.driver.escape(table)}`);
+    await dataSource.query(`DELETE FROM ${quotePath(dataSource, table)}`);
   }
 }
 
@@ -49,14 +50,17 @@ async function wipe(dataSource: DataSource, tables: string[]): Promise<void> {
 export async function makeTypeOrmNotificationStoreContext(
   dialect: SqlDialect,
   connection?: DbConnection,
+  schema?: string,
 ): Promise<NotificationStoreContractContext> {
-  const dataSource = new DataSource(options(dialect, [NotificationEntity], connection));
+  const entity = notificationEntity({ schema });
+  const dataSource = new DataSource(options(dialect, [entity], connection));
   await dataSource.initialize();
-  const store = new TypeOrmNotificationStore(dataSource.getRepository(NotificationEntity));
+  const store = new TypeOrmNotificationStore(dataSource.getRepository(entity));
   await store.ensureSchema();
+  const table = schema ? `${schema}.notifications` : 'notifications';
   return {
     store,
-    reset: () => wipe(dataSource, ['notifications']),
+    reset: () => wipe(dataSource, [table]),
     teardown: async () => {
       await dataSource.destroy();
     },
@@ -67,19 +71,25 @@ export async function makeTypeOrmNotificationStoreContext(
 export async function makeTypeOrmPendingDigestStoreContext(
   dialect: SqlDialect,
   connection?: DbConnection,
+  schema?: string,
 ): Promise<PendingDigestStoreContractContext> {
-  const dataSource = new DataSource(
-    options(dialect, [PendingDigestEntity, DigestWindowEntity], connection),
-  );
+  const entries = pendingDigestEntity({ schema });
+  const windows = digestWindowEntity({ schema });
+  const dataSource = new DataSource(options(dialect, [entries, windows], connection));
   await dataSource.initialize();
   const store = new TypeOrmPendingDigestStore(
-    dataSource.getRepository(PendingDigestEntity),
-    dataSource.getRepository(DigestWindowEntity),
+    dataSource.getRepository(entries),
+    dataSource.getRepository(windows),
   );
   await store.ensureSchema();
+  const prefix = schema ? `${schema}.` : '';
   return {
     store,
-    reset: () => wipe(dataSource, ['notification_pending_digests', 'notification_digest_windows']),
+    reset: () =>
+      wipe(dataSource, [
+        `${prefix}notification_pending_digests`,
+        `${prefix}notification_digest_windows`,
+      ]),
     teardown: async () => {
       await dataSource.destroy();
     },

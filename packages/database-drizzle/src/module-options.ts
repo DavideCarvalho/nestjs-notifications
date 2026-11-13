@@ -5,7 +5,7 @@ import type {
   OptionalFactoryDependency,
   Provider,
 } from '@nestjs/common';
-import type { NotificationTables } from './schema';
+import { type NotificationTables, createNotificationTables } from './schema';
 import {
   DRIZZLE_NOTIFICATIONS_DB,
   DRIZZLE_NOTIFICATION_TABLES,
@@ -18,6 +18,25 @@ interface TablesOption {
    * `createNotificationTables`). Defaults to the canonical names in the default schema.
    */
   tables?: NotificationTables;
+  /**
+   * Keep the tables (canonical names) in this Postgres schema: shorthand for
+   * `tables: createNotificationTables({ schema })`, created at boot when `ensureSchema` runs. Every
+   * statement names it (`search_path` is never used). Set `tables` OR `schema`, not both.
+   */
+  schema?: string;
+}
+
+/** The table set for these options: `tables`, else the canonical names in `schema`, else default. */
+function tablesOf(options: TablesOption | undefined): NotificationTables | null {
+  if (options?.tables !== undefined && options.schema !== undefined) {
+    throw new Error(
+      'Drizzle store: pass either `tables` or `schema`, not both. Build the tables with `createNotificationTables({ schema })` to set both.',
+    );
+  }
+  if (options?.tables !== undefined) return options.tables;
+  return options?.schema !== undefined
+    ? createNotificationTables({ schema: options.schema })
+    : null;
 }
 
 /** A database the app passes itself. */
@@ -53,7 +72,7 @@ export interface DrizzleStoreDbAsyncOptions extends AsyncFactoryOptions {
 
 /**
  * `forRootAsync` on a `@nestjs/drizzle` connection. The connection name is static (it picks the
- * provider to inject); the optional factory resolves the rest (`tables`).
+ * provider to inject); the optional factory resolves the rest (`tables` or `schema`).
  */
 export interface DrizzleStoreConnectionAsyncOptions extends AsyncFactoryOptions {
   /** The `DrizzleModule` connection to use (`'default'` for the unnamed one). */
@@ -85,7 +104,7 @@ export function staticProviders(options: DrizzleStoreModuleOptions): Provider[] 
           useExisting: drizzleConnectionToken(options.connectionName),
         }
       : { provide: DRIZZLE_NOTIFICATIONS_DB, useValue: options.db },
-    { provide: DRIZZLE_NOTIFICATION_TABLES, useValue: options.tables ?? null },
+    { provide: DRIZZLE_NOTIFICATION_TABLES, useValue: tablesOf(options) },
   ];
 }
 
@@ -123,7 +142,7 @@ export function asyncProviders(options: DrizzleStoreModuleAsyncOptions): {
           },
       {
         provide: DRIZZLE_NOTIFICATION_TABLES,
-        useFactory: (o: TablesOption) => o?.tables ?? null,
+        useFactory: (o: TablesOption) => tablesOf(o),
         inject: [OPTIONS],
       },
     ],

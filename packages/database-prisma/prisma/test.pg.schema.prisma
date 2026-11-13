@@ -1,0 +1,52 @@
+// Test-only schema: the library's models in their own Postgres schema (`@@schema`), generated into
+// the gitignored generated/pg-schema-client for the schema-option db.spec. NOT shipped.
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/pg-schema-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PRISMA_PG_URL")
+  schemas  = ["notif_lib"]
+}
+
+model Notification {
+  id             String    @id
+  type           String
+  notifiableType String
+  notifiableId   String
+  tenantId       String?
+  causerType     String?
+  causerId       String?
+  traceId        String?
+  data           Json
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([notifiableType, notifiableId, createdAt])
+  @@schema("notif_lib")
+}
+
+model PendingDigest {
+  id               String   @id
+  cadence          String
+  notifiableType   String
+  notifiableId     String
+  tenantId         String?
+  category         String
+  notificationName String
+  notificationData Json
+  createdAt        DateTime @default(now())
+
+  @@index([cadence, tenantId, notifiableType, notifiableId, category])
+  @@schema("notif_lib")
+}
+
+model DigestWindow {
+  id    String   @id
+  ranAt DateTime @default(now())
+
+  @@schema("notif_lib")
+}

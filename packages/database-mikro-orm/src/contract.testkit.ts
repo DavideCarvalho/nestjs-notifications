@@ -1,7 +1,8 @@
 import { MikroORM, type Options } from '@mikro-orm/core';
 import type { NotificationStoreContractContext } from '../../../test-contracts/notification-store.contract';
 import { MikroOrmNotificationStore } from './mikro-orm-notification.store';
-import { NotificationEntity } from './notification.entity';
+import { notificationEntity } from './notification.entity';
+import { tableSql } from './schema-name';
 
 /** A dialect the contract matrix runs against. */
 export type SqlDialect = 'sqlite' | 'postgres' | 'mysql';
@@ -34,8 +35,10 @@ async function driverFor(dialect: SqlDialect): Promise<any> {
 export async function makeMikroOrmNotificationStoreContext(
   dialect: SqlDialect,
   connection?: DbConnection,
+  schema?: string,
 ): Promise<NotificationStoreContractContext> {
   const driver = await driverFor(dialect);
+  const NotificationEntity = notificationEntity({ schema });
   const opts: Options =
     dialect === 'sqlite'
       ? { driver, dbName: ':memory:', entities: [NotificationEntity] }
@@ -50,12 +53,12 @@ export async function makeMikroOrmNotificationStoreContext(
         };
 
   const orm = await MikroORM.init(opts);
-  const store = new MikroOrmNotificationStore(orm.em);
+  const store = new MikroOrmNotificationStore(orm.em, schema ? { schema } : {});
   await store.ensureSchema();
 
-  const table = orm.em
-    .getPlatform()
-    .quoteIdentifier(orm.getMetadata().get('NotificationEntity').tableName);
+  const table = schema
+    ? tableSql(orm.em, 'notifications', schema)
+    : orm.em.getPlatform().quoteIdentifier(orm.getMetadata().get('NotificationEntity').tableName);
 
   return {
     store,

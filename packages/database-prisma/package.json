@@ -47,6 +47,7 @@
     "@dudousxd/nestjs-notifications-preferences": "workspace:^",
     "@nestjs/common": "12.3.2",
     "@prisma/client": "6.19.3",
+    "prisma": "6.19.3",
     "reflect-metadata": "0.2.2",
     "typescript": "5.9.3"
   },

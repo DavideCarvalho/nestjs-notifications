@@ -8,7 +8,12 @@ import type {
 } from '@dudousxd/nestjs-notifications-preferences';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { type SQL, and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
-import { type NotificationTables, notificationTables, pendingDigestSchemaDdl } from './schema';
+import {
+  type NotificationTables,
+  notificationTables,
+  pendingDigestSchemaDdl,
+  runSchemaDdl,
+} from './schema';
 import {
   DRIZZLE_NOTIFICATIONS_DB,
   DRIZZLE_NOTIFICATION_TABLES,
@@ -172,8 +177,10 @@ export class DrizzlePendingDigestStore implements PendingDigestStore {
 
   /** Create the digest tables if missing (`CREATE ... IF NOT EXISTS`, non-destructive). */
   async ensureSchema(): Promise<void> {
-    for (const statement of pendingDigestSchemaDdl(this.tables)) {
-      await this.db.execute(sql.raw(statement));
-    }
+    await runSchemaDdl(
+      (statement) => this.db.execute(sql.raw(statement)),
+      (statement) => this.db.execute(sql.raw(statement)) as Promise<{ rows?: unknown[] }>,
+      pendingDigestSchemaDdl(this.tables),
+    );
   }
 }

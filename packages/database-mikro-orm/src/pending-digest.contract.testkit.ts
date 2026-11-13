@@ -1,7 +1,8 @@
 import { MikroORM, type Options } from '@mikro-orm/core';
 import type { PendingDigestStoreContractContext } from '../../../test-contracts/pending-digest-store.contract';
 import { MikroOrmPendingDigestStore } from './mikro-orm-pending-digest.store';
-import { DigestWindowEntity, PendingDigestEntity } from './pending-digest.entity';
+import { digestWindowEntity, pendingDigestEntity } from './pending-digest.entity';
+import { tableSql } from './schema-name';
 
 /** A dialect the contract matrix runs against. */
 export type SqlDialect = 'sqlite' | 'postgres' | 'mysql';
@@ -34,9 +35,10 @@ async function driverFor(dialect: SqlDialect): Promise<any> {
 export async function makeMikroOrmPendingDigestStoreContext(
   dialect: SqlDialect,
   connection?: DbConnection,
+  schema?: string,
 ): Promise<PendingDigestStoreContractContext> {
   const driver = await driverFor(dialect);
-  const entities = [PendingDigestEntity, DigestWindowEntity];
+  const entities = [pendingDigestEntity({ schema }), digestWindowEntity({ schema })];
   const opts: Options =
     dialect === 'sqlite'
       ? { driver, dbName: ':memory:', entities }
@@ -51,17 +53,17 @@ export async function makeMikroOrmPendingDigestStoreContext(
         };
 
   const orm = await MikroORM.init(opts);
-  const store = new MikroOrmPendingDigestStore(orm.em);
+  const store = new MikroOrmPendingDigestStore(orm.em, schema ? { schema } : {});
   await store.ensureSchema();
 
-  const quote = (name: string): string =>
-    orm.em.getPlatform().quoteIdentifier(orm.getMetadata().get(name).tableName);
+  const quote = (table: string): string =>
+    schema ? tableSql(orm.em, table, schema) : orm.em.getPlatform().quoteIdentifier(table);
 
   return {
     store,
     reset: async () => {
-      await orm.em.getConnection().execute(`DELETE FROM ${quote('PendingDigestEntity')}`);
-      await orm.em.getConnection().execute(`DELETE FROM ${quote('DigestWindowEntity')}`);
+      await orm.em.getConnection().execute(`DELETE FROM ${quote('notification_pending_digests')}`);
+      await orm.em.getConnection().execute(`DELETE FROM ${quote('notification_digest_windows')}`);
     },
     teardown: async () => {
       await orm.close(true);

@@ -551,3 +551,137 @@ How an existing `notifications` table gets it:
   schemaGenerator: { skipTables: notificationsManagedTables() },
   ```
 </Callout>
+
+### Database schema
+
+Keep the library's tables (`notifications`, and the digest tables) in a database schema of their
+own, e.g. `notifications`, instead of your app's default one. On Postgres that's a schema; on MySQL
+it's a database. The schema is created at boot when it's missing (with auto-create on), and every
+statement the store issues names it.
+
+<Callout type="warn">
+  The stores never set `search_path`. Don't point `search_path` at the library's schema yourself to
+  get the same effect: behind PgBouncer in transaction mode it leaks from one client to the next.
+</Callout>
+
+<Tabs items={['TypeORM', 'MikroORM', 'Prisma', 'Drizzle']}>
+  <Tab value="TypeORM">
+
+    Pass `schema` to the store modules, and register the entities built for that schema in your
+    DataSource (or turn on `autoLoadEntities`):
+
+    ```ts title="app.module.ts"
+    import {
+      TypeOrmNotificationStoreModule,
+      TypeOrmPendingDigestStoreModule,
+      digestWindowEntity,
+      notificationEntity,
+      pendingDigestEntity,
+    } from '@dudousxd/nestjs-notifications-database-typeorm';
+
+    TypeOrmModule.forRoot({
+      type: 'postgres', // or 'mysql'
+      // ...
+      entities: [
+        notificationEntity({ schema: 'notifications' }),
+        pendingDigestEntity({ schema: 'notifications' }),
+        digestWindowEntity({ schema: 'notifications' }),
+      ],
+    }),
+    TypeOrmNotificationStoreModule.forFeature({ schema: 'notifications' }),
+    TypeOrmPendingDigestStoreModule.forFeature({ schema: 'notifications' }),
+    ```
+
+    The migration helpers take the same option: `createNotificationsTable(queryRunner, { schema })`,
+    `createPendingDigestTables(queryRunner, { schema })`, and `notificationsManagedTables({ schema })`
+    returns the qualified name.
+
+  </Tab>
+  <Tab value="MikroORM">
+
+    Pass `schema` to the store modules, and register the entities built for that schema:
+
+    ```ts title="app.module.ts"
+    import {
+      MikroOrmNotificationStoreModule,
+      MikroOrmPendingDigestStoreModule,
+      digestWindowEntity,
+      notificationEntity,
+      pendingDigestEntity,
+    } from '@dudousxd/nestjs-notifications-database-mikro-orm';
+
+    MikroOrmModule.forRoot({
+      // ...
+      entities: [
+        notificationEntity({ schema: 'notifications' }),
+        pendingDigestEntity({ schema: 'notifications' }),
+        digestWindowEntity({ schema: 'notifications' }),
+      ],
+    }),
+    MikroOrmNotificationStoreModule.forFeature({ schema: 'notifications' }),
+    MikroOrmPendingDigestStoreModule.forFeature({ schema: 'notifications' }),
+    ```
+
+    Built by hand, the stores take it too: `new MikroOrmNotificationStore(em, { schema })`. The
+    `notifications_schema_meta` marker table lives in the same schema. For migrations, use
+    `notificationsSchemaSql(em, { schema })` and `pendingDigestSchemaSql(em, { schema })` after
+    creating the schema.
+
+  </Tab>
+  <Tab value="Prisma">
+
+    The store runs no SQL of its own, so there's no option: put the models in a schema with Prisma's
+    `@@schema` (Postgres). List the schema in the datasource and add `@@schema` to each model:
+
+    ```prisma title="schema.prisma"
+    datasource db {
+      provider = "postgresql"
+      url      = env("DATABASE_URL")
+      schemas  = ["public", "notifications"]
+    }
+
+    model Notification {
+      // ...the fields above
+      @@schema("notifications")
+    }
+
+    model PendingDigest {
+      // ...
+      @@schema("notifications")
+    }
+
+    model DigestWindow {
+      // ...
+      @@schema("notifications")
+    }
+    ```
+
+    On Prisma 5 and older, enable `previewFeatures = ["multiSchema"]` in the generator. Prisma has no
+    `@@schema` on MySQL: there, point a separate datasource at the database you want instead.
+
+  </Tab>
+  <Tab value="Drizzle">
+
+    Pass `schema` to the store modules:
+
+    ```ts title="app.module.ts"
+    DrizzleNotificationStoreModule.forRoot({ connectionName: 'default', schema: 'notifications' }),
+    DrizzlePendingDigestStoreModule.forRoot({ connectionName: 'default', schema: 'notifications' }),
+    ```
+
+    For drizzle-kit, export the same tables from your schema file:
+    `createNotificationTables({ schema: 'notifications' })`. Hand that object to the modules as
+    `tables` instead when you also rename the tables (set `tables` or `schema`, not both).
+
+  </Tab>
+</Tabs>
+
+A few rules apply to every adapter:
+
+- The name must start with a letter or `_`, then letters, digits or `_` (TypeORM and MikroORM also
+  allow `$`), at most 63 characters. Drizzle refuses `'public'`: leave `schema` unset for it.
+- SQLite has no schemas: setting `schema` there fails at boot.
+- The schema is created only when it's missing. If the database user can't create it, the error
+  names the grant to add (Postgres: `GRANT CREATE ON DATABASE <db> TO <role>`; MySQL:
+  ``GRANT CREATE ON `<schema>`.* TO <user>``), or create the schema yourself first.
+- Without `schema`, nothing changes.

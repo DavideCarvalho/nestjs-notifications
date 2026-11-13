@@ -1,6 +1,12 @@
 import { type DynamicModule, Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { DigestWindowEntity, PendingDigestEntity } from './pending-digest.entity';
+import { TypeOrmModule, getRepositoryToken } from '@nestjs/typeorm';
+import type { Repository } from 'typeorm';
+import {
+  type DigestWindowEntity,
+  type PendingDigestEntity,
+  digestWindowEntity,
+  pendingDigestEntity,
+} from './pending-digest.entity';
 import { TypeOrmPendingDigestStore } from './typeorm-pending-digest.store';
 
 /**
@@ -32,15 +38,27 @@ const PENDING_DIGEST_STORE = Symbol.for('nestjs-notifications:pending-digest-sto
  * })
  * export class AppModule {}
  * ```
+ *
+ * `forFeature({ schema })` keeps both tables in that Postgres schema (MySQL: database); register
+ * `pendingDigestEntity({ schema })` and `digestWindowEntity({ schema })` in the DataSource.
  */
 @Module({})
 export class TypeOrmPendingDigestStoreModule {
-  static forFeature(): DynamicModule {
+  static forFeature(options: { schema?: string } = {}): DynamicModule {
+    const entries = pendingDigestEntity(options);
+    const windows = digestWindowEntity(options);
     return {
       module: TypeOrmPendingDigestStoreModule,
-      imports: [TypeOrmModule.forFeature([PendingDigestEntity, DigestWindowEntity])],
+      imports: [TypeOrmModule.forFeature([entries, windows])],
       providers: [
-        TypeOrmPendingDigestStore,
+        options.schema === undefined
+          ? TypeOrmPendingDigestStore
+          : {
+              provide: TypeOrmPendingDigestStore,
+              useFactory: (e: Repository<PendingDigestEntity>, w: Repository<DigestWindowEntity>) =>
+                new TypeOrmPendingDigestStore(e, w),
+              inject: [getRepositoryToken(entries), getRepositoryToken(windows)],
+            },
         { provide: PENDING_DIGEST_STORE, useExisting: TypeOrmPendingDigestStore },
       ],
       exports: [TypeOrmPendingDigestStore, PENDING_DIGEST_STORE],

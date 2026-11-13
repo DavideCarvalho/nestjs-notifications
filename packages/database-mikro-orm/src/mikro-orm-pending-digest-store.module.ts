@@ -1,8 +1,9 @@
 import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { MikroOrmPendingDigestStore } from './mikro-orm-pending-digest.store';
-import { DigestWindowEntity, PendingDigestEntity } from './pending-digest.entity';
+import { digestWindowEntity, pendingDigestEntity } from './pending-digest.entity';
 import { DigestWindowRepository, PendingDigestRepository } from './pending-digest.repository';
+import { MIKRO_ORM_NOTIFICATIONS_OPTIONS } from './schema-name';
 
 /**
  * `@dudousxd/nestjs-notifications-preferences`'s PENDING_DIGEST_STORE token, inlined via the
@@ -36,11 +37,20 @@ const PENDING_DIGEST_STORE = Symbol.for('nestjs-notifications:pending-digest-sto
  */
 @Module({})
 export class MikroOrmPendingDigestStoreModule {
-  static forFeature(): DynamicModule {
+  /**
+   * `forFeature({ schema })` keeps both tables in that Postgres schema (MySQL: database); register
+   * `pendingDigestEntity({ schema })` and `digestWindowEntity({ schema })` in the ORM config.
+   */
+  static forFeature(options: { schema?: string } = {}): DynamicModule {
     return {
       module: MikroOrmPendingDigestStoreModule,
-      imports: [MikroOrmModule.forFeature([PendingDigestEntity, DigestWindowEntity])],
+      imports: [
+        MikroOrmModule.forFeature([pendingDigestEntity(options), digestWindowEntity(options)]),
+      ],
       providers: [
+        ...(options.schema !== undefined
+          ? [{ provide: MIKRO_ORM_NOTIFICATIONS_OPTIONS, useValue: { schema: options.schema } }]
+          : []),
         MikroOrmPendingDigestStore,
         { provide: PENDING_DIGEST_STORE, useExisting: MikroOrmPendingDigestStore },
       ],

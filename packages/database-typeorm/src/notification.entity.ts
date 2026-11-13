@@ -1,4 +1,5 @@
 import { Column, Entity, Index, PrimaryColumn } from 'typeorm';
+import { entityInSchema } from './schema-name';
 
 /** Name of the inbox index, shared by the entity and the schema repair. */
 export const NOTIFIABLE_INDEX = 'notifications_notifiable_idx';
@@ -59,4 +60,17 @@ export class NotificationEntity {
 
   @Column({ type: Date, precision: 3 })
   updatedAt!: Date;
+}
+
+/**
+ * The notification entity, in `schema` when given: a Postgres schema, or on MySQL a database.
+ * Register the one your store uses in the DataSource (`entities: [notificationEntity({ schema })]`,
+ * or `autoLoadEntities`) and pass the same `schema` to `TypeOrmNotificationStoreModule.forFeature`.
+ * Without `schema` it is {@link NotificationEntity}. Same `schema`, same class.
+ */
+export function notificationEntity(
+  options: { schema?: string | undefined } = {},
+): typeof NotificationEntity {
+  if (options.schema === undefined) return NotificationEntity;
+  return entityInSchema(NotificationEntity, 'notifications', options.schema);
 }

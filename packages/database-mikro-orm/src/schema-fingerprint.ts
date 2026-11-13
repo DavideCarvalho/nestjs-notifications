@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { EntityManager, EntityMetadata } from '@mikro-orm/core';
+import { schemaOf, tableSql } from './schema-name';
 
 /**
  * Hand-bump when a DDL change is NOT visible in the entity metadata this fingerprint hashes
@@ -14,6 +15,16 @@ export const SCHEMA_META_TABLE = 'notifications_schema_meta';
 export const SCHEMA_META_ID = 'notifications';
 /** Advisory-lock key used to serialize concurrent self-heals across booting replicas. */
 const ADVISORY_LOCK_KEY = 'notifications_schema';
+
+/** The marker table, qualified with `schema` when given. */
+function metaTable(em: EntityManager, schema: string | undefined): string {
+  return schema === undefined ? SCHEMA_META_TABLE : tableSql(em, SCHEMA_META_TABLE, schema);
+}
+
+/** The advisory-lock key: per schema, so heals of different schemas never wait on each other. */
+function lockKey(schema: string | undefined): string {
+  return schema === undefined ? ADVISORY_LOCK_KEY : `${ADVISORY_LOCK_KEY}:${schema}`;
+}
 
 type JsonPrimitive = string | number | boolean | null;
 
@@ -158,10 +169,15 @@ function serializeFingerprintInput(input: FingerprintInput): string {
 export function computeExpectedFingerprint(
   em: EntityManager,
   ownedTableNames: ReadonlySet<string>,
+  schema?: string,
 ): string {
   const tables: FingerprintTable[] = [];
   for (const meta of em.getMetadata().getAll().values()) {
     if (!ownedTableNames.has(meta.tableName)) {
+      continue;
+    }
+    // With `schema`, only the entities built for that schema count; without it, none of them do.
+    if (schemaOf(meta.class) !== schema) {
       continue;
     }
     tables.push(buildFingerprintTable(meta));
@@ -197,19 +213,26 @@ function platformDialect(em: EntityManager): Dialect {
  * Idempotently create the marker table. Uses `create table if not exists` — no `information_schema`
  * introspection — so it is safe to run on every boot, including against a completely empty database.
  */
-export async function ensureSchemaMetaTable(em: EntityManager): Promise<void> {
+export async function ensureSchemaMetaTable(em: EntityManager, schema?: string): Promise<void> {
   await em
     .getConnection()
     .execute(
-      `create table if not exists ${SCHEMA_META_TABLE} (id varchar(32) primary key, fingerprint varchar(64) not null, applied_at bigint not null)`,
+      `create table if not exists ${metaTable(em, schema)} (id varchar(32) primary key, fingerprint varchar(64) not null, applied_at bigint not null)`,
     );
 }
 
 /** Read the last-applied fingerprint for the owned schema, or `undefined` when the row is absent. */
-export async function readStoredFingerprint(em: EntityManager): Promise<string | undefined> {
+export async function readStoredFingerprint(
+  em: EntityManager,
+  schema?: string,
+): Promise<string | undefined> {
   const rows: SchemaMetaRow[] = await em
     .getConnection()
-    .execute(`select fingerprint from ${SCHEMA_META_TABLE} where id = ?`, [SCHEMA_META_ID], 'all');
+    .execute(
+      `select fingerprint from ${metaTable(em, schema)} where id = ?`,
+      [SCHEMA_META_ID],
+      'all',
+    );
   const fingerprint = Array.isArray(rows) ? rows[0]?.fingerprint : undefined;
   return typeof fingerprint === 'string' ? fingerprint : undefined;
 }
@@ -218,15 +241,17 @@ export async function readStoredFingerprint(em: EntityManager): Promise<string |
 export async function writeSchemaFingerprint(
   em: EntityManager,
   fingerprint: string,
+  schema?: string,
 ): Promise<void> {
   const connection = em.getConnection();
+  const table = metaTable(em, schema);
   const appliedAt = Date.now();
   const params = [SCHEMA_META_ID, fingerprint, appliedAt];
 
   switch (platformDialect(em)) {
     case 'mysql':
       await connection.execute(
-        `insert into ${SCHEMA_META_TABLE} (id, fingerprint, applied_at) values (?, ?, ?) on duplicate key update fingerprint = values(fingerprint), applied_at = values(applied_at)`,
+        `insert into ${table} (id, fingerprint, applied_at) values (?, ?, ?) on duplicate key update fingerprint = values(fingerprint), applied_at = values(applied_at)`,
         params,
         'run',
       );
@@ -234,7 +259,7 @@ export async function writeSchemaFingerprint(
     case 'postgres':
     case 'sqlite':
       await connection.execute(
-        `insert into ${SCHEMA_META_TABLE} (id, fingerprint, applied_at) values (?, ?, ?) on conflict (id) do update set fingerprint = excluded.fingerprint, applied_at = excluded.applied_at`,
+        `insert into ${table} (id, fingerprint, applied_at) values (?, ?, ?) on conflict (id) do update set fingerprint = excluded.fingerprint, applied_at = excluded.applied_at`,
         params,
         'run',
       );
@@ -242,7 +267,7 @@ export async function writeSchemaFingerprint(
     default: {
       // Unknown dialect: assume no native upsert syntax — update first, insert only when no row exists.
       const updated: MutationResult = await connection.execute(
-        `update ${SCHEMA_META_TABLE} set fingerprint = ?, applied_at = ? where id = ?`,
+        `update ${table} set fingerprint = ?, applied_at = ? where id = ?`,
         [fingerprint, appliedAt, SCHEMA_META_ID],
         'run',
       );
@@ -251,7 +276,7 @@ export async function writeSchemaFingerprint(
       }
       try {
         await connection.execute(
-          `insert into ${SCHEMA_META_TABLE} (id, fingerprint, applied_at) values (?, ?, ?)`,
+          `insert into ${table} (id, fingerprint, applied_at) values (?, ?, ?)`,
           params,
           'run',
         );
@@ -267,39 +292,28 @@ export async function writeSchemaFingerprint(
  * lock is an optimization, never a correctness requirement: any failure (or an engine without
  * advisory locks, e.g. SQLite) falls through to a no-op lock and the heal proceeds unguarded.
  */
-export async function acquireSchemaLock(em: EntityManager): Promise<SchemaLock> {
+export async function acquireSchemaLock(em: EntityManager, schema?: string): Promise<SchemaLock> {
   const connection = em.getConnection();
+  const key = lockKey(schema);
   try {
     switch (platformDialect(em)) {
       case 'mysql':
-        await connection.execute('select get_lock(?, 10) as locked', [ADVISORY_LOCK_KEY], 'all');
+        await connection.execute('select get_lock(?, 10) as locked', [key], 'all');
         return {
           release: async () => {
             try {
-              await connection.execute(
-                'select release_lock(?) as released',
-                [ADVISORY_LOCK_KEY],
-                'all',
-              );
+              await connection.execute('select release_lock(?) as released', [key], 'all');
             } catch {
               // The lock auto-releases when the connection returns to the pool.
             }
           },
         };
       case 'postgres':
-        await connection.execute(
-          'select pg_advisory_lock(hashtext(?))',
-          [ADVISORY_LOCK_KEY],
-          'all',
-        );
+        await connection.execute('select pg_advisory_lock(hashtext(?))', [key], 'all');
         return {
           release: async () => {
             try {
-              await connection.execute(
-                'select pg_advisory_unlock(hashtext(?))',
-                [ADVISORY_LOCK_KEY],
-                'all',
-              );
+              await connection.execute('select pg_advisory_unlock(hashtext(?))', [key], 'all');
             } catch {
               // The advisory lock auto-releases with the session.
             }
