@@ -1,5 +1,18 @@
 # @dudousxd/nestjs-notifications-core
 
+## 0.14.0
+
+### Minor Changes
+
+- [#130](https://github.com/DavideCarvalho/nestjs-notifications/pull/130) [`0422d07`](https://github.com/DavideCarvalho/nestjs-notifications/commit/0422d07baf05386f42df7588aaeca2839a9ddec4) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - Inbox tenancy follows the full `@dudousxd/nestjs-context` contract (2.1+): nested tenant chains, families and `required`.
+
+  - `tenancy.kinds` now picks a level of a nested tenant (e.g. `['clinic']` scopes a unit's request by its clinic), for inbox reads and for the tenant stamped on new rows.
+  - New `tenancy.family` scopes the inbox by a secondary tenant family.
+  - With the context's `tenancy.required` (or the inbox's own `tenancy.required`), an inbox read or mutation with no tenant answers `403` instead of showing tenantless rows. Sends, queues and workers never require a tenant.
+  - `captureContext()` records the tenant chain and families (`CapturedContext.tenants`) when the context has them, so an async worker stamps the same level. Flat tenants capture exactly what they did before.
+
+  An older context ignores the new options and keeps the flat behaviour.
+
 ## 0.13.0
 
 ### Minor Changes
