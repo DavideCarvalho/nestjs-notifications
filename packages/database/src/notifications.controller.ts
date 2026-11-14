@@ -3,7 +3,13 @@ import { Controller, Delete, Get, Param, Post, Query, Req, type Type } from '@ne
 import { finishController, rejectRemovedGuards } from './controller-decorators';
 import { type InboxMountOrigin, recordInboxMount } from './inbox-registry';
 import type { StoredNotification } from './interfaces';
-import { ListQueryError, parseFilterParams, parsePageParams, resolveSort } from './list-api';
+import {
+  ListQueryError,
+  parseFilterParams,
+  parsePageParams,
+  rejectUnknownParams,
+  resolveSort,
+} from './list-api';
 import type { PaginatedNotifications } from './notifications-query.service';
 import { NotificationsQueryService } from './notifications-query.service';
 
@@ -41,7 +47,10 @@ export interface NotificationsControllerOptions {
  * These follow the Aviary list API: `size` defaults to 20 and is clamped to 100; the only order
  * is newest first, so `sort` accepts only `-createdAt`. `filter[type]` takes one type, a comma
  * list (`filter[type]=A,B`) or repeated values (`filter[type][]=A&filter[type][]=B`). An unknown
- * filter field or operator, a bad `page`/`size` or any other `sort` answers `400`.
+ * filter field or operator, a bad `page`/`size`, any other `sort` or any other query param (the
+ * removed `perPage`, a bare `?type=`) answers `400` naming the replacement. An empty `sort` is the
+ * default. A hand-written controller gets the same rules from {@link parseInboxListQuery} and
+ * {@link parseInboxTypeQuery}.
  *
  * The two per-id mutations (`:id/read` and `DELETE /:id`) are scoped to the notifiable `resolveRef`
  * returns — a notification belonging to someone else responds `404`, not `403`, so the endpoint
@@ -98,10 +107,8 @@ export function buildNotificationsController(
       @Query() query: Record<string, unknown>,
     ): Promise<PaginatedNotifications> {
       const ref = await options.resolveRef(req);
-      const { page, size } = parsePageParams(query, { defaultSize: 20, maxSize: 100 });
-      assertNewestFirst(query.sort);
-      const types = parseTypeFilter(query);
-      return this.notifications.paginate(ref, { page, size, types });
+      const parsed = parseInboxListQuery(query);
+      return this.notifications.paginate(ref, parsed);
     }
 
     @Get('unread')
@@ -110,8 +117,8 @@ export function buildNotificationsController(
       @Query() query: Record<string, unknown>,
     ): Promise<{ data: StoredNotification[] }> {
       const ref = await options.resolveRef(req);
-      const types = parseTypeFilter(query);
-      return { data: await this.notifications.unread(ref, { types }) };
+      const filter = parseInboxTypeQuery(query);
+      return { data: await this.notifications.unread(ref, filter) };
     }
 
     @Get('unread/count')
@@ -120,8 +127,8 @@ export function buildNotificationsController(
       @Query() query: Record<string, unknown>,
     ): Promise<{ count: number }> {
       const ref = await options.resolveRef(req);
-      const types = parseTypeFilter(query);
-      return { count: await this.notifications.unreadCount(ref, { types }) };
+      const filter = parseInboxTypeQuery(query);
+      return { count: await this.notifications.unreadCount(ref, filter) };
     }
 
     @Post(':id/read')
@@ -149,6 +156,38 @@ export function buildNotificationsController(
   finishController(NotificationsController, options.decorators);
 
   return NotificationsController;
+}
+
+/** Inbox list paging: `size` defaults to 20 and is clamped to 100. */
+const INBOX_PAGE = { defaultSize: 20, maxSize: 100 } as const;
+
+/**
+ * Reads a `GET notifications` request the way the inbox controller does: `page` / `size` (default
+ * 20, at most 100), `sort` (only `-createdAt`; absent or empty is that default) and `filter[type]`.
+ * Anything else — a bad `page`/`size`, another sort, an unknown filter, a param the list does not
+ * read such as the removed `perPage` or a bare `type` — throws a `ListQueryError` (400) naming the
+ * replacement. For a hand-written inbox controller that must answer like the built-in one.
+ */
+export function parseInboxListQuery(query: Record<string, unknown>): {
+  page: number;
+  size: number;
+  types: string[] | undefined;
+} {
+  rejectUnknownParams(query, ['page', 'size', 'sort', 'filter']);
+  const { page, size } = parsePageParams(query, INBOX_PAGE);
+  assertNewestFirst(query.sort);
+  return { page, size, types: parseTypeFilter(query) };
+}
+
+/**
+ * Reads a `GET notifications/unread` or `unread/count` request: only `filter[type]`; any other
+ * param is a `ListQueryError` (400).
+ */
+export function parseInboxTypeQuery(query: Record<string, unknown>): {
+  types: string[] | undefined;
+} {
+  rejectUnknownParams(query, ['filter']);
+  return { types: parseTypeFilter(query) };
 }
 
 /**

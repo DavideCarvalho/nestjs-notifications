@@ -26,6 +26,12 @@ export class NotificationDto {
 export class ListNotificationsQueryDto {
   page?: number;
   size?: number;
+  sort?: '-createdAt';
+  'filter[type]'?: string;
+}
+
+/** Query of `GET /notifications/unread` and `unread/count`: `?filter[type]=A,B`, nothing else. */
+export class UnreadNotificationsQueryDto {
   'filter[type]'?: string;
 }
 

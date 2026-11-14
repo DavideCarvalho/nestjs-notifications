@@ -2,20 +2,21 @@
 
 import { route, ROUTES, type RouteName, type ExtractParams, type RouteParams } from './routes.js';
 import type { Fetcher } from '@dudousxd/nestjs-client';
+import type { Jsonify } from '@dudousxd/nestjs-client';
 
-import type { ListNotificationsQueryDto } from '../notifications/inbox.dto';
+import type { ListNotificationsQueryDto, UnreadNotificationsQueryDto } from '../notifications/inbox.dto';
 
 export type ApiRouter = {
   app: {
-    paid: { method: "POST"; url: "invoices/paid"; params: never; query: never; body: { userId: number; email: string; invoiceId: string; amount: number }; response: Awaited<ReturnType<import('../app.controller').AppController['paid']>>; filterFields: never };
+    paid: { method: "POST"; url: "/invoices/paid"; params: never; query: never; body: { userId: number; email: string; invoiceId: string; amount: number }; response: Jsonify<Awaited<ReturnType<import('../app.controller').AppController['paid']>>>; error: unknown; filterFields: never; stream: false; binary: false };
   };
   notificationsInbox: {
-    list: { method: "GET"; url: "/notifications"; params: never; query: ListNotificationsQueryDto; body: never; response: Awaited<ReturnType<import('../notifications/inbox.controller').NotificationsInboxController['list']>>; filterFields: never };
-    unread: { method: "GET"; url: "notifications/unread"; params: never; query: never; body: never; response: Awaited<ReturnType<import('../notifications/inbox.controller').NotificationsInboxController['unread']>>; filterFields: never };
-    unreadCount: { method: "GET"; url: "notifications/unread/count"; params: never; query: never; body: never; response: Awaited<ReturnType<import('../notifications/inbox.controller').NotificationsInboxController['unreadCount']>>; filterFields: never };
-    markAsRead: { method: "POST"; url: "notifications/:id/read"; params: { id: string }; query: never; body: never; response: Awaited<ReturnType<import('../notifications/inbox.controller').NotificationsInboxController['markAsRead']>>; filterFields: never };
-    markAllAsRead: { method: "POST"; url: "notifications/read-all"; params: never; query: never; body: never; response: Awaited<ReturnType<import('../notifications/inbox.controller').NotificationsInboxController['markAllAsRead']>>; filterFields: never };
-    remove: { method: "DELETE"; url: "notifications/:id"; params: { id: string }; query: never; body: never; response: Awaited<ReturnType<import('../notifications/inbox.controller').NotificationsInboxController['remove']>>; filterFields: never };
+    list: { method: "GET"; url: "/notifications"; params: never; query: ListNotificationsQueryDto; body: never; response: Jsonify<Awaited<ReturnType<import('../notifications/inbox.controller').NotificationsInboxController['list']>>>; error: unknown; filterFields: never; stream: false; binary: false };
+    unread: { method: "GET"; url: "/notifications/unread"; params: never; query: UnreadNotificationsQueryDto; body: never; response: Jsonify<Awaited<ReturnType<import('../notifications/inbox.controller').NotificationsInboxController['unread']>>>; error: unknown; filterFields: never; stream: false; binary: false };
+    unreadCount: { method: "GET"; url: "/notifications/unread/count"; params: never; query: UnreadNotificationsQueryDto; body: never; response: Jsonify<Awaited<ReturnType<import('../notifications/inbox.controller').NotificationsInboxController['unreadCount']>>>; error: unknown; filterFields: never; stream: false; binary: false };
+    markAsRead: { method: "POST"; url: "/notifications/:id/read"; params: { id: string }; query: never; body: never; response: Jsonify<Awaited<ReturnType<import('../notifications/inbox.controller').NotificationsInboxController['markAsRead']>>>; error: unknown; filterFields: never; stream: false; binary: false };
+    markAllAsRead: { method: "POST"; url: "/notifications/read-all"; params: never; query: never; body: never; response: Jsonify<Awaited<ReturnType<import('../notifications/inbox.controller').NotificationsInboxController['markAllAsRead']>>>; error: unknown; filterFields: never; stream: false; binary: false };
+    remove: { method: "DELETE"; url: "/notifications/:id"; params: { id: string }; query: never; body: never; response: Jsonify<Awaited<ReturnType<import('../notifications/inbox.controller').NotificationsInboxController['remove']>>>; error: unknown; filterFields: never; stream: false; binary: false };
   };
 };
 
@@ -47,7 +48,7 @@ export function createApi(fetcher: Fetcher) {
   return {
     app: {
       paid: (input?: { body?: ApiRouter["app"]["paid"]['body'] }) => ({
-        ...__req<ApiRouter["app"]["paid"]['response']>(() => fetcher.post<ApiRouter["app"]["paid"]['response']>(route("app.paid" as never) || "invoices/paid", { body: input?.body })),
+        ...__req<ApiRouter["app"]["paid"]['response']>(() => fetcher.post<ApiRouter["app"]["paid"]['response']>(route("app.paid" as never) || "/invoices/paid", { body: input?.body })),
       }),
     },
     notificationsInbox: {
@@ -55,19 +56,19 @@ export function createApi(fetcher: Fetcher) {
         ...__req<ApiRouter["notificationsInbox"]["list"]['response']>(() => fetcher.get<ApiRouter["notificationsInbox"]["list"]['response']>(route("notificationsInbox.list" as never) || "/notifications", { query: input?.query as Record<string, unknown> | undefined })),
       }),
       unread: (input?: { query?: ApiRouter["notificationsInbox"]["unread"]['query'] }) => ({
-        ...__req<ApiRouter["notificationsInbox"]["unread"]['response']>(() => fetcher.get<ApiRouter["notificationsInbox"]["unread"]['response']>(route("notificationsInbox.unread" as never) || "notifications/unread", { query: input?.query as Record<string, unknown> | undefined })),
+        ...__req<ApiRouter["notificationsInbox"]["unread"]['response']>(() => fetcher.get<ApiRouter["notificationsInbox"]["unread"]['response']>(route("notificationsInbox.unread" as never) || "/notifications/unread", { query: input?.query as Record<string, unknown> | undefined })),
       }),
       unreadCount: (input?: { query?: ApiRouter["notificationsInbox"]["unreadCount"]['query'] }) => ({
-        ...__req<ApiRouter["notificationsInbox"]["unreadCount"]['response']>(() => fetcher.get<ApiRouter["notificationsInbox"]["unreadCount"]['response']>(route("notificationsInbox.unreadCount" as never) || "notifications/unread/count", { query: input?.query as Record<string, unknown> | undefined })),
+        ...__req<ApiRouter["notificationsInbox"]["unreadCount"]['response']>(() => fetcher.get<ApiRouter["notificationsInbox"]["unreadCount"]['response']>(route("notificationsInbox.unreadCount" as never) || "/notifications/unread/count", { query: input?.query as Record<string, unknown> | undefined })),
       }),
       markAsRead: (input?: { params: ApiRouter["notificationsInbox"]["markAsRead"]['params'] }) => ({
-        ...__req<ApiRouter["notificationsInbox"]["markAsRead"]['response']>(() => fetcher.post<ApiRouter["notificationsInbox"]["markAsRead"]['response']>(route("notificationsInbox.markAsRead" as never, input?.params as never) || "notifications/:id/read", {})),
+        ...__req<ApiRouter["notificationsInbox"]["markAsRead"]['response']>(() => fetcher.post<ApiRouter["notificationsInbox"]["markAsRead"]['response']>(route("notificationsInbox.markAsRead" as never, input?.params as never) || "/notifications/:id/read", {})),
       }),
       markAllAsRead: (input?: Record<string, never>) => ({
-        ...__req<ApiRouter["notificationsInbox"]["markAllAsRead"]['response']>(() => fetcher.post<ApiRouter["notificationsInbox"]["markAllAsRead"]['response']>(route("notificationsInbox.markAllAsRead" as never) || "notifications/read-all", {})),
+        ...__req<ApiRouter["notificationsInbox"]["markAllAsRead"]['response']>(() => fetcher.post<ApiRouter["notificationsInbox"]["markAllAsRead"]['response']>(route("notificationsInbox.markAllAsRead" as never) || "/notifications/read-all", {})),
       }),
       remove: (input?: { params: ApiRouter["notificationsInbox"]["remove"]['params'] }) => ({
-        ...__req<ApiRouter["notificationsInbox"]["remove"]['response']>(() => fetcher.delete<ApiRouter["notificationsInbox"]["remove"]['response']>(route("notificationsInbox.remove" as never, input?.params as never) || "notifications/:id", {})),
+        ...__req<ApiRouter["notificationsInbox"]["remove"]['response']>(() => fetcher.delete<ApiRouter["notificationsInbox"]["remove"]['response']>(route("notificationsInbox.remove" as never, input?.params as never) || "/notifications/:id", {})),
       }),
     },
   };
@@ -98,6 +99,10 @@ export namespace Route {
   export type Params<K extends string> = ResolveByName<K, "params">;
   export type Error<K extends string> = ResolveByName<K, "error">;
   export type FilterFields<K extends string> = ResolveByName<K, "filterFields">;
+  /** The streamed element type of an `@Sse()`/streaming route — the type yielded by its `stream()` AsyncIterable. */
+  export type Stream<K extends string> = ResolveByName<K, "response">;
+  /** True for a binary/blob route (`StreamableFile`/`Buffer` handler return type). */
+  export type Binary<K extends string> = ResolveByName<K, "binary">;
   export type Request<K extends string> = {
     body: Body<K>;
     query: Query<K>;
@@ -112,4 +117,6 @@ export namespace Path {
   export type Params<M extends string, U extends string> = ResolveByPath<M, U, "params">;
   export type Error<M extends string, U extends string> = ResolveByPath<M, U, "error">;
   export type FilterFields<M extends string, U extends string> = ResolveByPath<M, U, "filterFields">;
+  export type Stream<M extends string, U extends string> = ResolveByPath<M, U, "response">;
+  export type Binary<M extends string, U extends string> = ResolveByPath<M, U, "binary">;
 }

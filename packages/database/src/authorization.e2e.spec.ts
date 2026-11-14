@@ -159,6 +159,9 @@ describe('DatabaseChannelModule with @nestjs/authorization', () => {
       expect((await get(app, '/notifications?sort=-createdAt', user)).status).toBe(200);
       expect((await get(app, '/notifications?sort=createdAt', user)).status).toBe(400);
       expect((await get(app, '/notifications?sort=type', user)).status).toBe(400);
+      // A cleared sort input is the default, like an empty page / size.
+      expect((await get(app, '/notifications?sort=', user)).status).toBe(200);
+      expect((await get(app, '/notifications?sort=&page=&size=', user)).status).toBe(200);
     });
 
     it('rejects bad paging and unknown filters with 400', async () => {
@@ -169,6 +172,21 @@ describe('DatabaseChannelModule with @nestjs/authorization', () => {
       expect((await get(app, '/notifications?filter[type][gt]=A', user)).status).toBe(400);
       expect((await get(app, '/notifications/unread?filter[nope]=1', user)).status).toBe(400);
       expect((await get(app, '/notifications/unread/count?filter[nope]=1', user)).status).toBe(400);
+    });
+
+    it('rejects the removed params with 400 naming the replacement, instead of ignoring them', async () => {
+      const app = await seeded();
+      for (const [path, hint] of [
+        ['/notifications?perPage=5', '"size"'],
+        ['/notifications?limit=5', '"size"'],
+        ['/notifications?type=A', 'filter[type]'],
+        ['/notifications/unread?type=A', 'filter[type]'],
+        ['/notifications/unread/count?page=2', '"page"'],
+      ] as const) {
+        const res = await get(app, path, user);
+        expect([path, res.status]).toEqual([path, 400]);
+        expect(((await res.json()) as { message: string }).message).toContain(hint);
+      }
     });
 
     it('GET /notifications/unread answers { data }, filtered by filter[type]', async () => {
