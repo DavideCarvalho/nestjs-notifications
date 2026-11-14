@@ -7,6 +7,7 @@ import {
   type NotificationDto,
   PaginatedNotificationsDto,
   UnreadCountDto,
+  UnreadNotificationsDto,
 } from './inbox.dto';
 
 /**
@@ -23,22 +24,19 @@ export class NotificationsInboxController {
 
   @Get()
   async list(@Query() query: ListNotificationsQueryDto): Promise<PaginatedNotificationsDto> {
+    // Query values arrive as strings; `size` is capped at 100 like the library's own controller.
     const page = await this.notifications.paginate(this.currentUser(), {
-      page: query.page,
-      perPage: query.perPage,
+      page: query.page ? Number(query.page) : 1,
+      size: Math.min(100, query.size ? Number(query.size) : 20),
+      types: typeFilter(query['filter[type]']),
     });
-    return {
-      items: page.items.map(toDto),
-      page: page.meta.page,
-      perPage: page.meta.perPage,
-      total: page.meta.total,
-    };
+    return { data: page.data.map(toDto), meta: page.meta };
   }
 
   @Get('unread')
-  async unread(): Promise<NotificationDto[]> {
-    const items = await this.notifications.unread(this.currentUser());
-    return items.map(toDto);
+  async unread(): Promise<UnreadNotificationsDto> {
+    const rows = await this.notifications.unread(this.currentUser());
+    return { data: rows.map(toDto) };
   }
 
   @Get('unread/count')
@@ -68,6 +66,16 @@ export class NotificationsInboxController {
   private currentUser() {
     return { type: 'User', id: '1' };
   }
+}
+
+/** `filter[type]=A,B` → `['A', 'B']`; absent or empty → no filter. */
+function typeFilter(raw: string | undefined): string[] | undefined {
+  if (!raw) return undefined;
+  const types = raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  return types.length > 0 ? types : undefined;
 }
 
 function toDto(n: StoredNotification): NotificationDto {

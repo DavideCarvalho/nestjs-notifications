@@ -30,15 +30,28 @@ describe('nestjsNotificationsCodegen', () => {
     );
   });
 
-  it('list returns the paginated shape and accepts page/perPage query', () => {
+  it('list returns the offset envelope and accepts page/size/filter[type]', () => {
     const routes = run(nestjsNotificationsCodegen());
     const list = routes.find((r) => r.name === 'notifications.list');
     expect(list?.method).toBe('GET');
     expect(list?.path).toBe('/notifications');
-    expect(list?.contract?.contractSource.query).toContain('page?: number');
-    expect(list?.contract?.contractSource.response).toContain('items:');
-    // `meta` + `lastPage` so the generated infiniteQueryOptions can paginate.
-    expect(list?.contract?.contractSource.response).toContain('lastPage');
+    const query = list?.contract?.contractSource.query;
+    expect(query).toContain('page?: number');
+    expect(query).toContain('size?: number');
+    expect(query).toContain("'filter[type]'?: string | string[]");
+    expect(query).not.toContain('perPage');
+    const response = list?.contract?.contractSource.response;
+    expect(response).toContain('data:');
+    expect(response).toContain('currentPage: number; lastPage: number');
+  });
+
+  it('unread returns { data } and both unread routes take filter[type]', () => {
+    const routes = run(nestjsNotificationsCodegen());
+    const unread = routes.find((r) => r.name === 'notifications.unread');
+    const count = routes.find((r) => r.name === 'notifications.unreadCount');
+    expect(unread?.contract?.contractSource.response).toMatch(/^\{ data: /);
+    expect(unread?.contract?.contractSource.query).toContain("'filter[type]'?:");
+    expect(count?.contract?.contractSource.query).toContain("'filter[type]'?:");
   });
 
   it('markAsRead is POST /notifications/:id/read with a path param', () => {

@@ -125,7 +125,7 @@ The stored `type` is the notification's `notificationName(notification)` — an 
 `notificationType()` override when implemented, else the class-level `@Notification({ name })`,
 else the class name. See [notificationType()](/docs/concepts/notifications#per-instance-display-name-notificationtype)
 for when to reach for the instance override (e.g. one generic notification class carrying many
-event names). This is also the value the [`?type=` inbox filter](/docs/recipes/in-app-notifications)
+event names). This is also the value the [`filter[type]` inbox filter](/docs/recipes/in-app-notifications)
 matches against.
 
 ## The store
@@ -150,7 +150,7 @@ feed:
 purely additive. `PaginateForNotifiableOptions` carries the same `types?: string[]` for the
 paginated read path. Every bundled adapter (in-memory, TypeORM, MikroORM, Prisma, Drizzle) implements the
 filter; see [In-app notifications](/docs/recipes/in-app-notifications) for the higher-level
-`NotificationsQueryService` and REST `?type=` query param this powers.
+`NotificationsQueryService` and REST `filter[type]` query param this powers.
 
 Every bundled store implements `countUnread`. A custom store should implement it too: the React
 inbox polls the unread count, and without it each poll loads every unread row and its payload.

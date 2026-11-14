@@ -85,39 +85,39 @@ describe('NotificationsQueryService', () => {
 
   it('paginate() slices over all() with totals', async () => {
     await seed(store);
-    const page1 = await service.paginate(ref, { page: 1, perPage: 2 });
+    const page1 = await service.paginate(ref, { page: 1, size: 2 });
     expect(page1).toEqual({
-      items: page1.items,
-      meta: { page: 1, perPage: 2, total: 3, lastPage: 2 },
+      data: page1.data,
+      meta: { total: 3, perPage: 2, currentPage: 1, lastPage: 2, firstPage: 1 },
     });
-    expect(page1.items.map((r) => r.type)).toEqual(['C', 'B']);
+    expect(page1.data.map((r) => r.type)).toEqual(['C', 'B']);
 
-    const page2 = await service.paginate(ref, { page: 2, perPage: 2 });
-    expect(page2.items.map((r) => r.type)).toEqual(['A']);
+    const page2 = await service.paginate(ref, { page: 2, size: 2 });
+    expect(page2.data.map((r) => r.type)).toEqual(['A']);
     expect(page2.meta.total).toBe(3);
     expect(page2.meta.lastPage).toBe(2);
   });
 
-  it('paginate() defaults to page 1, perPage 20', async () => {
+  it('paginate() defaults to page 1, size 20', async () => {
     await seed(store);
     const page = await service.paginate(ref);
-    expect(page.meta.page).toBe(1);
+    expect(page.meta.currentPage).toBe(1);
     expect(page.meta.perPage).toBe(20);
-    expect(page.items).toHaveLength(3);
+    expect(page.data).toHaveLength(3);
   });
 
   it('paginate() pushes limit/offset down into the store', async () => {
     await seed(store);
     const spy = vi.spyOn(store, 'paginateForNotifiable');
 
-    await service.paginate(ref, { page: 2, perPage: 2 });
+    await service.paginate(ref, { page: 2, size: 2 });
 
     expect(spy).toHaveBeenCalledWith('User', '42', { limit: 2, offset: 2, tenantId: undefined });
   });
 
   it('paginate() scopes the store call to a tenant', async () => {
     const spy = vi.spyOn(store, 'paginateForNotifiable');
-    await service.forTenant('ws-1').paginate(ref, { page: 1, perPage: 5 });
+    await service.forTenant('ws-1').paginate(ref, { page: 1, size: 5 });
     expect(spy).toHaveBeenCalledWith('User', '42', { limit: 5, offset: 0, tenantId: 'ws-1' });
   });
 
@@ -137,7 +137,7 @@ describe('NotificationsQueryService', () => {
     };
     const svc = new NotificationsQueryService(store);
 
-    const page = await svc.paginate(ref, { page: 1, perPage: 2 });
+    const page = await svc.paginate(ref, { page: 1, size: 2 });
 
     expect(store.paginateForNotifiable).toHaveBeenCalledWith('User', '42', {
       limit: 2,
@@ -145,8 +145,14 @@ describe('NotificationsQueryService', () => {
       tenantId: undefined,
     });
     expect(store.getForNotifiable).not.toHaveBeenCalled();
-    expect(page.items).toHaveLength(2);
-    expect(page.meta).toEqual({ page: 1, perPage: 2, total: 50, lastPage: 25 });
+    expect(page.data).toHaveLength(2);
+    expect(page.meta).toEqual({
+      total: 50,
+      perPage: 2,
+      currentPage: 1,
+      lastPage: 25,
+      firstPage: 1,
+    });
   });
 
   it('paginate() falls back to in-memory slicing for stores without pushdown', async () => {
@@ -166,11 +172,11 @@ describe('NotificationsQueryService', () => {
     };
     const svc = new NotificationsQueryService(store);
 
-    const page = await svc.paginate(ref, { page: 2, perPage: 2 });
+    const page = await svc.paginate(ref, { page: 2, size: 2 });
 
     expect(store.getForNotifiable).toHaveBeenCalled();
-    expect(page.items).toHaveLength(1);
-    expect(page.meta).toEqual({ page: 2, perPage: 2, total: 3, lastPage: 2 });
+    expect(page.data).toHaveLength(1);
+    expect(page.meta).toEqual({ total: 3, perPage: 2, currentPage: 2, lastPage: 2, firstPage: 1 });
   });
 
   it('markAllAsRead() clears unread for the target only', async () => {

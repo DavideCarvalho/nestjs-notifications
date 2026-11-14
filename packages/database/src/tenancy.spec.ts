@@ -172,8 +172,8 @@ describe('inbox tenancy: the matching matrix', () => {
       expect(types(await svc.all(ref))).toEqual(expected);
       expect(types(await svc.unread(ref))).toEqual(expected);
       expect(await svc.unreadCount(ref)).toBe(expected.length);
-      const page = await svc.paginate(ref, { perPage: 10 });
-      expect(types(page.items)).toEqual(expected);
+      const page = await svc.paginate(ref, { size: 10 });
+      expect(types(page.data)).toEqual(expected);
       expect(page.meta.total).toBe(expected.length);
     });
   });
@@ -491,12 +491,13 @@ describe('inbox controller under tenancy (HTTP)', () => {
   it('lists only the request tenant and answers 404 for another tenant’s row', async () => {
     const { rows, call } = await boot();
     const list = await (await call('/notifications', 'org_1')).json();
-    expect(list.items.map((r: StoredNotification) => r.type)).toEqual(['A']);
+    expect(list.data.map((r: StoredNotification) => r.type)).toEqual(['A']);
+    expect(list.meta).toEqual({ total: 1, perPage: 20, currentPage: 1, lastPage: 1, firstPage: 1 });
     expect((await call(`/notifications/${rows.b.id}`, 'org_1', 'DELETE')).status).toBe(404);
     expect((await call(`/notifications/${rows.b.id}/read`, 'org_1', 'POST')).status).toBe(404);
     expect((await call(`/notifications/${rows.a.id}`, 'org_1', 'DELETE')).status).toBe(200);
     const orgless = await (await call('/notifications/unread')).json();
-    expect(orgless.map((r: StoredNotification) => r.type)).toEqual(['N']);
+    expect(orgless.data.map((r: StoredNotification) => r.type)).toEqual(['N']);
   });
 
   it('required: a request with no tenant gets a 403', async () => {

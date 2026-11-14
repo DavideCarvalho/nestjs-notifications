@@ -61,7 +61,7 @@ describe('Drizzle store modules (Nest wiring, pglite)', () => {
     const query = moduleRef.get(NotificationsQueryService);
     const page = await query.paginate({ type: 'User', id: '7' });
     expect(page.meta.total).toBe(1);
-    expect(page.items[0]).toMatchObject({ type: 'InvoicePaid', data: { amount: 42 } });
+    expect(page.data[0]).toMatchObject({ type: 'InvoicePaid', data: { amount: 42 } });
     expect(await query.unreadCount({ type: 'User', id: '7' })).toBe(1);
 
     const rows = await client.query<{ n: number }>('SELECT count(*)::int AS n FROM inbox_items');
