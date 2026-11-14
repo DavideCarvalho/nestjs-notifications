@@ -6,6 +6,7 @@ import {
 } from '@dudousxd/nestjs-notifications-core';
 import { Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import type { NotificationOwnerRef, NotificationStore, StoredNotification } from './interfaces';
+import { type OffsetPage, type OffsetPageMeta, offsetPage } from './list-api';
 import { READ_SYNC_PUBLISHER, type ReadSyncPublisher } from './read-sync';
 import { type InboxScope, type TenancyOption, inboxScope, readTenancy } from './tenancy';
 import { DATABASE_TENANCY, NOTIFICATION_STORE } from './tokens';
@@ -27,27 +28,22 @@ export interface PaginateOptions {
   /** 1-based page number. Default 1. */
   page?: number | undefined;
   /** Page size. Default 20. */
-  perPage?: number | undefined;
+  size?: number | undefined;
   /** Only include notifications whose `type` is one of these; absent/empty = no filter. */
   types?: string[] | undefined;
 }
 
-/** Pagination metadata for a {@link PaginatedNotifications} page. */
-export interface PaginationMeta {
-  /** 1-based current page. */
-  page: number;
-  perPage: number;
-  /** Total matching notifications across all pages. */
-  total: number;
-  /** Number of the last page (`max(1, ceil(total / perPage))`). */
-  lastPage: number;
-}
+/**
+ * Pagination metadata for a {@link PaginatedNotifications} page — the Aviary offset list `meta`:
+ * `{ total, perPage, currentPage, lastPage, firstPage }` (pages are 1-based).
+ */
+export type PaginationMeta = OffsetPageMeta;
 
-/** A page of stored notifications. `meta` follows the conventional `{ page, lastPage, … }` shape. */
-export interface PaginatedNotifications {
-  items: StoredNotification[];
-  meta: PaginationMeta;
-}
+/**
+ * A page of stored notifications, in the Aviary offset list envelope:
+ * `{ data, meta: { total, perPage, currentPage, lastPage, firstPage } }`.
+ */
+export type PaginatedNotifications = OffsetPage<StoredNotification>;
 
 /** Tenant-scoped read API — same methods as {@link NotificationsQueryService}. */
 export interface ScopedNotificationsQuery {
@@ -341,39 +337,34 @@ export class NotificationsQueryService implements ScopedNotificationsQuery {
 
   private async paginateScoped(
     target: NotifiableTarget,
-    { page = 1, perPage = 20, types }: PaginateOptions,
+    { page = 1, size = 20, types }: PaginateOptions,
     explicitTenant?: string,
   ): Promise<PaginatedNotifications> {
     const scope = this.scopeOf(explicitTenant);
     const safePage = Math.max(1, Math.floor(page));
-    const safePerPage = Math.max(1, Math.floor(perPage));
-    const offset = (safePage - 1) * safePerPage;
-    const meta = (total: number): PaginationMeta => ({
-      page: safePage,
-      perPage: safePerPage,
-      total,
-      lastPage: Math.max(1, Math.ceil(total / safePerPage)),
-    });
+    const safeSize = Math.max(1, Math.floor(size));
+    const offset = (safePage - 1) * safeSize;
 
     // Push limit/offset down into the store when it supports it — scales to large feeds. A scope
     // the store predicate can't express (rows with no tenant) takes the in-memory path below.
     if (this.store.paginateForNotifiable && !scope.visible) {
       const ref = this.refOf(target);
       const { items, total } = await this.store.paginateForNotifiable(ref.type, String(ref.id), {
-        limit: safePerPage,
+        limit: safeSize,
         offset,
         tenantId: scope.tenant,
         types,
       });
-      return { items, meta: meta(total) };
+      return offsetPage(items, { total, page: safePage, size: safeSize });
     }
 
     // Fallback for stores without pushdown: fetch all rows and slice (correct, not scalable).
     const all = await this.allScoped(target, explicitTenant, types);
-    return {
-      items: all.slice(offset, offset + safePerPage),
-      meta: meta(all.length),
-    };
+    return offsetPage(all.slice(offset, offset + safeSize), {
+      total: all.length,
+      page: safePage,
+      size: safeSize,
+    });
   }
 
   private async unreadCountScoped(

@@ -37,8 +37,8 @@ export interface InboxProps {
   clientOptions?: NotificationsClientOptions;
   /** SSE endpoint for live unread-count updates (overrides the provider). */
   sseUrl?: string;
-  /** Page size. Default 20. */
-  perPage?: number;
+  /** Page size. Default 20; the server clamps it to 100. */
+  size?: number;
   /** Poll interval (ms) for the unread count when no SSE. Default 30000. */
   pollIntervalMs?: number;
   /** Custom row renderer; falls back to the built-in row. */
@@ -183,7 +183,7 @@ export function Inbox({
   client,
   clientOptions,
   sseUrl,
-  perPage,
+  size,
   pollIntervalMs,
   renderItem,
   emptyState,
@@ -214,7 +214,7 @@ export function Inbox({
     markAllAsRead,
     remove,
     refresh,
-  } = useNotifications({ ...hookOptions, perPage });
+  } = useNotifications({ ...hookOptions, size });
 
   // Refresh the feed each time the panel opens so it reflects live pushes.
   useEffect(() => {

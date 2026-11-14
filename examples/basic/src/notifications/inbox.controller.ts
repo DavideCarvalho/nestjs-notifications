@@ -1,5 +1,9 @@
 import type { StoredNotification } from '@dudousxd/nestjs-notifications-database';
-import { NotificationsQueryService } from '@dudousxd/nestjs-notifications-database';
+import {
+  NotificationsQueryService,
+  parseInboxListQuery,
+  parseInboxTypeQuery,
+} from '@dudousxd/nestjs-notifications-database';
 import { Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import {
   AckDto,
@@ -7,13 +11,18 @@ import {
   type NotificationDto,
   PaginatedNotificationsDto,
   UnreadCountDto,
+  UnreadNotificationsDto,
+  UnreadNotificationsQueryDto,
 } from './inbox.dto';
 
 /**
  * The in-app inbox REST API, written as a **static, decorated controller** (rather than the
  * library's `createNotificationsController` factory) so `nestjs-codegen` can discover it by static
  * AST and emit a typed client into `src/generated`. It delegates to `NotificationsQueryService`
- * from the database channel.
+ * from the database channel, and reads its query with the library's own `parseInboxListQuery` /
+ * `parseInboxTypeQuery`, so it answers exactly like `createNotificationsController`: a bad
+ * `page`/`size`, a sort other than `-createdAt`, an unknown filter or a removed param (`perPage`,
+ * a bare `type`) is a 400.
  *
  * In a real app the current notifiable comes from auth (`req.user`); here it's a fixed demo user.
  */
@@ -23,27 +32,23 @@ export class NotificationsInboxController {
 
   @Get()
   async list(@Query() query: ListNotificationsQueryDto): Promise<PaginatedNotificationsDto> {
-    const page = await this.notifications.paginate(this.currentUser(), {
-      page: query.page,
-      perPage: query.perPage,
-    });
-    return {
-      items: page.items.map(toDto),
-      page: page.meta.page,
-      perPage: page.meta.perPage,
-      total: page.meta.total,
-    };
+    // Query values arrive as strings: the library's parser validates and clamps them (size ≤ 100).
+    const parsed = parseInboxListQuery(query as Record<string, unknown>);
+    const page = await this.notifications.paginate(this.currentUser(), parsed);
+    return { data: page.data.map(toDto), meta: page.meta };
   }
 
   @Get('unread')
-  async unread(): Promise<NotificationDto[]> {
-    const items = await this.notifications.unread(this.currentUser());
-    return items.map(toDto);
+  async unread(@Query() query: UnreadNotificationsQueryDto): Promise<UnreadNotificationsDto> {
+    const filter = parseInboxTypeQuery(query as Record<string, unknown>);
+    const rows = await this.notifications.unread(this.currentUser(), filter);
+    return { data: rows.map(toDto) };
   }
 
   @Get('unread/count')
-  async unreadCount(): Promise<UnreadCountDto> {
-    return { count: await this.notifications.unreadCount(this.currentUser()) };
+  async unreadCount(@Query() query: UnreadNotificationsQueryDto): Promise<UnreadCountDto> {
+    const filter = parseInboxTypeQuery(query as Record<string, unknown>);
+    return { count: await this.notifications.unreadCount(this.currentUser(), filter) };
   }
 
   @Post(':id/read')

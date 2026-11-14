@@ -19,9 +19,12 @@ export {
   type PaginatedNotifications,
   type PaginationMeta,
 } from './notifications-query.service';
+export { ListQueryError, type OffsetPage, type OffsetPageMeta } from './list-api';
 export { InboxMountAudit } from './inbox-mount-audit';
 export {
   createNotificationsController,
+  parseInboxListQuery,
+  parseInboxTypeQuery,
   type NotificationsControllerOptions,
 } from './notifications.controller';
 export {

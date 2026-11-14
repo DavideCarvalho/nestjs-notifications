@@ -27,7 +27,12 @@ const NOTIFICATION =
   '{ id: string; type: string; notifiableType: string; notifiableId: string; ' +
   'tenantId: string | null; data: Record<string, unknown>; readAt: string | null; ' +
   'createdAt: string; updatedAt: string }';
-const PAGINATED = `{ items: ${NOTIFICATION}[]; meta: { page: number; perPage: number; total: number; lastPage: number } }`;
+// The Aviary offset list envelope `GET {path}` answers.
+const PAGINATED = `{ data: ${NOTIFICATION}[]; meta: { total: number; perPage: number; currentPage: number; lastPage: number; firstPage: number } }`;
+// `filter[type]` is one type or a list (`A,B`), as a flat bracket key: the generated client sends
+// query keys as-is (an array comma-joined), and the server reads it with or without a nested
+// (`qs`) query parser.
+const TYPE_FILTER = "{ 'filter[type]'?: string | string[] }";
 
 function route(
   method: string,
@@ -43,19 +48,20 @@ function inboxRoutes(base: string, path: string, ns: string): RouteDescriptor[] 
   const root = `${base}/${path}`;
   return [
     route('GET', root, `${ns}.list`, {
-      // `type` is a comma-separated list of notification types (e.g. `?type=A,B`); the backend
-      // splits/trims and treats absent/empty as "no filter".
-      query: '{ page?: number; perPage?: number; type?: string }',
+      // Aviary list API: `page` (1-based) + `size` (default 20, clamped to 100), `sort` accepts only
+      // `-createdAt`, `filter[type]` narrows by notification type.
+      query:
+        "{ page?: number; size?: number; sort?: '-createdAt'; 'filter[type]'?: string | string[] }",
       body: null,
       response: PAGINATED,
     }),
     route('GET', `${root}/unread`, `${ns}.unread`, {
-      query: '{ type?: string }',
+      query: TYPE_FILTER,
       body: null,
-      response: `${NOTIFICATION}[]`,
+      response: `{ data: ${NOTIFICATION}[] }`,
     }),
     route('GET', `${root}/unread/count`, `${ns}.unreadCount`, {
-      query: '{ type?: string }',
+      query: TYPE_FILTER,
       body: null,
       response: '{ count: number }',
     }),

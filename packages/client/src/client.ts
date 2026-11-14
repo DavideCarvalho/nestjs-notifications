@@ -10,9 +10,9 @@ import type {
  * Small `fetch` wrapper around the nestjs-notifications read API. Targets the
  * endpoints exposed by `createNotificationsController` (mounted by the host):
  *
- * - `GET    {baseUrl}notifications?page&perPage`
- * - `GET    {baseUrl}notifications/unread`
- * - `GET    {baseUrl}notifications/unread/count`
+ * - `GET    {baseUrl}notifications?page&size&filter[type]` → `{ data, meta }`
+ * - `GET    {baseUrl}notifications/unread?filter[type]` → `{ data }`
+ * - `GET    {baseUrl}notifications/unread/count?filter[type]` → `{ count }`
  * - `POST   {baseUrl}notifications/:id/read`
  * - `POST   {baseUrl}notifications/read-all`
  * - `DELETE {baseUrl}notifications/:id`
@@ -53,29 +53,35 @@ export class NotificationsClient {
     this.fetchImpl = options.fetch ?? f.bind(globalThis);
   }
 
-  /** List notifications for the current notifiable (paginated). */
-  async list(params: ListParams = {}): Promise<PaginatedNotifications> {
+  /**
+   * List notifications for the current notifiable, newest first, one offset page at a time.
+   * Resolves the server's `{ data, meta: { total, perPage, currentPage, lastPage, firstPage } }`.
+   */
+  list(params: ListParams = {}): Promise<PaginatedNotifications> {
     const query = new URLSearchParams();
     if (params.page != null) query.set('page', String(params.page));
-    if (params.perPage != null) query.set('perPage', String(params.perPage));
-    setTypeParam(query, params.types);
+    if (params.size != null) query.set('size', String(params.size));
+    setTypeFilter(query, params.types);
     const qs = query.toString();
-    const raw = await this.request<RawPaginated>('GET', `${this.path}${qs ? `?${qs}` : ''}`);
-    return normalizePaginated(raw, params);
+    return this.request<PaginatedNotifications>('GET', `${this.path}${qs ? `?${qs}` : ''}`);
   }
 
-  /** Unread notifications for the current notifiable. */
-  unread(params: NotificationsFilterParams = {}): Promise<NotificationItem[]> {
+  /** Unread notifications for the current notifiable (unwraps the server's `{ data }`). */
+  async unread(params: NotificationsFilterParams = {}): Promise<NotificationItem[]> {
     const query = new URLSearchParams();
-    setTypeParam(query, params.types);
+    setTypeFilter(query, params.types);
     const qs = query.toString();
-    return this.request<NotificationItem[]>('GET', `${this.path}/unread${qs ? `?${qs}` : ''}`);
+    const res = await this.request<{ data: NotificationItem[] }>(
+      'GET',
+      `${this.path}/unread${qs ? `?${qs}` : ''}`,
+    );
+    return res.data;
   }
 
   /** Number of unread notifications for the current notifiable. */
   async unreadCount(params: NotificationsFilterParams = {}): Promise<number> {
     const query = new URLSearchParams();
-    setTypeParam(query, params.types);
+    setTypeFilter(query, params.types);
     const qs = query.toString();
     const res = await this.request<{ count: number }>(
       'GET',
@@ -178,29 +184,13 @@ export class NotificationsApiError extends Error {
   }
 }
 
-/** Backend page shape — `items` is canonical (`data` tolerated); pagination lives under `meta`. */
-interface RawPaginated {
-  items?: NotificationItem[];
-  data?: NotificationItem[];
-  meta?: { page?: number; perPage?: number; total?: number; lastPage?: number };
-}
-
-function normalizePaginated(raw: RawPaginated, params: ListParams): PaginatedNotifications {
-  const items = raw.items ?? raw.data ?? [];
-  const page = raw.meta?.page ?? params.page ?? 1;
-  const perPage = raw.meta?.perPage ?? params.perPage ?? items.length;
-  const total = raw.meta?.total ?? items.length;
-  const lastPage = raw.meta?.lastPage ?? Math.max(1, Math.ceil(total / Math.max(1, perPage)));
-  return { items, meta: { page, perPage, total, lastPage } };
-}
-
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 }
 
-/** Sends `types` as the comma-separated `?type=` param the backend splits/trims; empty = omitted. */
-function setTypeParam(query: URLSearchParams, types: string[] | undefined): void {
-  if (types && types.length > 0) query.set('type', types.join(','));
+/** Sends `types` as the `filter[type]=A,B` list filter; absent/empty = omitted (no filter). */
+function setTypeFilter(query: URLSearchParams, types: string[] | undefined): void {
+  if (types && types.length > 0) query.set('filter[type]', types.join(','));
 }
 
 async function parseBody<T>(response: Response): Promise<T> {

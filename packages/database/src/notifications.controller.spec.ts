@@ -7,7 +7,7 @@ import { createNotificationsController } from './notifications.controller';
 /** Instantiate the generated controller against a stubbed query service. */
 function mountController(options?: { path?: string }) {
   const notifications = {
-    paginate: vi.fn(async () => ({ items: [], meta: {} })),
+    paginate: vi.fn(async () => ({ data: [], meta: {} })),
     unread: vi.fn(async () => []),
     unreadCount: vi.fn(async () => 0),
     markAsRead: vi.fn(async () => undefined),

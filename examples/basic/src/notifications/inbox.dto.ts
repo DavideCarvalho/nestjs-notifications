@@ -18,18 +18,41 @@ export class NotificationDto {
   createdAt!: string;
 }
 
-/** Query string for the paginated list endpoint. */
+/**
+ * Query string for the paginated list endpoint (Aviary list API): `?page=2&size=20` and
+ * `?filter[type]=A,B`. Nest 12 on Express 5 parses the query flat, so the filter arrives under
+ * the literal `filter[type]` key — the same key the generated client sends.
+ */
 export class ListNotificationsQueryDto {
   page?: number;
-  perPage?: number;
+  size?: number;
+  sort?: '-createdAt';
+  'filter[type]'?: string;
 }
 
-/** One page of notifications. */
-export class PaginatedNotificationsDto {
-  items!: NotificationDto[];
-  page!: number;
-  perPage!: number;
+/** Query of `GET /notifications/unread` and `unread/count`: `?filter[type]=A,B`, nothing else. */
+export class UnreadNotificationsQueryDto {
+  'filter[type]'?: string;
+}
+
+/** Offset paging metadata. Pages are 1-based. */
+export class PageMetaDto {
   total!: number;
+  perPage!: number;
+  currentPage!: number;
+  lastPage!: number;
+  firstPage!: number;
+}
+
+/** One page of notifications: `{ data, meta }`. */
+export class PaginatedNotificationsDto {
+  data!: NotificationDto[];
+  meta!: PageMetaDto;
+}
+
+/** The unread notifications: `{ data }`. */
+export class UnreadNotificationsDto {
+  data!: NotificationDto[];
 }
 
 /** The unread badge count. */

@@ -2,13 +2,13 @@
 
 /** Map of route name → path pattern. */
 export const ROUTES = {
-  "app.paid": "invoices/paid",
+  "app.paid": "/invoices/paid",
   "notificationsInbox.list": "/notifications",
-  "notificationsInbox.unread": "notifications/unread",
-  "notificationsInbox.unreadCount": "notifications/unread/count",
-  "notificationsInbox.markAsRead": "notifications/:id/read",
-  "notificationsInbox.markAllAsRead": "notifications/read-all",
-  "notificationsInbox.remove": "notifications/:id",
+  "notificationsInbox.unread": "/notifications/unread",
+  "notificationsInbox.unreadCount": "/notifications/unread/count",
+  "notificationsInbox.markAsRead": "/notifications/:id/read",
+  "notificationsInbox.markAllAsRead": "/notifications/read-all",
+  "notificationsInbox.remove": "/notifications/:id",
 } as const;
 
 /** Union of all known route names. */

@@ -39,8 +39,8 @@ The host app mounts the read API via `createNotificationsController` from `@dudo
 
 | Method                                | Endpoint                                |
 | ------------------------------------- | --------------------------------------- |
-| `list({ page, perPage })`             | `GET {baseUrl}notifications`            |
-| `unread()`                            | `GET {baseUrl}notifications/unread`     |
+| `list({ page, size, types })`        | `GET {baseUrl}notifications` → `{ data, meta }` |
+| `unread({ types })`                   | `GET {baseUrl}notifications/unread` → `{ data }` |
 | `unreadCount()`                       | `GET {baseUrl}notifications/unread/count` |
 | `markAsRead(id)`                      | `POST {baseUrl}notifications/:id/read`  |
 | `markAllAsRead()`                     | `POST {baseUrl}notifications/read-all`  |

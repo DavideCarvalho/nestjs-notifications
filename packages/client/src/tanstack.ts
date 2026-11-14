@@ -1,5 +1,14 @@
 import type { NotificationsClient } from './client';
-import type { ListParams, NotificationsFilterParams } from './types';
+import type { ListParams, NotificationsFilterParams, PaginatedNotifications } from './types';
+
+/**
+ * `getNextPageParam` for the offset list envelope: the next 1-based page, or `undefined` on the
+ * last one. Also usable as the override for a codegen-generated `infiniteQueryOptions`.
+ */
+export function nextNotificationsPage(page: PaginatedNotifications): number | undefined {
+  const { currentPage, lastPage } = page.meta;
+  return currentPage < lastPage ? currentPage + 1 : undefined;
+}
 
 /** Stable query keys for cache management/invalidation. */
 export const notificationKeys = {
@@ -16,6 +25,16 @@ export const notificationQueries = {
   list: (client: NotificationsClient, params?: ListParams) => ({
     queryKey: notificationKeys.list(params),
     queryFn: () => client.list(params),
+  }),
+  /**
+   * infiniteQueryOptions-shaped factory: spread into `useInfiniteQuery`. Pages through `list` by
+   * `meta.currentPage` / `meta.lastPage`; `params.page` is ignored (the page param drives it).
+   */
+  infiniteList: (client: NotificationsClient, params?: Omit<ListParams, 'page'>) => ({
+    queryKey: [...notificationKeys.list(params), 'infinite'] as const,
+    queryFn: ({ pageParam }: { pageParam: number }) => client.list({ ...params, page: pageParam }),
+    initialPageParam: 1,
+    getNextPageParam: nextNotificationsPage,
   }),
   unread: (client: NotificationsClient, params?: NotificationsFilterParams) => ({
     queryKey: notificationKeys.unread(params),

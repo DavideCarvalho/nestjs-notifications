@@ -2,6 +2,14 @@ import type { NotifiableRef } from '@dudousxd/nestjs-notifications-core';
 import { Controller, Delete, Get, Param, Post, Query, Req, type Type } from '@nestjs/common';
 import { finishController, rejectRemovedGuards } from './controller-decorators';
 import { type InboxMountOrigin, recordInboxMount } from './inbox-registry';
+import type { StoredNotification } from './interfaces';
+import {
+  ListQueryError,
+  parseFilterParams,
+  parsePageParams,
+  rejectUnknownParams,
+  resolveSort,
+} from './list-api';
 import type { PaginatedNotifications } from './notifications-query.service';
 import { NotificationsQueryService } from './notifications-query.service';
 
@@ -28,16 +36,21 @@ export interface NotificationsControllerOptions {
 /**
  * Builds a `@Controller('notifications')` exposing the in-app inbox endpoints:
  *
- * - `GET /notifications` — list (`?page&perPage` paginates, `?type=` filters)
- * - `GET /notifications/unread` (`?type=` filters)
- * - `GET /notifications/unread/count` (`?type=` filters)
+ * - `GET /notifications` — offset-paged list (`?page&size`, `?sort=-createdAt`, `?filter[type]=`),
+ *   answering `{ data, meta: { total, perPage, currentPage, lastPage, firstPage } }`
+ * - `GET /notifications/unread` (`?filter[type]=`), answering `{ data }`
+ * - `GET /notifications/unread/count` (`?filter[type]=`), answering `{ count }`
  * - `POST /notifications/:id/read`
  * - `POST /notifications/read-all`
  * - `DELETE /notifications/:id`
  *
- * `?type=` accepts a comma-separated list of notification types (e.g.
- * `?type=FILE_EXPORT_RUNNING,PRIBUY_FILE_EXPORT_RUNNING`); entries are trimmed and blanks are
- * dropped. Absent or empty after parsing = no type filter (matches every type).
+ * These follow the Aviary list API: `size` defaults to 20 and is clamped to 100; the only order
+ * is newest first, so `sort` accepts only `-createdAt`. `filter[type]` takes one type, a comma
+ * list (`filter[type]=A,B`) or repeated values (`filter[type][]=A&filter[type][]=B`). An unknown
+ * filter field or operator, a bad `page`/`size`, any other `sort` or any other query param (the
+ * removed `perPage`, a bare `?type=`) answers `400` naming the replacement. An empty `sort` is the
+ * default. A hand-written controller gets the same rules from {@link parseInboxListQuery} and
+ * {@link parseInboxTypeQuery}.
  *
  * The two per-id mutations (`:id/read` and `DELETE /:id`) are scoped to the notifiable `resolveRef`
  * returns — a notification belonging to someone else responds `404`, not `403`, so the endpoint
@@ -91,28 +104,31 @@ export function buildNotificationsController(
     @Get()
     async list(
       @Req() req: any,
-      @Query('page') page?: string,
-      @Query('perPage') perPage?: string,
-      @Query('type') type?: string,
+      @Query() query: Record<string, unknown>,
     ): Promise<PaginatedNotifications> {
       const ref = await options.resolveRef(req);
-      return this.notifications.paginate(ref, {
-        page: page ? Number(page) : undefined,
-        perPage: perPage ? Number(perPage) : undefined,
-        types: parseTypesParam(type),
-      });
+      const parsed = parseInboxListQuery(query);
+      return this.notifications.paginate(ref, parsed);
     }
 
     @Get('unread')
-    async unread(@Req() req: any, @Query('type') type?: string) {
+    async unread(
+      @Req() req: any,
+      @Query() query: Record<string, unknown>,
+    ): Promise<{ data: StoredNotification[] }> {
       const ref = await options.resolveRef(req);
-      return this.notifications.unread(ref, { types: parseTypesParam(type) });
+      const filter = parseInboxTypeQuery(query);
+      return { data: await this.notifications.unread(ref, filter) };
     }
 
     @Get('unread/count')
-    async unreadCount(@Req() req: any, @Query('type') type?: string): Promise<{ count: number }> {
+    async unreadCount(
+      @Req() req: any,
+      @Query() query: Record<string, unknown>,
+    ): Promise<{ count: number }> {
       const ref = await options.resolveRef(req);
-      return { count: await this.notifications.unreadCount(ref, { types: parseTypesParam(type) }) };
+      const filter = parseInboxTypeQuery(query);
+      return { count: await this.notifications.unreadCount(ref, filter) };
     }
 
     @Post(':id/read')
@@ -142,16 +158,56 @@ export function buildNotificationsController(
   return NotificationsController;
 }
 
+/** Inbox list paging: `size` defaults to 20 and is clamped to 100. */
+const INBOX_PAGE = { defaultSize: 20, maxSize: 100 } as const;
+
 /**
- * Parses a `?type=A,B` query param into a trimmed, non-empty list of types. Splits on commas,
- * trims whitespace, and drops empty entries. Returns `undefined` when `raw` is absent or resolves
- * to no entries — callers treat that as "no filter" (matches every type).
+ * Reads a `GET notifications` request the way the inbox controller does: `page` / `size` (default
+ * 20, at most 100), `sort` (only `-createdAt`; absent or empty is that default) and `filter[type]`.
+ * Anything else — a bad `page`/`size`, another sort, an unknown filter, a param the list does not
+ * read such as the removed `perPage` or a bare `type` — throws a `ListQueryError` (400) naming the
+ * replacement. For a hand-written inbox controller that must answer like the built-in one.
  */
-function parseTypesParam(raw?: string): string[] | undefined {
-  if (!raw) return undefined;
-  const types = raw
-    .split(',')
-    .map((type) => type.trim())
-    .filter((type) => type.length > 0);
-  return types.length > 0 ? types : undefined;
+export function parseInboxListQuery(query: Record<string, unknown>): {
+  page: number;
+  size: number;
+  types: string[] | undefined;
+} {
+  rejectUnknownParams(query, ['page', 'size', 'sort', 'filter']);
+  const { page, size } = parsePageParams(query, INBOX_PAGE);
+  assertNewestFirst(query.sort);
+  return { page, size, types: parseTypeFilter(query) };
+}
+
+/**
+ * Reads a `GET notifications/unread` or `unread/count` request: only `filter[type]`; any other
+ * param is a `ListQueryError` (400).
+ */
+export function parseInboxTypeQuery(query: Record<string, unknown>): {
+  types: string[] | undefined;
+} {
+  rejectUnknownParams(query, ['filter']);
+  return { types: parseTypeFilter(query) };
+}
+
+/**
+ * Reads `filter[type]` (one type, `A,B`, or `filter[type][]=A&filter[type][]=B`) into a list of
+ * types. Returns `undefined` when absent — "no filter" (matches every type). Any other filter
+ * field or operator throws a `ListQueryError` (400).
+ */
+function parseTypeFilter(query: Record<string, unknown>): string[] | undefined {
+  const filters = parseFilterParams(query, { fields: { type: ['eq', 'in'] } });
+  const types = filters.flatMap((filter) =>
+    Array.isArray(filter.value) ? filter.value : [filter.value],
+  );
+  const cleaned = types.map((type) => type.trim()).filter((type) => type.length > 0);
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+/** The store has one fixed order (newest first), so `sort` may only ask for `-createdAt`. */
+function assertNewestFirst(raw: unknown): void {
+  const sort = resolveSort(raw, { sortable: ['createdAt'], default: '-createdAt' });
+  if (sort.length !== 1 || sort[0]?.direction !== 'desc') {
+    throw new ListQueryError('Unsupported "sort": notifications are ordered by "-createdAt" only.');
+  }
 }

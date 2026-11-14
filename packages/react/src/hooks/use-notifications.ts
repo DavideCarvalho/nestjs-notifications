@@ -14,8 +14,8 @@ export interface UseNotificationsOptions {
   client?: NotificationsClient | undefined;
   /** Build a client inline (overrides the provider). */
   clientOptions?: NotificationsClientOptions | undefined;
-  /** Page size for `list` / `loadMore`. Default 20. */
-  perPage?: number | undefined;
+  /** Page size for `list` / `loadMore`. Default 20; the server clamps it to 100. */
+  size?: number | undefined;
 }
 
 /** Return value of {@link useNotifications}. */
@@ -52,7 +52,7 @@ export interface UseNotificationsResult {
  */
 export function useNotifications(options: UseNotificationsOptions = {}): UseNotificationsResult {
   const { client } = useResolvedContext(options);
-  const perPage = options.perPage ?? 20;
+  const size = options.size ?? 20;
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,14 +79,14 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
       setLoading(true);
       setError(null);
       try {
-        const result = await client.list({ page, perPage });
+        const result = await client.list({ page, size });
         if (!mountedRef.current) return;
-        pageRef.current = result.meta.page;
+        pageRef.current = result.meta.currentPage;
         totalRef.current = result.meta.total;
         setNotifications((prev) =>
-          replace ? mergeNotifications([], result.items) : mergeNotifications(prev, result.items),
+          replace ? mergeNotifications([], result.data) : mergeNotifications(prev, result.data),
         );
-        setHasMore(result.meta.page < result.meta.lastPage && result.items.length > 0);
+        setHasMore(result.meta.currentPage < result.meta.lastPage && result.data.length > 0);
       } catch (err) {
         if (mountedRef.current) setError(toError(err));
       } finally {
@@ -94,7 +94,7 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
         loadingRef.current = false;
       }
     },
-    [client, perPage],
+    [client, size],
   );
 
   const refresh = useCallback(async () => {

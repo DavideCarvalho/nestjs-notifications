@@ -17,30 +17,31 @@ describe('NotificationsClient', () => {
   it('lists notifications with pagination params', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
-        items: [{ id: '1' }],
-        meta: { page: 2, perPage: 10, total: 11, lastPage: 2 },
+        data: [{ id: '1' }],
+        meta: { total: 11, perPage: 10, currentPage: 2, lastPage: 2, firstPage: 1 },
       }),
     );
     const client = createNotificationsClient({ baseUrl: 'https://api.test', fetch: fetchMock });
 
-    const page = await client.list({ page: 2, perPage: 10 });
+    const page = await client.list({ page: 2, size: 10 });
 
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.test/notifications?page=2&perPage=10');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.test/notifications?page=2&size=10');
     expect(page).toEqual({
-      items: [{ id: '1' }],
-      meta: { page: 2, perPage: 10, total: 11, lastPage: 2 },
+      data: [{ id: '1' }],
+      meta: { total: 11, perPage: 10, currentPage: 2, lastPage: 2, firstPage: 1 },
     });
   });
 
   it('targets a custom resource path', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockImplementation(() =>
-        Promise.resolve(
-          jsonResponse({ items: [], meta: { page: 1, perPage: 20, total: 0, lastPage: 1 } }),
-        ),
-      );
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        jsonResponse({
+          data: [],
+          meta: { total: 0, perPage: 20, currentPage: 1, lastPage: 1, firstPage: 1 },
+        }),
+      ),
+    );
     const client = createNotificationsClient({
       baseUrl: 'https://api.test',
       path: 'notifications-inbox',
@@ -56,20 +57,27 @@ describe('NotificationsClient', () => {
     expect(fetchMock.mock.calls[2]?.[0]).toBe('https://api.test/notifications-inbox/read-all');
   });
 
+  it('unwraps the `{ data }` of the unread list', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ data: [{ id: 'u1' }] }));
+    const client = createNotificationsClient({ fetch: fetchMock });
+    expect(await client.unread()).toEqual([{ id: 'u1' }]);
+  });
+
   it('reads the unread count', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ count: 7 }));
     const client = createNotificationsClient({ fetch: fetchMock });
     expect(await client.unreadCount()).toBe(7);
   });
 
-  it('sends the types filter as a comma-separated `type` query param', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockImplementation(() =>
-        Promise.resolve(
-          jsonResponse({ items: [], meta: { page: 1, perPage: 20, total: 0, lastPage: 1 } }),
-        ),
-      );
+  it('sends the types filter as a `filter[type]` comma list', async () => {
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        jsonResponse({
+          data: [],
+          meta: { total: 0, perPage: 20, currentPage: 1, lastPage: 1, firstPage: 1 },
+        }),
+      ),
+    );
     const client = createNotificationsClient({ baseUrl: 'https://api.test', fetch: fetchMock });
 
     await client.list({ types: ['A', 'B'] });
@@ -78,10 +86,11 @@ describe('NotificationsClient', () => {
     // An empty array omits the param entirely (no filter).
     await client.unread({ types: [] });
 
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://api.test/notifications?type=A%2CB');
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api.test/notifications/unread?type=A%2CB');
+    const filter = 'filter%5Btype%5D=A%2CB';
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`https://api.test/notifications?${filter}`);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`https://api.test/notifications/unread?${filter}`);
     expect(fetchMock.mock.calls[2]?.[0]).toBe(
-      'https://api.test/notifications/unread/count?type=A%2CB',
+      `https://api.test/notifications/unread/count?${filter}`,
     );
     expect(fetchMock.mock.calls[3]?.[0]).toBe('https://api.test/notifications/unread');
   });

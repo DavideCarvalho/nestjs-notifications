@@ -58,8 +58,8 @@ export default defineConfig({
 Run codegen and the inbox is now a typed client:
 
 ```ts
-const page = await api.notifications.list({ query: { page: 1, perPage: 20 } });
-//    ^? { items: StoredNotification[]; meta: { page, perPage, total, lastPage } }
+const page = await api.notifications.list({ query: { page: 1, size: 20, 'filter[type]': ['A', 'B'] } });
+//    ^? { data: StoredNotification[]; meta: { total, perPage, currentPage, lastPage, firstPage } }
 const { count } = await api.notifications.unreadCount();
 await api.notifications.markAsRead({ params: { id } });
 ```
@@ -83,9 +83,12 @@ doesn't discover them, so a mismatch produces a client that calls the wrong URL.
 <Callout type="info">
   The injected inbox routes mirror `createNotificationsController` exactly: `GET {path}`,
   `GET {path}/unread`, `GET {path}/unread/count`, `POST {path}/:id/read`, `POST {path}/read-all`,
-  `DELETE {path}/:id`. The `list` query accepts `page` / `perPage` / `type` (a comma-separated type
-  filter) and returns the paginated `{ items, meta }` shape, so the generated infinite-query factory
-  can page through the inbox out of the box.
+  `DELETE {path}/:id`. The `list` query accepts `page` / `size` / `sort` (`-createdAt` only) /
+  `filter[type]` (one type or a list) and returns the offset list envelope `{ data, meta }`;
+  `unread` returns `{ data }`. To page with the generated `infiniteQueryOptions`, pass the
+  `currentPage`-based selector from the client package:
+  `infiniteQueryOptions({ getNextPageParam: nextNotificationsPage })`
+  (`import { nextNotificationsPage } from '@dudousxd/nestjs-notifications-client/tanstack'`).
 </Callout>
 
 <Callout type="warn">
@@ -129,15 +132,20 @@ export class NotificationDto {
   readAt!: string | null;
   createdAt!: string;
 }
-export class PaginatedNotificationsDto {
-  items!: NotificationDto[];
-  page!: number;
-  perPage!: number;
+export class PageMetaDto {
   total!: number;
+  perPage!: number;
+  currentPage!: number;
+  lastPage!: number;
+  firstPage!: number;
+}
+export class PaginatedNotificationsDto {
+  data!: NotificationDto[];
+  meta!: PageMetaDto;
 }
 export class UnreadCountDto { count!: number; }
 export class AckDto { ok!: boolean; }
-export class ListNotificationsQueryDto { page?: number; perPage?: number; }
+export class ListNotificationsQueryDto { page?: number; size?: number; 'filter[type]'?: string; }
 ```
 
 ### Configure codegen
@@ -195,7 +203,7 @@ import { createFetcher } from '@dudousxd/nestjs-client';
 
 const api = createApi(createFetcher({ baseUrl: '/' }));
 
-const page = await api.notificationsInbox.list({ query: { page: 1, perPage: 20 } });
+const page = await api.notificationsInbox.list({ query: { page: 1, size: 20 } });
 //    ^? PaginatedNotificationsDto
 const { count } = await api.notificationsInbox.unreadCount();
 await api.notificationsInbox.markAsRead({ params: { id } });

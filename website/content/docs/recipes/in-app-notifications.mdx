@@ -40,7 +40,7 @@ Every method that reads "whose notifications" accepts a **target**: either a not
 | `all(target, { types? })` | `StoredNotification[]` | Every notification for the target, newest first. |
 | `unread(target, { types? })` | `StoredNotification[]` | Unread notifications for the target. |
 | `unreadCount(target, { types? })` | `number` | How many are unread. A `COUNT` in the database when the store implements `countUnread` (every bundled store does). |
-| `paginate(target, { page?, perPage?, types? })` | `{ items, meta: { page, perPage, total, lastPage } }` | One page over `all` (defaults: page 1, 20 per page). |
+| `paginate(target, { page?, size?, types? })` | `{ data, meta: { total, perPage, currentPage, lastPage, firstPage } }` | One page over `all`, newest first (defaults: page 1, 20 per page). |
 | `markAsRead(id)` | `void` | Mark one notification read, by its id. |
 | `markAllAsRead(target)` | `void` | Mark every notification for the target read. |
 | `delete(id)` | `void` | Remove one notification, by its id. |
@@ -133,16 +133,20 @@ whatever your auth layer puts on `req.user`. The controller exposes:
 
 | Route | Action |
 | --- | --- |
-| `GET /notifications` | Paginated list (`?page` & `?perPage`, `?type=` filters). |
-| `GET /notifications/unread` | Unread notifications (`?type=` filters). |
-| `GET /notifications/unread/count` | `{ count }` of unread (`?type=` filters). |
+| `GET /notifications` | `{ data, meta: { total, perPage, currentPage, lastPage, firstPage } }`, newest first (`?page`, `?size`, `?sort=-createdAt`, `?filter[type]=`). |
+| `GET /notifications/unread` | `{ data }` — every unread notification (`?filter[type]=`). |
+| `GET /notifications/unread/count` | `{ count }` of unread (`?filter[type]=`). |
 | `POST /notifications/:id/read` | Mark one read (only the caller's own). |
 | `POST /notifications/read-all` | Mark all read for the current user. |
 | `DELETE /notifications/:id` | Delete one (only the caller's own). |
 
-`?type=` accepts a comma-separated list of types (e.g.
-`?type=FILE_EXPORT_RUNNING,FILE_EXPORT_DONE`); entries are trimmed and blank entries dropped.
-Absent, or empty after parsing, means no filter — every type matches.
+The routes follow the Aviary list API convention: `page` is
+1-based, `size` defaults to 20 and is clamped to 100, and the only order is newest first, so `sort`
+accepts `-createdAt` and nothing else. `filter[type]` takes one type, a comma list
+(`?filter[type]=FILE_EXPORT_RUNNING,FILE_EXPORT_DONE`) or a repeated list
+(`?filter[type][]=FILE_EXPORT_RUNNING&filter[type][]=FILE_EXPORT_DONE`); absent means no filter.
+An unknown filter field or operator, a `page`/`size` that is not a whole number of at least 1, or
+any other `sort` answers `400`.
 
 <Callout type="info">
   The controller relies on `resolveRef` to scope every route to the current user. The per-id routes

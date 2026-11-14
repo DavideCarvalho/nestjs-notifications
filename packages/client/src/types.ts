@@ -20,23 +20,29 @@ export interface NotificationItem {
   updatedAt: string | Date;
 }
 
-/** Pagination metadata for a {@link PaginatedNotifications} page. */
+/**
+ * Pagination metadata of a {@link PaginatedNotifications} page — the Aviary offset list `meta`.
+ * Pages are 1-based.
+ */
 export interface PaginationMeta {
-  /** 1-based current page. */
-  page: number;
-  perPage: number;
   /** Total matching notifications across all pages. */
   total: number;
+  /** Page size the server used (the requested `size`, clamped by the server). */
+  perPage: number;
+  /** The page these rows are. */
+  currentPage: number;
   /** Number of the last page (`max(1, ceil(total / perPage))`). */
   lastPage: number;
+  /** Always `1`. */
+  firstPage: number;
 }
 
 /**
- * A page of notifications. Mirrors the backend `PaginatedNotifications`: `items` plus a
- * conventional `meta` (a `data` alias for items is tolerated for forward compatibility).
+ * A page of notifications, in the Aviary offset list envelope:
+ * `{ data, meta: { total, perPage, currentPage, lastPage, firstPage } }`.
  */
 export interface PaginatedNotifications {
-  items: NotificationItem[];
+  data: NotificationItem[];
   meta: PaginationMeta;
 }
 
@@ -71,8 +77,7 @@ export interface NotificationsClientOptions {
 
 /**
  * Filter params shared by `list()`, `unread()`, and `unreadCount()`. `types`, when present and
- * non-empty, is sent as the comma-separated `?type=` query param the backend splits/trims;
- * absent/empty = no filter (matches every type).
+ * non-empty, is sent as `filter[type]=A,B`; absent/empty = no filter (matches every type).
  */
 export interface NotificationsFilterParams {
   types?: string[];
@@ -82,6 +87,6 @@ export interface NotificationsFilterParams {
 export interface ListParams extends NotificationsFilterParams {
   /** 1-based page number. Default 1. */
   page?: number;
-  /** Page size. Default 20. */
-  perPage?: number;
+  /** Page size. Default 20; the server clamps it to 100. */
+  size?: number;
 }
