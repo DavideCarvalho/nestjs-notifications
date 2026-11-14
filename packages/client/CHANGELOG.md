@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-client
 
+## 0.10.0
+
+### Minor Changes
+
+- [#132](https://github.com/DavideCarvalho/nestjs-notifications/pull/132) [`45a9292`](https://github.com/DavideCarvalho/nestjs-notifications/commit/45a92923133aebe9c569dac92772bd05bcfd23bc) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - Follows the Aviary list API of the inbox endpoints. `list({ page, size, types })` sends `page`/`size`/`filter[type]` and resolves `{ data, meta: { total, perPage, currentPage, lastPage, firstPage } }` (was `{ items, meta: { page, perPage, total, lastPage } }`; `perPage` is now `size`). `unread()` and `unreadCount()` send `filter[type]`; `unread()` still resolves an array, unwrapped from the server's `{ data }`. The `tanstack` entry adds `notificationQueries.infiniteList()` and `nextNotificationsPage`, a `getNextPageParam` for the new `meta`.
+
 ## 0.9.0
 
 ### Minor Changes

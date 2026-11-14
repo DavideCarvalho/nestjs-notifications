@@ -1,5 +1,11 @@
 # @dudousxd/nestjs-notifications-codegen
 
+## 0.7.0
+
+### Minor Changes
+
+- [#132](https://github.com/DavideCarvalho/nestjs-notifications/pull/132) [`45a9292`](https://github.com/DavideCarvalho/nestjs-notifications/commit/45a92923133aebe9c569dac92772bd05bcfd23bc) Thanks [@DavideCarvalho](https://github.com/DavideCarvalho)! - The injected inbox routes follow the Aviary list API: `list` takes `page`, `size`, `sort` and `'filter[type]'` and returns `{ data, meta: { total, perPage, currentPage, lastPage, firstPage } }`; `unread` returns `{ data }`; `unread` and `unreadCount` take `'filter[type]'`. The default `infiniteQueryOptions` selector of `@dudousxd/nestjs-codegen-tanstack` reads `meta.page`, so pass `getNextPageParam: nextNotificationsPage` from `@dudousxd/nestjs-notifications-client/tanstack`.
+
 ## 0.6.0
 
 ### Minor Changes
